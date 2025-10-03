@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { OwnerView, PlayerView } from './views';
+import { ToastHost } from './ui/toasts';
 import { NetClient } from './net/NetClient';
 import { useSessionStore } from './state/sessionStore';
 
@@ -28,8 +29,18 @@ export function App() {
   }, [roomId, role]);
 
   if (role === 'owner') {
-    return <OwnerView client={client} wallCount={120} trapCharges={1} />;
+    return (
+      <>
+        <OwnerView client={client} wallCount={120} trapCharges={1} />
+        <ToastHost />
+      </>
+    );
   }
 
-  return <PlayerView points={score} targetPoints={targetScore} predictionHits={0} />;
+  return (
+    <>
+      <PlayerView points={score} targetPoints={targetScore} predictionHits={0} />
+      <ToastHost />
+    </>
+  );
 }
