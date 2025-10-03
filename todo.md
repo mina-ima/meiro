@@ -67,10 +67,10 @@
 ## 5. 通信（WebSocket, JSON Lines）
 - [x] 接続: `/ws?room=ID&role=owner|player&nick=foo`
   - DoD: 役割検証・重複入室禁止
-- [ ] メッセージ定義（Zod）
-  - [ ] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`
-  - [ ] プレイヤー: `P_INPUT(yaw, fwd, ts)`
-  - [ ] オーナー: `O_EDIT(ADD_WALL|DEL_WALL|PLACE_TRAP)`, `O_MRK`, `O_CONFIRM`, `O_CANCEL`
+- [x] メッセージ定義（Zod）
+  - [x] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`
+  - [x] プレイヤー: `P_INPUT(yaw, fwd, ts)`
+  - [x] オーナー: `O_EDIT(ADD_WALL|DEL_WALL|PLACE_TRAP)`, `O_MRK`, `O_CONFIRM`, `O_CANCEL`
   - DoD: 型安全なシリアライズ/バリデーション
 - [ ] 送受信頻度
   - DoD: サーバ送信20Hz上限、1メッセージ≤2KB（p95）
