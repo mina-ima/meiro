@@ -1,0 +1,5 @@
+name = "meiro-server"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+workers_dev = true
+compatibility_flags = ["nodejs_compat"]

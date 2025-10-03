@@ -1,0 +1,21 @@
+{
+  "name": "@meiro/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251003.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.41.0"
+  }
+}
