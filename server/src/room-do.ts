@@ -4,6 +4,7 @@ import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/l
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
 import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
 import { ClientConnection, MessageSizeExceededError } from './logic/outbound';
+import { StateComposer } from './logic/state-sync';
 import type { PlayerSession, RoomState } from './state';
 import type { ServerMessage } from './schema/ws';
 
@@ -11,6 +12,11 @@ interface SessionPayload {
   roomId: string;
   nick: string;
   role: Role;
+}
+
+interface PublishStateOptions {
+  forceFull?: boolean;
+  immediate?: WebSocket | WebSocket[] | Set<WebSocket>;
 }
 
 interface WebSocketRequest extends Request {
@@ -23,6 +29,7 @@ export class RoomDurableObject {
   private readonly clients = new Set<WebSocket>();
   private readonly connections = new Map<WebSocket, ClientConnection>();
   private readonly socketSessions = new Map<WebSocket, PlayerSession>();
+  private readonly stateComposer = new StateComposer();
   private roomState: RoomState;
 
   constructor(state: DurableObjectState) {
@@ -67,8 +74,10 @@ export class RoomDurableObject {
 
       if (maybeStartCountdown(this.roomState, now)) {
         await this.schedulePhaseAlarm();
+        this.publishState({ forceFull: true });
       }
 
+      this.publishState({ forceFull: true });
       return Response.json({ ok: true });
     }
 
@@ -111,6 +120,7 @@ export class RoomDurableObject {
       if (maybeStartCountdown(this.roomState, now)) {
         console.log('room %s countdown started', this.roomId);
         await this.schedulePhaseAlarm();
+        this.publishState({ forceFull: true });
       }
       return Response.json({ ok: true, sessionId: joinResult.session.id });
     }
@@ -136,11 +146,28 @@ export class RoomDurableObject {
           return;
         }
 
+        const now = Date.now();
+        this.roomState.updatedAt = now;
+
         const events = createServerEvents(currentSession, message);
         if (events.length > 0) {
           for (const eventMessage of events) {
             this.broadcast(eventMessage);
           }
+        }
+
+        switch (message.type) {
+          case 'O_EDIT':
+          case 'O_CONFIRM':
+            this.publishState({ forceFull: true });
+            break;
+          case 'P_INPUT':
+          case 'O_MRK':
+          case 'O_CANCEL':
+            this.publishState({ forceFull: false });
+            break;
+          default:
+            break;
         }
       } catch (error) {
         if (error instanceof MessageValidationError) {
@@ -178,20 +205,11 @@ export class RoomDurableObject {
         tracked.dispose();
       }
       this.connections.delete(socket);
+
+      this.publishState({ forceFull: true });
     });
 
-    try {
-      connection.sendImmediate({
-        type: 'STATE',
-        payload: { roomId: this.roomId, nick: session.nick, role: session.role },
-      });
-    } catch (error) {
-      if (error instanceof MessageSizeExceededError) {
-        console.error('room %s initial STATE message is too large', this.roomId);
-      } else {
-        console.error('room %s failed to send initial STATE message', this.roomId, error);
-      }
-    }
+    this.publishState({ forceFull: true, immediate: socket });
   }
 
   private expireLobby(now: number): void {
@@ -219,6 +237,7 @@ export class RoomDurableObject {
     progressPhase(this.roomState, now);
     console.log('room %s phase -> %s', this.roomId, this.roomState.phase);
     await this.schedulePhaseAlarm();
+    this.publishState({ forceFull: true });
   }
 
   private async schedulePhaseAlarm(): Promise<void> {
@@ -242,6 +261,34 @@ export class RoomDurableObject {
       }
     }
   }
+
+  private publishState(options: PublishStateOptions = {}): void {
+    const message = this.stateComposer.compose(this.roomState, {
+      forceFull: options.forceFull,
+    });
+
+    if (!message) {
+      return;
+    }
+
+    const immediateSockets = options.immediate ? toSocketSet(options.immediate) : null;
+
+    for (const [socket, connection] of this.connections.entries()) {
+      const sender = immediateSockets?.has(socket)
+        ? connection.sendImmediate.bind(connection)
+        : connection.enqueue.bind(connection);
+
+      try {
+        sender(message);
+      } catch (error) {
+        if (error instanceof MessageSizeExceededError) {
+          console.error('room %s state message too large', this.roomId);
+        } else {
+          console.error('room %s failed to send state message', this.roomId, error);
+        }
+      }
+    }
+  }
 }
 
 function deserialize(data: unknown): unknown {
@@ -254,4 +301,20 @@ function deserialize(data: unknown): unknown {
   }
 
   return data;
+}
+
+function toSocketSet(source: PublishStateOptions['immediate']): Set<WebSocket> {
+  if (!source) {
+    return new Set();
+  }
+
+  if (source instanceof Set) {
+    return source;
+  }
+
+  if (Array.isArray(source)) {
+    return new Set(source);
+  }
+
+  return new Set([source]);
 }
