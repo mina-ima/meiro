@@ -2,6 +2,7 @@ import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
+import { MessageValidationError, processClientMessage } from './logic/messages';
 import type { PlayerSession, RoomState } from './state';
 
 interface SessionPayload {
@@ -113,7 +114,36 @@ export class RoomDurableObject {
     this.socketSessions.set(socket, session);
 
     socket.addEventListener('message', (event) => {
-      socket.send(event.data);
+      const raw = deserialize(event.data);
+      const currentSession = this.roomState.sessions.get(session.id) ?? session;
+
+      try {
+        const message = processClientMessage(this.roomState, currentSession, raw);
+
+        if (message.type === 'PING') {
+          socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
+        }
+      } catch (error) {
+        if (error instanceof MessageValidationError) {
+          socket.send(
+            JSON.stringify({
+              type: 'ERR',
+              code: 'INVALID_MESSAGE',
+              message: error.message,
+            }),
+          );
+          return;
+        }
+
+        console.error('room %s unexpected error handling message', this.roomId, error);
+        socket.send(
+          JSON.stringify({
+            type: 'ERR',
+            code: 'INTERNAL_ERROR',
+            message: 'Internal error',
+          }),
+        );
+      }
     });
 
     socket.addEventListener('close', () => {
@@ -164,4 +194,16 @@ export class RoomDurableObject {
 
     await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
   }
+}
+
+function deserialize(data: unknown): unknown {
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      throw new MessageValidationError(`invalid JSON payload: ${(error as Error).message}`);
+    }
+  }
+
+  return data;
 }
