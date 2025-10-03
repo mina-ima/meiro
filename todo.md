@@ -31,17 +31,17 @@
 ---
 
 ## 2. ディレクトリと初期コード
-- [ ] client/ 初期構成
-  - [ ] `src/net/NetClient.ts`
-  - [ ] `src/views/OwnerView.tsx`, `PlayerView.tsx`, `HUD.tsx`
-  - [ ] `src/game/Raycaster.ts`, `Physics.ts`, `Sound.ts`
-  - [ ] `src/state/*`（Zustand）
+- [x] client/ 初期構成
+  - [x] `src/net/NetClient.ts`
+  - [x] `src/views/OwnerView.tsx`, `PlayerView.tsx`, `HUD.tsx`
+  - [x] `src/game/Raycaster.ts`, `Physics.ts`, `Sound.ts`
+  - [x] `src/state/*`（Zustand）
   - DoD: Vite開発サーバ起動・空画面表示
-- [ ] server/ 初期構成
-  - [ ] `router.ts`（WSアップグレード）
-  - [ ] `room-do.ts`（DO本体・20Hz Tick）
-  - [ ] `logic/maze.ts`, `rules.ts`, `validate.ts`, `bfs.ts`
-  - [ ] `schema/ws.ts`, `state.ts`
+- [x] server/ 初期構成
+  - [x] `router.ts`（WSアップグレード）
+  - [x] `room-do.ts`（DO本体・20Hz Tick）
+  - [x] `logic/maze.ts`, `rules.ts`, `validate.ts`, `bfs.ts`
+  - [x] `schema/ws.ts`, `state.ts`
   - DoD: wrangler dev でWSエコーが動作
 
 ---
