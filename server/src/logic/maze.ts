@@ -1,7 +1,9 @@
+export type MazeDirection = 'top' | 'right' | 'bottom' | 'left';
+
 export interface MazeCell {
   x: number;
   y: number;
-  walls: Record<'top' | 'right' | 'bottom' | 'left', boolean>;
+  walls: Record<MazeDirection, boolean>;
 }
 
 export interface MazeGenerationResult {
@@ -51,9 +53,7 @@ export function generateMaze(config: MazeConfig): MazeGenerationResult {
   throw new Error(`failed to generate maze satisfying constraints for size=${size}`);
 }
 
-type Direction = 'top' | 'right' | 'bottom' | 'left';
-
-const OFFSETS: Record<Direction, { dx: number; dy: number; opposite: Direction }> = {
+const OFFSETS: Record<MazeDirection, { dx: number; dy: number; opposite: MazeDirection }> = {
   top: { dx: 0, dy: -1, opposite: 'bottom' },
   right: { dx: 1, dy: 0, opposite: 'left' },
   bottom: { dx: 0, dy: 1, opposite: 'top' },
@@ -100,7 +100,8 @@ function carveMaze(size: number, rng: () => number): MazeCell[] {
         return { direction, cell: cells[index], index };
       })
       .filter(
-        (entry): entry is { direction: Direction; cell: MazeCell; index: number } => entry !== null,
+        (entry): entry is { direction: MazeDirection; cell: MazeCell; index: number } =>
+          entry !== null,
       );
 
     if (neighbors.length === 0) {
@@ -117,11 +118,11 @@ function carveMaze(size: number, rng: () => number): MazeCell[] {
   return cells;
 }
 
-function directions(): Direction[] {
+function directions(): MazeDirection[] {
   return ['top', 'right', 'bottom', 'left'];
 }
 
-function removeWall(a: MazeCell, b: MazeCell, direction: Direction): void {
+function removeWall(a: MazeCell, b: MazeCell, direction: MazeDirection): void {
   const offset = OFFSETS[direction];
   a.walls[direction] = false;
   b.walls[offset.opposite] = false;
