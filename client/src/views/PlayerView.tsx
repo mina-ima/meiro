@@ -6,7 +6,7 @@ export interface PlayerViewProps {
   predictionHits: number;
 }
 
-export function PlayerView({ points, targetPoints, predictionHits }: PlayerViewProps): JSX.Element {
+export function PlayerView({ points, targetPoints, predictionHits }: PlayerViewProps) {
   return (
     <div>
       <h2>プレイヤービュー</h2>

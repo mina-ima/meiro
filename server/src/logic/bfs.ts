@@ -8,7 +8,11 @@ export interface PathResult {
   path: string[];
 }
 
-export function breadthFirstSearch(nodes: GraphNode[], startId: string, goalId: string): PathResult {
+export function breadthFirstSearch(
+  nodes: GraphNode[],
+  startId: string,
+  goalId: string,
+): PathResult {
   const queue: string[] = [startId];
   const visited = new Set<string>([startId]);
   const parent = new Map<string, string | null>([[startId, null]]);
@@ -42,7 +46,11 @@ export function breadthFirstSearch(nodes: GraphNode[], startId: string, goalId: 
   };
 }
 
-function reconstructPath(parent: Map<string, string | null>, startId: string, goalId: string): string[] {
+function reconstructPath(
+  parent: Map<string, string | null>,
+  startId: string,
+  goalId: string,
+): string[] {
   if (!parent.has(goalId)) {
     return [];
   }

@@ -8,7 +8,7 @@ export interface OwnerViewProps {
   trapCharges: number;
 }
 
-export function OwnerView({ client, wallCount, trapCharges }: OwnerViewProps): JSX.Element {
+export function OwnerView({ client, wallCount, trapCharges }: OwnerViewProps) {
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
 
   return (

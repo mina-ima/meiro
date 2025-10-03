@@ -5,7 +5,7 @@ import { useSessionStore } from './state/sessionStore';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
 
-export function App(): JSX.Element {
+export function App() {
   const { role, roomId, score, targetScore, setRoom, setScore } = useSessionStore();
 
   useEffect(() => {
