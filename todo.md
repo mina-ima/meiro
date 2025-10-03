@@ -18,14 +18,14 @@
 ---
 
 ## 1. 環境・依存関係
-- [ ] Node.js LTS / pnpm を統一（バージョンピン）  
+- [x] Node.js LTS / pnpm を統一（バージョンピン）  
   - DoD: `.tool-versions` or `.nvmrc` / `.npmrc`
-- [ ] パッケージ導入  
+- [x] パッケージ導入  
   - client: React, Phaser, Zustand, Zod, Vite
   - server: Cloudflare Workers, Durable Objects, wrangler, Zod
   - 共通: eslint, prettier, vitest, tsconfig
   - DoD: `pnpm i` で両プロジェクトがビルド・起動
-- [ ] .env / Secrets 設定  
+- [x] .env / Secrets 設定  
   - DoD: `VITE_WS_URL`, `CF_*`, `SENTRY_DSN(任意)` の雛形 `.env.example`
 
 ---
