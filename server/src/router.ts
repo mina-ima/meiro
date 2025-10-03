@@ -2,6 +2,7 @@ import type { Env } from './index';
 import { RoleSchema } from './schema/ws';
 import { validateNickname, validateRoomId } from './logic/validate';
 import { defaultRoomIdGenerator } from './logic/room-id';
+import { getRoomStub } from './logic/room-binding';
 
 export function createFetchHandler(env: Env): ExportedHandlerFetchHandler {
   return async function handle(request) {
@@ -23,7 +24,7 @@ export function createFetchHandler(env: Env): ExportedHandlerFetchHandler {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    const stub = env.ROOM.get(env.ROOM.idFromName(roomId));
+    const stub = getRoomStub(env, roomId);
     await stub.fetch('https://internal/session', {
       method: 'POST',
       headers: {

@@ -49,7 +49,7 @@
 ## 3. ルーム/マッチメイク（DO）
 - [x] ルームID発行（6桁 Base32風、O/I/1/0除外）
   - DoD: 衝突率試験（10万回で衝突0）
-- [ ] 1ルーム=1 Durable Object マッピング
+- [x] 1ルーム=1 Durable Object マッピング
   - DoD: 同一 roomId で同一DOにルーティング
 - [ ] ロビー管理（2名まで/5分で自動解散）
   - DoD: 満室時 `ROOM_FULL`、5分で `ROOM_EXPIRED`
