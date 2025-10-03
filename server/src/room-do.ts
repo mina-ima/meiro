@@ -2,7 +2,7 @@ import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
-import { MessageValidationError, processClientMessage } from './logic/messages';
+import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
 import type { PlayerSession, RoomState } from './state';
 
 interface SessionPayload {
@@ -122,6 +122,14 @@ export class RoomDurableObject {
 
         if (message.type === 'PING') {
           socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
+          return;
+        }
+
+        const events = createServerEvents(currentSession, message);
+        if (events.length > 0) {
+          for (const eventMessage of events) {
+            this.broadcast(eventMessage);
+          }
         }
       } catch (error) {
         if (error instanceof MessageValidationError) {
@@ -193,6 +201,17 @@ export class RoomDurableObject {
     }
 
     await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
+  }
+
+  private broadcast(message: { type: string }): void {
+    const encoded = JSON.stringify(message);
+    for (const client of this.clients) {
+      try {
+        client.send(encoded);
+      } catch (error) {
+        console.error('room %s failed to send message', this.roomId, error);
+      }
+    }
   }
 }
 

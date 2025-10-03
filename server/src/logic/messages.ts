@@ -1,5 +1,5 @@
 import { parseClientMessage } from '../schema/ws';
-import type { ClientMessage } from '../schema/ws';
+import type { ClientMessage, ServerMessage } from '../schema/ws';
 import type { RoomState, PlayerSession } from '../state';
 
 export class MessageValidationError extends Error {
@@ -41,4 +41,74 @@ export function processClientMessage(
 
 function assertNever(value: never): never {
   throw new MessageValidationError(`unsupported message type: ${String(value)}`);
+}
+
+export function createServerEvents(
+  session: PlayerSession,
+  message: ClientMessage,
+): ServerMessage[] {
+  switch (message.type) {
+    case 'P_INPUT':
+      return [
+        {
+          type: 'EV',
+          event: 'PLAYER_INPUT',
+          payload: {
+            sessionId: session.id,
+            yaw: message.yaw,
+            forward: message.forward,
+            timestamp: message.timestamp,
+          },
+        },
+      ];
+    case 'O_EDIT':
+      return [
+        {
+          type: 'EV',
+          event: 'OWNER_EDIT',
+          payload: {
+            sessionId: session.id,
+            edit: message.edit,
+          },
+        },
+      ];
+    case 'O_MRK':
+      return [
+        {
+          type: 'EV',
+          event: 'OWNER_MARK',
+          payload: {
+            sessionId: session.id,
+            cell: message.cell,
+            active: message.active ?? true,
+          },
+        },
+      ];
+    case 'O_CONFIRM':
+      return [
+        {
+          type: 'EV',
+          event: 'OWNER_CONFIRM',
+          payload: {
+            sessionId: session.id,
+            targetId: message.targetId,
+          },
+        },
+      ];
+    case 'O_CANCEL':
+      return [
+        {
+          type: 'EV',
+          event: 'OWNER_CANCEL',
+          payload: {
+            sessionId: session.id,
+            targetId: message.targetId,
+          },
+        },
+      ];
+    case 'PING':
+      return [];
+    default:
+      return assertNever(message);
+  }
 }
