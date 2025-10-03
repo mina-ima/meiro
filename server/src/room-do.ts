@@ -3,7 +3,9 @@ import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
 import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
+import { ClientConnection, MessageSizeExceededError } from './logic/outbound';
 import type { PlayerSession, RoomState } from './state';
+import type { ServerMessage } from './schema/ws';
 
 interface SessionPayload {
   roomId: string;
@@ -19,6 +21,7 @@ export class RoomDurableObject {
   private readonly state: DurableObjectState;
   private readonly roomId: string;
   private readonly clients = new Set<WebSocket>();
+  private readonly connections = new Map<WebSocket, ClientConnection>();
   private readonly socketSessions = new Map<WebSocket, PlayerSession>();
   private roomState: RoomState;
 
@@ -43,16 +46,22 @@ export class RoomDurableObject {
           continue;
         }
         this.socketSessions.set(socket, updated);
+        const connection = this.connections.get(socket);
+        if (!connection) {
+          continue;
+        }
         try {
-          socket.send(
-            JSON.stringify({
-              type: 'EV',
-              event: 'REMATCH_READY',
-              payload: { role: updated.role },
-            }),
-          );
+          connection.enqueue({
+            type: 'EV',
+            event: 'REMATCH_READY',
+            payload: { role: updated.role },
+          });
         } catch (error) {
-          console.warn('failed to notify rematch', error);
+          if (error instanceof MessageSizeExceededError) {
+            console.warn('rematch notification too large for room %s', this.roomId);
+          } else {
+            console.warn('failed to notify rematch for room %s', this.roomId, error);
+          }
         }
       }
 
@@ -111,6 +120,8 @@ export class RoomDurableObject {
 
   private registerSocket(socket: WebSocket, session: PlayerSession): void {
     this.clients.add(socket);
+    const connection = new ClientConnection(socket, () => Date.now());
+    this.connections.set(socket, connection);
     this.socketSessions.set(socket, session);
 
     socket.addEventListener('message', (event) => {
@@ -161,21 +172,36 @@ export class RoomDurableObject {
         removeSession(this.roomState, record.id, Date.now());
       }
       this.socketSessions.delete(socket);
+
+      const tracked = this.connections.get(socket);
+      if (tracked) {
+        tracked.dispose();
+      }
+      this.connections.delete(socket);
     });
 
-    socket.send(
-      JSON.stringify({
+    try {
+      connection.sendImmediate({
         type: 'STATE',
         payload: { roomId: this.roomId, nick: session.nick, role: session.role },
-      }),
-    );
+      });
+    } catch (error) {
+      if (error instanceof MessageSizeExceededError) {
+        console.error('room %s initial STATE message is too large', this.roomId);
+      } else {
+        console.error('room %s failed to send initial STATE message', this.roomId, error);
+      }
+    }
   }
 
   private expireLobby(now: number): void {
     for (const socket of this.clients) {
       socket.close(4000, 'ROOM_EXPIRED');
+      const connection = this.connections.get(socket);
+      connection?.dispose();
     }
     this.clients.clear();
+    this.connections.clear();
     this.socketSessions.clear();
     resetLobby(this.roomState, now);
   }
@@ -203,13 +229,16 @@ export class RoomDurableObject {
     await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
   }
 
-  private broadcast(message: { type: string }): void {
-    const encoded = JSON.stringify(message);
-    for (const client of this.clients) {
+  private broadcast(message: ServerMessage): void {
+    for (const connection of this.connections.values()) {
       try {
-        client.send(encoded);
+        connection.enqueue(message);
       } catch (error) {
-        console.error('room %s failed to send message', this.roomId, error);
+        if (error instanceof MessageSizeExceededError) {
+          console.error('room %s broadcast message too large', this.roomId);
+        } else {
+          console.error('room %s failed to queue message', this.roomId, error);
+        }
       }
     }
   }
