@@ -65,7 +65,7 @@
 ---
 
 ## 5. 通信（WebSocket, JSON Lines）
-- [ ] 接続: `/ws?room=ID&role=owner|player&nick=foo`
+- [x] 接続: `/ws?room=ID&role=owner|player&nick=foo`
   - DoD: 役割検証・重複入室禁止
 - [ ] メッセージ定義（Zod）
   - [ ] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`

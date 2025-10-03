@@ -27,6 +27,14 @@ describe('lobby logic', () => {
     expect(state.sessions.size).toBe(2);
   });
 
+  it('rejects duplicate roles', () => {
+    const state = createState();
+    joinLobby(state, { nick: 'A', role: 'owner' }, NOW, () => 'owner');
+    const result = joinLobby(state, { nick: 'B', role: 'owner' }, NOW, () => 'owner2');
+
+    expect(result.kind).toBe('role_taken');
+  });
+
   it('expires after timeout window', () => {
     const state = createState();
     const later = NOW + LOBBY_TIMEOUT_MS + 1;

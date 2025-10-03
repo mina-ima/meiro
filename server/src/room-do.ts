@@ -87,6 +87,10 @@ export class RoomDurableObject {
         return Response.json({ error: 'ROOM_FULL' }, { status: 409 });
       }
 
+      if (joinResult.kind === 'role_taken') {
+        return Response.json({ error: 'ROLE_TAKEN' }, { status: 409 });
+      }
+
       if (joinResult.kind === 'expired') {
         this.expireLobby(now);
         return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });

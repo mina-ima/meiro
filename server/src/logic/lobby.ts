@@ -12,7 +12,8 @@ export interface LobbyJoinPayload {
 export type LobbyJoinResult =
   | { kind: 'joined'; session: PlayerSession }
   | { kind: 'full' }
-  | { kind: 'expired' };
+  | { kind: 'expired' }
+  | { kind: 'role_taken' };
 
 export function joinLobby(
   state: RoomState,
@@ -26,6 +27,13 @@ export function joinLobby(
 
   if (state.sessions.size >= LOBBY_CAPACITY) {
     return { kind: 'full' };
+  }
+
+  const roleTaken = Array.from(state.sessions.values()).some(
+    (session) => session.role === payload.role,
+  );
+  if (roleTaken) {
+    return { kind: 'role_taken' };
   }
 
   const session: PlayerSession = {
