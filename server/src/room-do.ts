@@ -1,7 +1,7 @@
 import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
-import { maybeStartCountdown, progressPhase } from './logic/phases';
+import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
 import type { PlayerSession, RoomState } from './state';
 
 interface SessionPayload {
@@ -28,7 +28,41 @@ export class RoomDurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (request.method === 'POST') {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/rematch' && request.method === 'POST') {
+      const now = Date.now();
+      if (!resetForRematch(this.roomState, now)) {
+        return Response.json({ error: 'REMATCH_UNAVAILABLE' }, { status: 409 });
+      }
+
+      for (const [socket, session] of this.socketSessions.entries()) {
+        const updated = this.roomState.sessions.get(session.id);
+        if (!updated) {
+          continue;
+        }
+        this.socketSessions.set(socket, updated);
+        try {
+          socket.send(
+            JSON.stringify({
+              type: 'EV',
+              event: 'REMATCH_READY',
+              payload: { role: updated.role },
+            }),
+          );
+        } catch (error) {
+          console.warn('failed to notify rematch', error);
+        }
+      }
+
+      if (maybeStartCountdown(this.roomState, now)) {
+        await this.schedulePhaseAlarm();
+      }
+
+      return Response.json({ ok: true });
+    }
+
+    if (url.pathname === '/session' && request.method === 'POST') {
       const payload = (await request.json()) as SessionPayload;
       const { webSocket } = request as WebSocketRequest;
       if (!webSocket) {

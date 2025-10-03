@@ -4,6 +4,7 @@ import {
   startCountdown,
   progressPhase,
   maybeStartCountdown,
+  resetForRematch,
   DEFAULT_EXPLORE_DURATION_MS,
 } from '../src/logic/phases';
 
@@ -60,5 +61,32 @@ describe('phase progression', () => {
     expect(maybeStartCountdown(state, NOW)).toBe(true);
     expect(state.phase).toBe('countdown');
     expect(state.phaseEndsAt).toBe(NOW + 3_000);
+  });
+
+  it('resetForRematchでフェーズをロビーに戻し役割を保持', () => {
+    const state = createInitialRoomState('ROOM', NOW);
+    state.phase = 'result';
+    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner' });
+    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player' });
+
+    const success = resetForRematch(state, NOW + 1_000, () => 0.4);
+    expect(success).toBe(true);
+    expect(state.phase).toBe('lobby');
+    expect(state.phaseEndsAt).toBeUndefined();
+    expect(state.createdAt).toBe(NOW + 1_000);
+    expect(state.sessions.get('owner')?.role).toBe('owner');
+    expect(state.sessions.get('player')?.role).toBe('player');
+  });
+
+  it('resetForRematchで役割を入れ替える', () => {
+    const state = createInitialRoomState('ROOM', NOW);
+    state.phase = 'result';
+    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner' });
+    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player' });
+
+    const success = resetForRematch(state, NOW + 2_000, () => 0.6);
+    expect(success).toBe(true);
+    expect(state.sessions.get('owner')?.role).toBe('player');
+    expect(state.sessions.get('player')?.role).toBe('owner');
   });
 });

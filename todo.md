@@ -59,7 +59,7 @@
 ## 4. ステートマシン（サーバ権威）
 - [x] Phase 遷移: `CREATED → LOBBY → COUNTDOWN(3s) → PREP(60s:40/5/15) → EXPLORE(5..10m) → RESULT`
   - DoD: ログで全遷移が追跡できる
-- [ ] 再戦: 同部屋・役割50/50
+- [x] 再戦: 同部屋・役割50/50
   - DoD: RESULT後にクリーン再初期化
 
 ---

@@ -12,6 +12,17 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     return Response.json({ roomId });
   }
 
+  const rematchMatch = url.pathname.match(/^\/rooms\/(\w{6})\/rematch$/i);
+  if (rematchMatch && request.method === 'POST') {
+    const roomId = validateRoomId(rematchMatch[1]);
+    const stub = getRoomStub(env, roomId);
+    return (
+      stub.fetch as unknown as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    )('https://internal/rematch', {
+      method: 'POST',
+    });
+  }
+
   if (url.pathname !== '/ws' || request.method !== 'GET') {
     return new Response('not found', { status: 404 });
   }

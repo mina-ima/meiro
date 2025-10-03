@@ -29,6 +29,42 @@ export function maybeStartCountdown(state: RoomState, now: number): boolean {
   return true;
 }
 
+export function resetForRematch(
+  state: RoomState,
+  now: number,
+  random: () => number = Math.random,
+): boolean {
+  if (state.phase !== 'result') {
+    return false;
+  }
+
+  if (state.sessions.size < REQUIRED_PLAYERS) {
+    return false;
+  }
+
+  const players = Array.from(state.sessions.values());
+  if (players.length < REQUIRED_PLAYERS) {
+    return false;
+  }
+
+  const chooseFirst = random() < 0.5;
+  const ownerSession = chooseFirst ? players[0] : players[1];
+  const playerSession = ownerSession === players[0] ? players[1] : players[0];
+
+  ownerSession.role = 'owner';
+  playerSession.role = 'player';
+
+  state.phase = 'lobby';
+  state.phaseEndsAt = undefined;
+  state.createdAt = now;
+  state.updatedAt = now;
+
+  state.sessions.set(ownerSession.id, ownerSession);
+  state.sessions.set(playerSession.id, playerSession);
+
+  return true;
+}
+
 export function progressPhase(state: RoomState, now: number): void {
   if (state.phase === 'result') {
     return;
