@@ -24,20 +24,19 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   const [client, server] = Object.values(pair);
 
   const stub = getRoomStub(env, roomId);
-  await (stub.fetch as unknown as (
-    input: RequestInfo | URL,
-    init?: RequestInit & { webSocket?: WebSocket },
-  ) => Promise<Response>)(
-    'https://internal/session',
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ roomId, nick, role }),
-      webSocket: server,
+  await (
+    stub.fetch as unknown as (
+      input: RequestInfo | URL,
+      init?: RequestInit & { webSocket?: WebSocket },
+    ) => Promise<Response>
+  )('https://internal/session', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
     },
-  );
+    body: JSON.stringify({ roomId, nick, role }),
+    webSocket: server,
+  });
 
   return new Response(null, {
     status: 101,

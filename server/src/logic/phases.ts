@@ -3,6 +3,7 @@ import type { RoomState } from '../state';
 export const DEFAULT_EXPLORE_DURATION_MS = 5 * 60 * 1000;
 const COUNTDOWN_DURATION_MS = 3_000;
 const PREP_DURATION_MS = 60_000;
+const REQUIRED_PLAYERS = 2;
 
 export function startCountdown(state: RoomState, now: number): void {
   if (state.phase !== 'lobby') {
@@ -13,6 +14,19 @@ export function startCountdown(state: RoomState, now: number): void {
   state.updatedAt = now;
   state.countdownDurationMs = COUNTDOWN_DURATION_MS;
   state.phaseEndsAt = now + state.countdownDurationMs;
+}
+
+export function maybeStartCountdown(state: RoomState, now: number): boolean {
+  if (state.phase !== 'lobby') {
+    return false;
+  }
+
+  if (state.sessions.size < REQUIRED_PLAYERS) {
+    return false;
+  }
+
+  startCountdown(state, now);
+  return true;
 }
 
 export function progressPhase(state: RoomState, now: number): void {

@@ -1,7 +1,8 @@
 import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
-import type { PlayerSession } from './state';
+import { maybeStartCountdown, progressPhase } from './logic/phases';
+import type { PlayerSession, RoomState } from './state';
 
 interface SessionPayload {
   roomId: string;
@@ -18,12 +19,12 @@ export class RoomDurableObject {
   private readonly roomId: string;
   private readonly clients = new Set<WebSocket>();
   private readonly socketSessions = new Map<WebSocket, PlayerSession>();
-  private lobbyState = createInitialRoomState('');
+  private roomState: RoomState;
 
   constructor(state: DurableObjectState) {
     this.state = state;
     this.roomId = state.id.toString();
-    this.lobbyState = createInitialRoomState(this.roomId);
+    this.roomState = createInitialRoomState(this.roomId);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -36,13 +37,13 @@ export class RoomDurableObject {
 
       const now = Date.now();
 
-      if (hasLobbyExpired(this.lobbyState, now)) {
+      if (hasLobbyExpired(this.roomState, now)) {
         this.expireLobby(now);
         return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
       }
 
       const joinResult = joinLobby(
-        this.lobbyState,
+        this.roomState,
         { nick: payload.nick, role: payload.role },
         now,
         () => this.createSessionId(),
@@ -59,6 +60,10 @@ export class RoomDurableObject {
 
       webSocket.accept();
       this.registerSocket(webSocket, joinResult.session);
+      if (maybeStartCountdown(this.roomState, now)) {
+        console.log('room %s countdown started', this.roomId);
+        await this.schedulePhaseAlarm();
+      }
       return Response.json({ ok: true, sessionId: joinResult.session.id });
     }
 
@@ -77,7 +82,7 @@ export class RoomDurableObject {
       this.clients.delete(socket);
       const record = this.socketSessions.get(socket);
       if (record) {
-        removeSession(this.lobbyState, record.id, Date.now());
+        removeSession(this.roomState, record.id, Date.now());
       }
       this.socketSessions.delete(socket);
     });
@@ -96,7 +101,7 @@ export class RoomDurableObject {
     }
     this.clients.clear();
     this.socketSessions.clear();
-    resetLobby(this.lobbyState, now);
+    resetLobby(this.roomState, now);
   }
 
   private createSessionId(): string {
@@ -105,5 +110,20 @@ export class RoomDurableObject {
     }
 
     return `${this.roomId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async alarm(alarmTime: number): Promise<void> {
+    const now = alarmTime;
+    progressPhase(this.roomState, now);
+    console.log('room %s phase -> %s', this.roomId, this.roomState.phase);
+    await this.schedulePhaseAlarm();
+  }
+
+  private async schedulePhaseAlarm(): Promise<void> {
+    if (!this.roomState.phaseEndsAt) {
+      return;
+    }
+
+    await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
   }
 }
