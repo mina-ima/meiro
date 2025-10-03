@@ -1,10 +1,16 @@
 import type { Env } from './index';
 import { RoleSchema } from './schema/ws';
 import { validateNickname, validateRoomId } from './logic/validate';
+import { defaultRoomIdGenerator } from './logic/room-id';
 
 export function createFetchHandler(env: Env): ExportedHandlerFetchHandler {
   return async function handle(request) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/rooms' && request.method === 'POST') {
+      const roomId = defaultRoomIdGenerator.generate();
+      return Response.json({ roomId });
+    }
 
     if (url.pathname !== '/ws' || request.method !== 'GET') {
       return new Response('not found', { status: 404 });
