@@ -193,6 +193,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * **ミニマップなし**、**ヘッドボブなし**。HUD：残時間（mm:ssタイマー）、現在ポイント/規定ポイント、ゴール到達ボーナス値、達成率(%)進捗バー。
 * 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。
+* Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
 
 ### 8.2 オーナー
 
