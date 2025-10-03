@@ -10,14 +10,16 @@ export interface RoomState {
   id: string;
   phase: 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
   createdAt: number;
+  updatedAt: number;
   sessions: Map<string, PlayerSession>;
 }
 
-export function createInitialRoomState(id: string): RoomState {
+export function createInitialRoomState(id: string, now: number = Date.now()): RoomState {
   return {
     id,
     phase: 'lobby',
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     sessions: new Map(),
   };
 }
