@@ -4,6 +4,7 @@ import {
   PLAYER_RADIUS,
   TURN_SPEED,
   integrate,
+  type PhysicsEnvironment,
   type PhysicsInput,
   type PhysicsState,
 } from '../src/game/Physics';
@@ -57,3 +58,62 @@ describe('Physics 定数', () => {
   });
 });
 
+describe('壁衝突のスライド補正', () => {
+  it('正面衝突で壁直前に停止し速度のX成分がゼロになる', () => {
+    const environment = createEnvironment([
+      '.#',
+      '.#',
+      '.#',
+    ]);
+
+    const state: PhysicsState = {
+      position: { x: 0.5, y: 0.5 },
+      angle: 0,
+      velocity: { x: 0, y: 0 },
+    };
+
+    const result = integrate(state, { forward: 1, turn: 0 }, { deltaTime: 1 }, environment);
+
+    expect(result.position.x).toBeCloseTo(1 - PLAYER_RADIUS, 3);
+    expect(result.position.y).toBeCloseTo(0.5, 6);
+    expect(result.velocity.x).toBeCloseTo(0, 6);
+    expect(result.velocity.y).toBeCloseTo(0, 6);
+  });
+
+  it('斜め移動で壁に接触した場合、壁に沿ってスライドする', () => {
+    const environment = createEnvironment([
+      '.#',
+      '.#',
+      '.#',
+    ]);
+
+    const state: PhysicsState = {
+      position: { x: 0.5, y: 0.5 },
+      angle: Math.PI / 4,
+      velocity: { x: 0, y: 0 },
+    };
+
+    const result = integrate(state, { forward: 1, turn: 0 }, { deltaTime: 0.5 }, environment);
+
+    expect(result.position.x).toBeCloseTo(1 - PLAYER_RADIUS, 3);
+    expect(result.position.y).toBeCloseTo(
+      0.5 + Math.sin(Math.PI / 4) * MOVE_SPEED * 0.5,
+      5,
+    );
+    expect(result.velocity.x).toBeCloseTo(0, 6);
+    expect(result.velocity.y).toBeCloseTo(Math.sin(Math.PI / 4) * MOVE_SPEED, 5);
+  });
+});
+
+function createEnvironment(rows: string[]): PhysicsEnvironment {
+  const height = rows.length;
+  const width = rows[0]?.length ?? 0;
+  return {
+    isSolid(tileX, tileY) {
+      if (tileX < 0 || tileY < 0 || tileX >= width || tileY >= height) {
+        return true;
+      }
+      return rows[tileY][tileX] === '#';
+    },
+  };
+}
