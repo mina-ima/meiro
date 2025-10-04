@@ -33,6 +33,9 @@ interface WebSocketRequest extends Request {
 type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 
+const EDIT_COOLDOWN_MS = 1_000;
+const FORBIDDEN_MANHATTAN_DISTANCE = 2;
+
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
   private readonly roomId: string;
@@ -154,6 +157,7 @@ export class RoomDurableObject {
 
       try {
         const message = processClientMessage(this.roomState, currentSession, raw);
+        const now = Date.now();
 
         if (message.type === 'PING') {
           socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
@@ -161,13 +165,12 @@ export class RoomDurableObject {
         }
 
         if (message.type === 'O_EDIT') {
-          const accepted = this.handleOwnerEdit(message, socket);
+          const accepted = this.handleOwnerEdit(message, socket, now);
           if (!accepted) {
             return;
           }
         }
 
-        const now = Date.now();
         this.roomState.updatedAt = now;
 
         const events = createServerEvents(currentSession, message);
@@ -322,8 +325,23 @@ export class RoomDurableObject {
     } satisfies PlayerInputState;
   }
 
-  private handleOwnerEdit(message: OwnerEditMessage, socket: WebSocket): boolean {
+  private handleOwnerEdit(message: OwnerEditMessage, socket: WebSocket, now: number): boolean {
     const { owner } = this.roomState;
+
+    if (now < owner.editCooldownUntil) {
+      this.sendError(socket, 'EDIT_COOLDOWN', 'Edit action is on cooldown.');
+      return false;
+    }
+
+    const targetCell = message.edit.cell;
+    if (isEditInForbiddenArea(targetCell, this.roomState.player.physics.position)) {
+      this.sendError(
+        socket,
+        'EDIT_FORBIDDEN',
+        'Cell is within the forbidden distance from player.',
+      );
+      return false;
+    }
 
     switch (message.edit.action) {
       case 'ADD_WALL': {
@@ -332,6 +350,7 @@ export class RoomDurableObject {
           return false;
         }
         owner.wallStock -= 1;
+        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
       }
       case 'DEL_WALL': {
@@ -345,6 +364,7 @@ export class RoomDurableObject {
         }
         owner.wallRemoveLeft = 0;
         owner.wallStock += 1;
+        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
       }
       case 'PLACE_TRAP': {
@@ -353,6 +373,7 @@ export class RoomDurableObject {
           return false;
         }
         owner.trapCharges -= 1;
+        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
       }
       default:
@@ -479,4 +500,14 @@ function differs(a: number, b: number, epsilon = FLOAT_EPSILON): boolean {
 
 function solidKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+function isEditInForbiddenArea(
+  cell: { x: number; y: number },
+  playerPosition: { x: number; y: number },
+): boolean {
+  const playerCellX = Math.round(playerPosition.x);
+  const playerCellY = Math.round(playerPosition.y);
+  const distance = Math.abs(cell.x - playerCellX) + Math.abs(cell.y - playerCellY);
+  return distance <= FORBIDDEN_MANHATTAN_DISTANCE;
 }

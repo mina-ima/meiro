@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { RoomDurableObject } from '../src/room-do';
 
@@ -49,14 +49,32 @@ async function joinOwner(room: RoomDurableObject, socket: MockSocket): Promise<v
   expect(response.ok).toBe(true);
 }
 
+const NOW = 1_700_000_000_000;
+
 describe('RoomDurableObject wall removal', () => {
   let room: RoomDurableObject;
   let ownerSocket: MockSocket;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
     ownerSocket = new MockSocket();
     await joinOwner(room, ownerSocket);
+
+    const internal = room as unknown as {
+      roomState: {
+        owner: { editCooldownUntil: number };
+        player: { physics: { position: { x: number; y: number } } };
+      };
+    };
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    internal.roomState.player.physics.position = { x: 100, y: 100 };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('削除権は1回のみで壁資源を返却する', () => {
@@ -91,6 +109,11 @@ describe('RoomDurableObject wall removal', () => {
     );
 
     ownerSocket.sent.length = 0;
+    vi.advanceTimersByTime(1_000);
+    const internal = room as unknown as {
+      roomState: { owner: { editCooldownUntil: number; wallStock: number; wallRemoveLeft: number } };
+    };
+    internal.roomState.owner.editCooldownUntil = Date.now();
 
     ownerSocket.dispatchMessage(
       JSON.stringify({
@@ -118,7 +141,7 @@ describe('RoomDurableObject wall removal', () => {
 
   it('壁追加は在庫を消費し、在庫がない場合はエラーになる', () => {
     const internal = room as unknown as {
-      roomState: { owner: { wallStock: number; wallRemoveLeft: number; trapCharges: number } };
+      roomState: { owner: { wallStock: number; wallRemoveLeft: number; trapCharges: number; editCooldownUntil: number } };
     };
 
     internal.roomState.owner.wallStock = 1;
@@ -137,6 +160,8 @@ describe('RoomDurableObject wall removal', () => {
 
     expect(internal.roomState.owner.wallStock).toBe(0);
 
+    vi.advanceTimersByTime(1_000);
+    internal.roomState.owner.editCooldownUntil = Date.now();
     ownerSocket.dispatchMessage(
       JSON.stringify({
         type: 'O_EDIT',
@@ -173,6 +198,8 @@ describe('RoomDurableObject wall removal', () => {
 
     expect(internal.roomState.owner.trapCharges).toBe(0);
 
+    vi.advanceTimersByTime(1_000);
+    internal.roomState.owner.editCooldownUntil = Date.now();
     ownerSocket.dispatchMessage(
       JSON.stringify({
         type: 'O_EDIT',
@@ -186,5 +213,90 @@ describe('RoomDurableObject wall removal', () => {
     const error = ownerSocket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === 'ERR');
     expect(error).toMatchObject({ code: 'TRAP_CHARGE_EMPTY' });
     expect(internal.roomState.owner.trapCharges).toBe(0);
+  });
+
+  it('編集クールダウンが1秒間適用される', () => {
+    const internal = room as unknown as {
+      roomState: { owner: { wallStock: number; editCooldownUntil: number } };
+    };
+    internal.roomState.owner.wallStock = 2;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 3, y: 3 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    expect(internal.roomState.owner.wallStock).toBe(1);
+
+    ownerSocket.sent.length = 0;
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 4, y: 4 },
+          direction: 'east',
+        },
+      }),
+    );
+
+    const cooldownError = ownerSocket.sent
+      .map((raw) => JSON.parse(raw))
+      .find((message) => message.type === 'ERR');
+    expect(cooldownError).toMatchObject({ code: 'EDIT_COOLDOWN' });
+    expect(internal.roomState.owner.wallStock).toBe(1);
+
+    vi.advanceTimersByTime(1_000);
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    ownerSocket.sent.length = 0;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 5, y: 5 },
+          direction: 'south',
+        },
+      }),
+    );
+
+    expect(internal.roomState.owner.wallStock).toBe(0);
+  });
+
+  it('禁止エリア内の編集は拒否される', () => {
+    const internal = room as unknown as {
+      roomState: {
+        owner: { wallStock: number; editCooldownUntil: number };
+        player: { physics: { position: { x: number; y: number } } };
+      };
+    };
+
+    internal.roomState.owner.wallStock = 5;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    internal.roomState.player.physics.position = { x: 10.2, y: 10.4 };
+
+    ownerSocket.sent.length = 0;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 11, y: 9 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    const error = ownerSocket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'EDIT_FORBIDDEN' });
+    expect(internal.roomState.owner.wallStock).toBe(5);
   });
 });

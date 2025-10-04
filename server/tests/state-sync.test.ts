@@ -110,6 +110,7 @@ describe('StateComposer', () => {
       wallStock: 120,
       wallRemoveLeft: 1,
       trapCharges: 0,
+      editCooldownUntil: room.owner.editCooldownUntil,
     });
   });
 });

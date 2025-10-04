@@ -58,7 +58,7 @@ export function resetForRematch(
   state.phaseEndsAt = undefined;
   state.createdAt = now;
   state.updatedAt = now;
-  resetOwnerState(state);
+  resetOwnerState(state, now);
 
   state.player.physics = {
     position: { x: 0.5, y: 0.5 },

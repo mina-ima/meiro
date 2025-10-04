@@ -18,6 +18,7 @@ interface SnapshotOwner {
   wallStock: number;
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
+  editCooldownUntil: number;
 }
 
 interface Snapshot {
@@ -117,6 +118,7 @@ function createSnapshot(room: RoomState): Snapshot {
       wallStock: room.owner.wallStock,
       wallRemoveLeft: room.owner.wallRemoveLeft,
       trapCharges: room.owner.trapCharges,
+      editCooldownUntil: room.owner.editCooldownUntil,
     },
   };
 }
@@ -194,6 +196,7 @@ function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
   return (
     a.wallStock === b.wallStock &&
     a.wallRemoveLeft === b.wallRemoveLeft &&
-    a.trapCharges === b.trapCharges
+    a.trapCharges === b.trapCharges &&
+    a.editCooldownUntil === b.editCooldownUntil
   );
 }
