@@ -6,11 +6,13 @@ describe('RoomState owner resources', () => {
     const room = createInitialRoomState('ROOM-ID', 1_000);
 
     expect(room.owner.wallStock).toBe(140);
+    expect(room.owner.wallRemoveLeft).toBe(1);
   });
 
   it('迷路サイズ20では壁資源が48本で初期化される', () => {
     const room = createInitialRoomState('ROOM-ID', 1_000, undefined, { mazeSize: 20 });
 
     expect(room.owner.wallStock).toBe(48);
+    expect(room.owner.wallRemoveLeft).toBe(1);
   });
 });

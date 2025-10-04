@@ -31,6 +31,7 @@ interface WebSocketRequest extends Request {
 }
 
 type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
+type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
@@ -157,6 +158,13 @@ export class RoomDurableObject {
         if (message.type === 'PING') {
           socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
           return;
+        }
+
+        if (message.type === 'O_EDIT') {
+          const accepted = this.handleOwnerEdit(message, socket);
+          if (!accepted) {
+            return;
+          }
         }
 
         const now = Date.now();
@@ -312,6 +320,27 @@ export class RoomDurableObject {
       clientTimestamp: message.timestamp,
       receivedAt,
     } satisfies PlayerInputState;
+  }
+
+  private handleOwnerEdit(message: OwnerEditMessage, socket: WebSocket): boolean {
+    if (message.edit.action !== 'DEL_WALL') {
+      return true;
+    }
+
+    if (this.roomState.owner.wallRemoveLeft === 0) {
+      socket.send(
+        JSON.stringify({
+          type: 'ERR',
+          code: 'WALL_REMOVE_EXHAUSTED',
+          message: 'Owner has already used the wall removal ability.',
+        }),
+      );
+      return false;
+    }
+
+    this.roomState.owner.wallRemoveLeft = 0;
+    this.roomState.owner.wallStock += 1;
+    return true;
   }
 
   private handleTick(): void {

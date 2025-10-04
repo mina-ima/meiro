@@ -16,6 +16,7 @@ interface SnapshotPlayer {
 
 interface SnapshotOwner {
   wallStock: number;
+  wallRemoveLeft: 0 | 1;
 }
 
 interface Snapshot {
@@ -113,6 +114,7 @@ function createSnapshot(room: RoomState): Snapshot {
     },
     owner: {
       wallStock: room.owner.wallStock,
+      wallRemoveLeft: room.owner.wallRemoveLeft,
     },
   };
 }
@@ -187,5 +189,5 @@ function cloneVector(source: Vector2): Vector2 {
 }
 
 function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
-  return a.wallStock === b.wallStock;
+  return a.wallStock === b.wallStock && a.wallRemoveLeft === b.wallRemoveLeft;
 }

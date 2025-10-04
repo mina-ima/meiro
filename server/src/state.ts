@@ -19,6 +19,7 @@ export interface PlayerSession {
 
 export interface OwnerRuntimeState {
   wallStock: number;
+  wallRemoveLeft: 0 | 1;
 }
 
 export interface RoomState {
@@ -83,6 +84,7 @@ function defaultPlayerPosition(): Vector2 {
 function createInitialOwnerState(mazeSize: 20 | 40): OwnerRuntimeState {
   return {
     wallStock: initialWallStockForMaze(mazeSize),
+    wallRemoveLeft: 1,
   };
 }
 
