@@ -5,11 +5,8 @@
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["vite/client", "react", "react-dom", "vitest"],
-    "baseUrl": "."
+    "types": ["vite/client", "react", "react-dom", "vitest"]
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts", "tests"],
-  "references": [
-    { "path": "../packages/common" }
-  ]
+  "references": []
 }

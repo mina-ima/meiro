@@ -1,3 +1,10 @@
+import {
+  SERVER_TICK_INTERVAL_MS,
+  SERVER_TICK_INTERVAL_S,
+  integrate,
+  type PhysicsEnvironment,
+  type PhysicsState,
+} from '@meiro/common';
 import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
@@ -5,8 +12,8 @@ import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/pha
 import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
 import { ClientConnection, MessageSizeExceededError } from './logic/outbound';
 import { StateComposer } from './logic/state-sync';
-import type { PlayerSession, RoomState } from './state';
-import type { ServerMessage } from './schema/ws';
+import type { PlayerInputState, PlayerSession, RoomState } from './state';
+import type { ClientMessage, ServerMessage } from './schema/ws';
 
 interface SessionPayload {
   roomId: string;
@@ -23,6 +30,8 @@ interface WebSocketRequest extends Request {
   webSocket?: WebSocket;
 }
 
+type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
+
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
   private readonly roomId: string;
@@ -31,11 +40,15 @@ export class RoomDurableObject {
   private readonly socketSessions = new Map<WebSocket, PlayerSession>();
   private readonly stateComposer = new StateComposer();
   private roomState: RoomState;
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(state: DurableObjectState) {
     this.state = state;
     this.roomId = state.id.toString();
     this.roomState = createInitialRoomState(this.roomId);
+    this.tickTimer = setInterval(() => {
+      this.handleTick();
+    }, SERVER_TICK_INTERVAL_MS);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -157,11 +170,13 @@ export class RoomDurableObject {
         }
 
         switch (message.type) {
+          case 'P_INPUT':
+            this.handlePlayerInput(message, now);
+            break;
           case 'O_EDIT':
           case 'O_CONFIRM':
             this.publishState({ forceFull: true });
             break;
-          case 'P_INPUT':
           case 'O_MRK':
           case 'O_CANCEL':
             this.publishState({ forceFull: false });
@@ -289,6 +304,62 @@ export class RoomDurableObject {
       }
     }
   }
+
+  private handlePlayerInput(message: PlayerInputMessage, receivedAt: number): void {
+    this.roomState.player.input = {
+      forward: clampInput(message.forward),
+      turn: clampInput(message.yaw),
+      clientTimestamp: message.timestamp,
+      receivedAt,
+    } satisfies PlayerInputState;
+  }
+
+  private handleTick(): void {
+    if (this.roomState.phase !== 'explore' || !this.hasPlayerSession()) {
+      return;
+    }
+
+    const current = this.roomState.player.physics;
+    const input = this.roomState.player.input;
+    const environment = this.createPhysicsEnvironment();
+
+    const next = integrate(current, input, { deltaTime: SERVER_TICK_INTERVAL_S }, environment);
+    const changed = physicsStateChanged(current, next);
+
+    this.roomState.player.physics = next;
+
+    if (!changed) {
+      return;
+    }
+
+    this.roomState.updatedAt = Date.now();
+    this.publishState({ forceFull: false });
+  }
+
+  private hasPlayerSession(): boolean {
+    for (const session of this.roomState.sessions.values()) {
+      if (session.role === 'player') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private createPhysicsEnvironment(): PhysicsEnvironment {
+    const solids = this.roomState.solidCells;
+    return {
+      isSolid(tileX: number, tileY: number): boolean {
+        return solids.has(solidKey(tileX, tileY));
+      },
+    };
+  }
+
+  public dispose(): void {
+    if (this.tickTimer !== null) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+  }
 }
 
 function deserialize(data: unknown): unknown {
@@ -317,4 +388,39 @@ function toSocketSet(source: PublishStateOptions['immediate']): Set<WebSocket> {
   }
 
   return new Set([source]);
+}
+
+const INPUT_MIN = -1;
+const INPUT_MAX = 1;
+const FLOAT_EPSILON = 1e-4;
+
+function clampInput(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < INPUT_MIN) {
+    return INPUT_MIN;
+  }
+  if (value > INPUT_MAX) {
+    return INPUT_MAX;
+  }
+  return value;
+}
+
+function physicsStateChanged(a: PhysicsState, b: PhysicsState): boolean {
+  return (
+    differs(a.position.x, b.position.x) ||
+    differs(a.position.y, b.position.y) ||
+    differs(a.angle, b.angle) ||
+    differs(a.velocity.x, b.velocity.x) ||
+    differs(a.velocity.y, b.velocity.y)
+  );
+}
+
+function differs(a: number, b: number, epsilon = FLOAT_EPSILON): boolean {
+  return Math.abs(a - b) > epsilon;
+}
+
+function solidKey(x: number, y: number): string {
+  return `${x},${y}`;
 }

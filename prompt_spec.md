@@ -301,6 +301,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * ルートに `README.md` を置き、モノレポ構成と主要コマンドを記載。
 * 配布ライセンスは MIT。`LICENSE` と `NOTICE` をルートに配置し、著作権表記を明示。
 * ブランチ戦略は `main` を安定ブランチとし、`feature/*`・`fix/*` からPR経由で取り込む。
+* CI は `.github/workflows/ci.yml` でフォーマットチェック・Lint・Typecheck・Test を自動実行。
 
 ---
 
@@ -400,7 +401,7 @@ wrangler dev --local
 * [ ] ポイント：下限不足→初期ポイント補填（上限=規定−1）
 * [ ] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**
 * [ ] 切断→即ポーズ→60秒勝敗
-* [ ] 30fps/20Hz/遅延100ms以下
+* [ ] 30fps/20Hz/遅延100ms以下（20Hz積分・補間の初期実装済み、レイテンシ評価未）
 
 ---
 

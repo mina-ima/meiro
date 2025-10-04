@@ -59,6 +59,19 @@ export function resetForRematch(
   state.createdAt = now;
   state.updatedAt = now;
 
+  state.player.physics = {
+    position: { x: 0.5, y: 0.5 },
+    angle: 0,
+    velocity: { x: 0, y: 0 },
+  };
+  state.player.input = {
+    forward: 0,
+    turn: 0,
+    clientTimestamp: now,
+    receivedAt: now,
+  };
+  state.solidCells.clear();
+
   state.sessions.set(ownerSession.id, ownerSession);
   state.sessions.set(playerSession.id, playerSession);
 

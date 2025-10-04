@@ -4,11 +4,8 @@
     "lib": ["ES2022", "WebWorker"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/workers-types"],
-    "baseUrl": "."
+    "types": ["@cloudflare/workers-types"]
   },
   "include": ["src", "vitest.config.ts", "wrangler.toml"],
-  "references": [
-    { "path": "../packages/common" }
-  ]
+  "references": []
 }

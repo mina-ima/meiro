@@ -1,3 +1,4 @@
+import type { Vector2 } from '@meiro/common';
 import type { Role, ServerMessage } from '../schema/ws';
 import type { RoomState } from '../state';
 
@@ -5,6 +6,12 @@ interface SnapshotSession {
   id: string;
   role: Role;
   nick: string;
+}
+
+interface SnapshotPlayer {
+  position: Vector2;
+  velocity: Vector2;
+  angle: number;
 }
 
 interface Snapshot {
@@ -16,6 +23,7 @@ interface Snapshot {
   prepDurationMs: number;
   exploreDurationMs: number;
   sessions: SnapshotSession[];
+  player: SnapshotPlayer;
 }
 
 interface ComposeOptions {
@@ -93,6 +101,11 @@ function createSnapshot(room: RoomState): Snapshot {
     sessions: Array.from(room.sessions.values())
       .map(({ id, role, nick }) => ({ id, role, nick }))
       .sort((a, b) => a.id.localeCompare(b.id)),
+    player: {
+      position: cloneVector(room.player.physics.position),
+      velocity: cloneVector(room.player.physics.velocity),
+      angle: room.player.physics.angle,
+    },
   };
 }
 
@@ -127,6 +140,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
     changes.sessions = next.sessions;
   }
 
+  if (!playerEqual(previous.player, next.player)) {
+    changes.player = next.player;
+  }
+
   return changes;
 }
 
@@ -139,4 +156,20 @@ function sessionsEqual(a: SnapshotSession[], b: SnapshotSession[]): boolean {
     const other = b[index];
     return session.id === other.id && session.role === other.role && session.nick === other.nick;
   });
+}
+
+function playerEqual(a: SnapshotPlayer, b: SnapshotPlayer): boolean {
+  return (
+    vectorsEqual(a.position, b.position) &&
+    vectorsEqual(a.velocity, b.velocity) &&
+    Math.abs(a.angle - b.angle) < 1e-4
+  );
+}
+
+function vectorsEqual(a: Vector2, b: Vector2): boolean {
+  return Math.abs(a.x - b.x) < 1e-4 && Math.abs(a.y - b.y) < 1e-4;
+}
+
+function cloneVector(source: Vector2): Vector2 {
+  return { x: source.x, y: source.y };
 }
