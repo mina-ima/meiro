@@ -41,3 +41,9 @@ pnpm install
 - 開発作業は `feature/<概要>` ブランチで行い、完了後に Pull Request を通じて `main` へマージします。
 - バグ修正は `fix/<概要>` ブランチで行い、緊急対応が必要な場合でも PR を経由して `main` に取り込みます。
 - PR 作成時は `pnpm format && pnpm lint && pnpm typecheck && pnpm test` の実行結果を添付し、レビュー後に squash merge します。
+
+## CI
+
+- `.github/workflows/ci.yml` で `main` への push・pull request をトリガーに自動実行。
+- フォーマットチェック（`pnpm -r exec prettier --check "**/*.{ts,tsx,js,jsx,md,json}"`）、Lint、Typecheck、テストを順番に実行します。
+- ワークフローは Node.js 20 + pnpm 9 を使用し、`pnpm install --frozen-lockfile` で依存関係を固定します。
