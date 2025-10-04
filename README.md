@@ -30,3 +30,7 @@ pnpm install
 ```
 
 各パッケージは `pnpm-workspace.yaml` で管理され、共通のリンター/フォーマッター/テスト設定を共有しています。
+
+## ライセンス
+
+本リポジトリは MIT License で提供されます。詳細は `LICENSE` と `NOTICE` を参照してください。

@@ -299,6 +299,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **依存**：React, Phaser, zod(スキーマ), colyseus/protobufなし(JSONでOK), vite, workers-types。
 * **シリアライズ**：JSON（要コンパクト化：短key/数値配列）。
 * ルートに `README.md` を置き、モノレポ構成と主要コマンドを記載。
+* 配布ライセンスは MIT。`LICENSE` と `NOTICE` をルートに配置し、著作権表記を明示。
 
 ---
 

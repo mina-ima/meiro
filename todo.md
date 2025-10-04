@@ -10,7 +10,7 @@
   - DoD: `package.json` の name/version 設定
 - [x] リポジトリ初期化（client/server モノレポ or 2リポ）  
   - DoD: `client/` と `server/` の雛形コミット
-- [ ] ライセンス/著作権表記  
+- [x] ライセンス/著作権表記  
   - DoD: `LICENSE`/`NOTICE` 追加
 - [ ] 作業ブランチ戦略（main/develop、PR運用）  
   - DoD: READMEに明記
