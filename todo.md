@@ -218,7 +218,7 @@
 ## 19. DevOps/CI
 - [ ] wrangler セットアップ（local/dev/prod）
 - [ ] ページ/ワーカー デプロイパイプライン（PRでpreviews）
-- [ ] CI: lint/format/typecheck/unit/e2e
+- [x] CI: lint/format/typecheck/unit/e2e
 - [ ] エラートラッキング（Sentry 任意）
 - [ ] リリースタグとCHANGELOG運用
 

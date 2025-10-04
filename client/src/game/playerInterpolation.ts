@@ -116,8 +116,18 @@ function interpolateSnapshots(
 
   return {
     position: {
-      x: clampToTargetAxis(lerp(from.position.x, to.position.x, t), from.position.x, to.position.x, to.velocity.x),
-      y: clampToTargetAxis(lerp(from.position.y, to.position.y, t), from.position.y, to.position.y, to.velocity.y),
+      x: clampToTargetAxis(
+        lerp(from.position.x, to.position.x, t),
+        from.position.x,
+        to.position.x,
+        to.velocity.x,
+      ),
+      y: clampToTargetAxis(
+        lerp(from.position.y, to.position.y, t),
+        from.position.y,
+        to.position.y,
+        to.velocity.y,
+      ),
     },
     velocity: {
       x: lerp(from.velocity.x, to.velocity.x, t),
@@ -169,7 +179,12 @@ function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-function clampToTargetAxis(value: number, from: number, to: number, targetVelocity: number): number {
+function clampToTargetAxis(
+  value: number,
+  from: number,
+  to: number,
+  targetVelocity: number,
+): number {
   if (Math.abs(targetVelocity) >= VELOCITY_EPSILON) {
     return value;
   }
