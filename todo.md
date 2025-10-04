@@ -12,7 +12,7 @@
   - DoD: `client/` と `server/` の雛形コミット
 - [x] ライセンス/著作権表記  
   - DoD: `LICENSE`/`NOTICE` 追加
-- [ ] 作業ブランチ戦略（main/develop、PR運用）  
+- [x] 作業ブランチ戦略（main/develop、PR運用）  
   - DoD: READMEに明記
 
 ---

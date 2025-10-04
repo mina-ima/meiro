@@ -34,3 +34,10 @@ pnpm install
 ## ライセンス
 
 本リポジトリは MIT License で提供されます。詳細は `LICENSE` と `NOTICE` を参照してください。
+
+## ブランチ戦略
+
+- `main`：デプロイ可能な安定ブランチ。常に最新の検証済みビルドを保持します。
+- 開発作業は `feature/<概要>` ブランチで行い、完了後に Pull Request を通じて `main` へマージします。
+- バグ修正は `fix/<概要>` ブランチで行い、緊急対応が必要な場合でも PR を経由して `main` に取り込みます。
+- PR 作成時は `pnpm format && pnpm lint && pnpm typecheck && pnpm test` の実行結果を添付し、レビュー後に squash merge します。

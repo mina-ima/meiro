@@ -15,5 +15,6 @@ describe('リポジトリ初期化', () => {
     const readme = readFileSync(readmePath, 'utf8');
     expect(readme).toContain('client/');
     expect(readme).toContain('server/');
+    expect(readme).toContain('## ブランチ戦略');
   });
 });
