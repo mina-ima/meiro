@@ -215,6 +215,34 @@ describe('RoomDurableObject wall removal', () => {
     expect(internal.roomState.owner.trapCharges).toBe(0);
   });
 
+  it('罠は通路以外のセルには設置できない', () => {
+    const internal = room as unknown as {
+      roomState: {
+        owner: { trapCharges: number; editCooldownUntil: number };
+        solidCells: Set<string>;
+      };
+    };
+
+    internal.roomState.owner.trapCharges = 1;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    internal.roomState.solidCells = new Set(['4,4']);
+    ownerSocket.sent.length = 0;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'PLACE_TRAP',
+          cell: { x: 4, y: 4 },
+        },
+      }),
+    );
+
+    const error = ownerSocket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'TRAP_INVALID_CELL' });
+    expect(internal.roomState.owner.trapCharges).toBe(1);
+  });
+
   it('編集クールダウンが1秒間適用される', () => {
     const internal = room as unknown as {
       roomState: { owner: { wallStock: number; editCooldownUntil: number } };

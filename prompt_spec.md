@@ -220,6 +220,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
   * `INVALID_NAME`（文字種/長さNG）
   * `ROOM_NOT_FOUND` / `ROOM_FULL` / `ROOM_EXPIRED`
   * `DENY_EDIT`（禁止エリア/資源不足/重ね不可）
+  * `TRAP_INVALID_CELL`（罠を通路中心に置いていない）
   * `NO_PATH`（経路保証違反）
   * `COOLDOWN`（連続編集）
   * `LIMIT_REACHED`（予測/罠/本数上限）

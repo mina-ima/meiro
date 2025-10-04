@@ -372,6 +372,12 @@ export class RoomDurableObject {
           this.sendError(socket, 'TRAP_CHARGE_EMPTY', 'No trap charges remaining.');
           return false;
         }
+        if (
+          !isTrapPlacementCellValid(targetCell, this.roomState.mazeSize, this.roomState.solidCells)
+        ) {
+          this.sendError(socket, 'TRAP_INVALID_CELL', 'Trap must be placed on a walkable cell.');
+          return false;
+        }
         owner.trapCharges -= 1;
         owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
@@ -500,6 +506,18 @@ function differs(a: number, b: number, epsilon = FLOAT_EPSILON): boolean {
 
 function solidKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+function isTrapPlacementCellValid(
+  cell: { x: number; y: number },
+  mazeSize: number,
+  solidCells: Set<string>,
+): boolean {
+  if (cell.x < 0 || cell.y < 0 || cell.x >= mazeSize || cell.y >= mazeSize) {
+    return false;
+  }
+
+  return !solidCells.has(solidKey(cell.x, cell.y));
 }
 
 function isEditInForbiddenArea(
