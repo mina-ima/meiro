@@ -6,7 +6,7 @@
 ---
 
 ## 0. プロジェクトメタ
-- [ ] プロジェクト名・バージョンを確定（MEIRO v1）  
+- [x] プロジェクト名・バージョンを確定（MEIRO v1）  
   - DoD: `package.json` の name/version 設定
 - [ ] リポジトリ初期化（client/server モノレポ or 2リポ）  
   - DoD: `client/` と `server/` の雛形コミット
