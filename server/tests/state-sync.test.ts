@@ -106,6 +106,10 @@ describe('StateComposer', () => {
     const diff = composer.compose(room);
 
     assertStateMessage(diff);
-    expect(diff.payload.changes?.owner).toEqual({ wallStock: 120, wallRemoveLeft: 1 });
+    expect(diff.payload.changes?.owner).toEqual({
+      wallStock: 120,
+      wallRemoveLeft: 1,
+      trapCharges: 0,
+    });
   });
 });

@@ -7,6 +7,7 @@ describe('RoomState owner resources', () => {
 
     expect(room.owner.wallStock).toBe(140);
     expect(room.owner.wallRemoveLeft).toBe(1);
+    expect(room.owner.trapCharges).toBe(0);
   });
 
   it('迷路サイズ20では壁資源が48本で初期化される', () => {
@@ -14,5 +15,6 @@ describe('RoomState owner resources', () => {
 
     expect(room.owner.wallStock).toBe(48);
     expect(room.owner.wallRemoveLeft).toBe(1);
+    expect(room.owner.trapCharges).toBe(0);
   });
 });

@@ -115,4 +115,76 @@ describe('RoomDurableObject wall removal', () => {
     expect(state.wallRemoveLeft).toBe(0);
     expect(state.wallStock).toBe(141);
   });
+
+  it('壁追加は在庫を消費し、在庫がない場合はエラーになる', () => {
+    const internal = room as unknown as {
+      roomState: { owner: { wallStock: number; wallRemoveLeft: number; trapCharges: number } };
+    };
+
+    internal.roomState.owner.wallStock = 1;
+    ownerSocket.sent.length = 0;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 3, y: 4 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    expect(internal.roomState.owner.wallStock).toBe(0);
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 1, y: 1 },
+          direction: 'east',
+        },
+      }),
+    );
+
+    const error = ownerSocket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'WALL_STOCK_EMPTY' });
+    expect(internal.roomState.owner.wallStock).toBe(0);
+  });
+
+  it('罠設置はチャージを消費し、残数が無ければエラーになる', () => {
+    const internal = room as unknown as {
+      roomState: { owner: { trapCharges: number } };
+    };
+
+    internal.roomState.owner.trapCharges = 1;
+    ownerSocket.sent.length = 0;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'PLACE_TRAP',
+          cell: { x: 5, y: 5 },
+        },
+      }),
+    );
+
+    expect(internal.roomState.owner.trapCharges).toBe(0);
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'PLACE_TRAP',
+          cell: { x: 6, y: 6 },
+        },
+      }),
+    );
+
+    const error = ownerSocket.sent.map((raw) => JSON.parse(raw)).find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'TRAP_CHARGE_EMPTY' });
+    expect(internal.roomState.owner.trapCharges).toBe(0);
+  });
 });

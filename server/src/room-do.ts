@@ -323,24 +323,41 @@ export class RoomDurableObject {
   }
 
   private handleOwnerEdit(message: OwnerEditMessage, socket: WebSocket): boolean {
-    if (message.edit.action !== 'DEL_WALL') {
-      return true;
-    }
+    const { owner } = this.roomState;
 
-    if (this.roomState.owner.wallRemoveLeft === 0) {
-      socket.send(
-        JSON.stringify({
-          type: 'ERR',
-          code: 'WALL_REMOVE_EXHAUSTED',
-          message: 'Owner has already used the wall removal ability.',
-        }),
-      );
-      return false;
+    switch (message.edit.action) {
+      case 'ADD_WALL': {
+        if (owner.wallStock <= 0) {
+          this.sendError(socket, 'WALL_STOCK_EMPTY', 'No wall stock remaining.');
+          return false;
+        }
+        owner.wallStock -= 1;
+        return true;
+      }
+      case 'DEL_WALL': {
+        if (owner.wallRemoveLeft === 0) {
+          this.sendError(
+            socket,
+            'WALL_REMOVE_EXHAUSTED',
+            'Owner has already used the wall removal ability.',
+          );
+          return false;
+        }
+        owner.wallRemoveLeft = 0;
+        owner.wallStock += 1;
+        return true;
+      }
+      case 'PLACE_TRAP': {
+        if (owner.trapCharges <= 0) {
+          this.sendError(socket, 'TRAP_CHARGE_EMPTY', 'No trap charges remaining.');
+          return false;
+        }
+        owner.trapCharges -= 1;
+        return true;
+      }
+      default:
+        return true;
     }
-
-    this.roomState.owner.wallRemoveLeft = 0;
-    this.roomState.owner.wallStock += 1;
-    return true;
   }
 
   private handleTick(): void {
@@ -388,6 +405,16 @@ export class RoomDurableObject {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
     }
+  }
+
+  private sendError(socket: WebSocket, code: string, message: string): void {
+    socket.send(
+      JSON.stringify({
+        type: 'ERR',
+        code,
+        message,
+      }),
+    );
   }
 }
 

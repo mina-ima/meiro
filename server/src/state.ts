@@ -20,6 +20,7 @@ export interface PlayerSession {
 export interface OwnerRuntimeState {
   wallStock: number;
   wallRemoveLeft: 0 | 1;
+  trapCharges: number;
 }
 
 export interface RoomState {
@@ -85,6 +86,7 @@ function createInitialOwnerState(mazeSize: 20 | 40): OwnerRuntimeState {
   return {
     wallStock: initialWallStockForMaze(mazeSize),
     wallRemoveLeft: 1,
+    trapCharges: 0,
   };
 }
 
