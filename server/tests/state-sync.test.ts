@@ -94,5 +94,18 @@ describe('StateComposer', () => {
     assertStateMessage(second);
     expect(second.payload.seq).toBeGreaterThan(first.payload.seq);
   });
-});
 
+  it('オーナー資源の変化を差分に含める', () => {
+    const composer = new StateComposer();
+    const room = createInitialRoomState('ROOM', 1_000);
+
+    composer.compose(room);
+
+    room.owner.wallStock = 120;
+
+    const diff = composer.compose(room);
+
+    assertStateMessage(diff);
+    expect(diff.payload.changes?.owner).toEqual({ wallStock: 120 });
+  });
+});

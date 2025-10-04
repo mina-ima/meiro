@@ -17,6 +17,10 @@ export interface PlayerSession {
   nick: string;
 }
 
+export interface OwnerRuntimeState {
+  wallStock: number;
+}
+
 export interface RoomState {
   id: string;
   phase: 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
@@ -27,15 +31,23 @@ export interface RoomState {
   prepDurationMs: number;
   exploreDurationMs: number;
   sessions: Map<string, PlayerSession>;
+  mazeSize: 20 | 40;
+  owner: OwnerRuntimeState;
   player: PlayerRuntimeState;
   solidCells: Set<string>;
+}
+
+export interface RoomStateOptions {
+  mazeSize?: 20 | 40;
 }
 
 export function createInitialRoomState(
   id: string,
   now: number = Date.now(),
   exploreDurationMs = 5 * 60 * 1000,
+  options: RoomStateOptions = {},
 ): RoomState {
+  const mazeSize = options.mazeSize ?? 40;
   return {
     id,
     phase: 'lobby',
@@ -45,6 +57,8 @@ export function createInitialRoomState(
     prepDurationMs: 60_000,
     exploreDurationMs,
     sessions: new Map(),
+    mazeSize,
+    owner: createInitialOwnerState(mazeSize),
     player: {
       physics: {
         position: defaultPlayerPosition(),
@@ -64,4 +78,18 @@ export function createInitialRoomState(
 
 function defaultPlayerPosition(): Vector2 {
   return { x: 0.5, y: 0.5 };
+}
+
+function createInitialOwnerState(mazeSize: 20 | 40): OwnerRuntimeState {
+  return {
+    wallStock: initialWallStockForMaze(mazeSize),
+  };
+}
+
+function initialWallStockForMaze(mazeSize: 20 | 40): number {
+  return mazeSize === 20 ? 48 : 140;
+}
+
+export function resetOwnerState(state: RoomState): void {
+  state.owner = createInitialOwnerState(state.mazeSize);
 }

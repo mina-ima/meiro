@@ -1,4 +1,4 @@
-import type { RoomState } from '../state';
+import { resetOwnerState, type RoomState } from '../state';
 
 export const DEFAULT_EXPLORE_DURATION_MS = 5 * 60 * 1000;
 const COUNTDOWN_DURATION_MS = 3_000;
@@ -58,6 +58,7 @@ export function resetForRematch(
   state.phaseEndsAt = undefined;
   state.createdAt = now;
   state.updatedAt = now;
+  resetOwnerState(state);
 
   state.player.physics = {
     position: { x: 0.5, y: 0.5 },

@@ -1,5 +1,5 @@
 import type { Role } from '../schema/ws';
-import type { PlayerSession, RoomState } from '../state';
+import { resetOwnerState, type PlayerSession, type RoomState } from '../state';
 
 export const LOBBY_CAPACITY = 2;
 export const LOBBY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -61,6 +61,7 @@ export function resetLobby(state: RoomState, now: number): void {
   state.phase = 'lobby';
   state.createdAt = now;
   state.updatedAt = now;
+  resetOwnerState(state);
   state.player.physics = {
     position: { x: 0.5, y: 0.5 },
     angle: 0,

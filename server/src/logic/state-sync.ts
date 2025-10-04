@@ -14,6 +14,10 @@ interface SnapshotPlayer {
   angle: number;
 }
 
+interface SnapshotOwner {
+  wallStock: number;
+}
+
 interface Snapshot {
   roomId: string;
   phase: RoomState['phase'];
@@ -24,6 +28,7 @@ interface Snapshot {
   exploreDurationMs: number;
   sessions: SnapshotSession[];
   player: SnapshotPlayer;
+  owner: SnapshotOwner;
 }
 
 interface ComposeOptions {
@@ -106,6 +111,9 @@ function createSnapshot(room: RoomState): Snapshot {
       velocity: cloneVector(room.player.physics.velocity),
       angle: room.player.physics.angle,
     },
+    owner: {
+      wallStock: room.owner.wallStock,
+    },
   };
 }
 
@@ -144,6 +152,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
     changes.player = next.player;
   }
 
+  if (!ownerEqual(previous.owner, next.owner)) {
+    changes.owner = next.owner;
+  }
+
   return changes;
 }
 
@@ -172,4 +184,8 @@ function vectorsEqual(a: Vector2, b: Vector2): boolean {
 
 function cloneVector(source: Vector2): Vector2 {
   return { x: source.x, y: source.y };
+}
+
+function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
+  return a.wallStock === b.wallStock;
 }
