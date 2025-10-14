@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { recordFrame } from '../logging/telemetry';
 
 export type FrameLoopCallback = (deltaMs: number) => void;
 
@@ -36,6 +37,7 @@ export function useFixedFrameLoop(callback: FrameLoopCallback): void {
       let steps = 0;
       while (accumulator + EPSILON >= FRAME_INTERVAL_MS && steps < MAX_STEPS_PER_TICK) {
         callbackRef.current(FRAME_INTERVAL_MS);
+        recordFrame(FRAME_INTERVAL_MS);
         accumulator -= FRAME_INTERVAL_MS;
         steps += 1;
       }

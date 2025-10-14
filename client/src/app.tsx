@@ -1,37 +1,161 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OwnerView, PlayerView } from './views';
-import { ToastHost } from './ui/toasts';
+import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { NetClient } from './net/NetClient';
-import { useSessionStore } from './state/sessionStore';
+import { useSessionStore, type ServerStatePayload } from './state/sessionStore';
+import { logClientInit, logClientError, logPhaseChange } from './logging/telemetry';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isServerStatePayload(value: unknown): value is ServerStatePayload {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (typeof value.seq !== 'number' || typeof value.full !== 'boolean') {
+    return false;
+  }
+
+  if (value.full) {
+    return isRecord(value.snapshot);
+  }
+
+  return isRecord(value.changes);
+}
+
 export function App() {
-  const { role, roomId, score, targetScore, setRoom, setScore } = useSessionStore();
+  const role = useSessionStore((state) => state.role);
+  const roomId = useSessionStore((state) => state.roomId);
+  const score = useSessionStore((state) => state.score);
+  const targetScore = useSessionStore((state) => state.targetScore);
+  const ownerState = useSessionStore((state) => state.owner);
+  const playerState = useSessionStore((state) => state.player);
+  const phase = useSessionStore((state) => state.phase);
+  const phaseEndsAt = useSessionStore((state) => state.phaseEndsAt);
+  const mazeSize = useSessionStore((state) => state.mazeSize);
+  const setRoom = useSessionStore((state) => state.setRoom);
+  const setScore = useSessionStore((state) => state.setScore);
+  const applyServerState = useSessionStore((state) => state.applyServerState);
+  const timeRemaining = useTimeRemaining(phaseEndsAt);
+  const previousPhase = useRef(phase);
 
   useEffect(() => {
-    // 仮の初期状態。UI 確認用にプレイヤー役割で起動する。
+    logClientInit({
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+    });
+  }, []);
+
+  useEffect(() => {
+    // 仮の初期状態。初回のみUI確認用にプレイヤー役割で起動する。
+    if (role !== null) {
+      return;
+    }
     setRoom('DEBUGROOM', 'player');
     setScore(0, 100);
-  }, [setRoom, setScore]);
+  }, [role, setRoom, setScore]);
+
+  useEffect(() => {
+    if (previousPhase.current !== phase) {
+      const countdownMs = phaseEndsAt ? Math.max(phaseEndsAt - Date.now(), 0) : undefined;
+      logPhaseChange(phase, countdownMs);
+      previousPhase.current = phase;
+    }
+  }, [phase, phaseEndsAt]);
+
+  const handleServerMessage = useCallback(
+    (data: unknown) => {
+      if (!isRecord(data) || typeof data.type !== 'string') {
+        return;
+      }
+
+      if (data.type === 'STATE') {
+        const payload = (data as { payload?: unknown }).payload;
+        if (isServerStatePayload(payload)) {
+          applyServerState(payload);
+        }
+        return;
+      }
+
+      if (data.type === 'ERR' && typeof data.code === 'string') {
+        enqueueErrorToast(data.code);
+        logClientError(data.code);
+      }
+    },
+    [applyServerState],
+  );
 
   const client = useMemo(() => {
     if (!roomId || !role) {
       return null;
     }
 
-    return new NetClient({
-      endpoint: WS_ENDPOINT,
-      nick: 'debugger',
-      role,
-      room: roomId,
-    });
-  }, [roomId, role]);
+    return new NetClient(
+      {
+        endpoint: WS_ENDPOINT,
+        nick: 'debugger',
+        role,
+        room: roomId,
+      },
+      {
+        onMessage: handleServerMessage,
+        onError: () => {
+          enqueueErrorToast('NETWORK_ERROR');
+        },
+      },
+    );
+  }, [roomId, role, handleServerMessage]);
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+
+    client.connect();
+    return () => {
+      client.dispose();
+    };
+  }, [client]);
+
+  const previousPredictionHits = useRef(playerState.predictionHits);
+
+  useEffect(() => {
+    if (role !== 'player') {
+      previousPredictionHits.current = playerState.predictionHits;
+      return;
+    }
+
+    if (playerState.predictionHits > previousPredictionHits.current) {
+      enqueueInfoToast('予測地点を通過！');
+    }
+
+    previousPredictionHits.current = playerState.predictionHits;
+  }, [playerState.predictionHits, role]);
+
+  const ownerCooldownMs = Math.max(0, ownerState.editCooldownUntil - Date.now());
+  const forbiddenDistance = 2;
 
   if (role === 'owner') {
     return (
       <>
-        <OwnerView client={client} wallCount={120} trapCharges={1} />
+        <OwnerView
+          client={client}
+          wallCount={ownerState.wallStock}
+          trapCharges={ownerState.trapCharges}
+          wallRemoveLeft={ownerState.wallRemoveLeft}
+          editCooldownMs={ownerCooldownMs}
+          forbiddenDistance={forbiddenDistance}
+          activePredictions={ownerState.activePredictionCount}
+          predictionLimit={ownerState.predictionLimit}
+          timeRemaining={timeRemaining}
+          predictionMarks={ownerState.predictionMarks}
+          traps={ownerState.traps}
+          playerPosition={playerState.position}
+          mazeSize={mazeSize}
+        />
         <ToastHost />
       </>
     );
@@ -39,8 +163,54 @@ export function App() {
 
   return (
     <>
-      <PlayerView points={score} targetPoints={targetScore} predictionHits={0} />
+      <PlayerView
+        points={score}
+        targetPoints={targetScore}
+        predictionHits={playerState.predictionHits}
+        phase={phase}
+        timeRemaining={timeRemaining}
+      />
       <ToastHost />
     </>
   );
+}
+
+function useTimeRemaining(targetMs?: number): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (targetMs == null) {
+      return;
+    }
+
+    let timerId: number | undefined;
+
+    const tick = () => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= targetMs && timerId !== undefined) {
+        window.clearInterval(timerId);
+        timerId = undefined;
+      }
+    };
+
+    tick();
+    timerId = window.setInterval(tick, 1_000);
+    return () => {
+      if (timerId !== undefined) {
+        window.clearInterval(timerId);
+      }
+    };
+  }, [targetMs]);
+
+  if (targetMs == null) {
+    return 0;
+  }
+
+  const remainingMs = targetMs - now;
+  if (remainingMs <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(remainingMs / 1000);
 }

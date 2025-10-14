@@ -5,6 +5,7 @@ const TOAST_DURATION_MS = 3500;
 const ERROR_MESSAGES: Record<string, string> = {
   ROOM_FULL: 'ルームが満員です。別のルームIDを使用してください。',
   INVALID_NAME: 'ニックネームが不正です。使用可能な文字で入力してください。',
+  NETWORK_ERROR: 'ネットワークエラーが発生しました。接続を確認してください。',
 };
 
 const DEFAULT_ERROR_MESSAGE = '不明なエラーが発生しました。時間をおいて再試行してください。';
@@ -38,6 +39,20 @@ class ToastStore {
 
     const message = ERROR_MESSAGES[code] ?? DEFAULT_ERROR_MESSAGE;
     const toast: ToastEntry = { id, code, message };
+    this.#toasts = [...this.#toasts, toast];
+    this.#notify();
+
+    const timer = setTimeout(() => {
+      this.dismiss(id);
+    }, TOAST_DURATION_MS);
+    this.#timers.set(id, timer);
+  };
+
+  enqueueCustom = (message: string): void => {
+    const id = this.#nextId;
+    this.#nextId += 1;
+
+    const toast: ToastEntry = { id, code: 'INFO', message };
     this.#toasts = [...this.#toasts, toast];
     this.#notify();
 
@@ -84,6 +99,10 @@ const store = new ToastStore();
 
 export function enqueueErrorToast(code: string): void {
   store.enqueue(code);
+}
+
+export function enqueueInfoToast(message: string): void {
+  store.enqueueCustom(message);
 }
 
 export function resetToastStoreForTest(): void {

@@ -7,7 +7,7 @@ const CoordinateSchema = z
     x: z.number().int(),
     y: z.number().int(),
   })
-  .strict();
+  .passthrough();
 
 const WallDirectionSchema = z.enum(['north', 'east', 'south', 'west']);
 
@@ -18,20 +18,27 @@ const OwnerEditPayloadSchema = z.discriminatedUnion('action', [
       cell: CoordinateSchema,
       direction: WallDirectionSchema,
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       action: z.literal('DEL_WALL'),
       cell: CoordinateSchema,
       direction: WallDirectionSchema,
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       action: z.literal('PLACE_TRAP'),
       cell: CoordinateSchema,
     })
-    .strict(),
+    .passthrough(),
+  z
+    .object({
+      action: z.literal('PLACE_POINT'),
+      cell: CoordinateSchema,
+      value: z.union([z.literal(1), z.literal(3), z.literal(5)]),
+    })
+    .passthrough(),
 ]);
 
 export const ClientMessageSchema = z.discriminatedUnion('type', [
@@ -42,38 +49,38 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
       forward: z.number(),
       timestamp: z.number(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('O_EDIT'),
       edit: OwnerEditPayloadSchema,
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('O_MRK'),
       cell: CoordinateSchema,
       active: z.boolean().optional(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('O_CONFIRM'),
       targetId: z.string(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('O_CANCEL'),
       targetId: z.string(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('PING'),
       ts: z.number(),
     })
-    .strict(),
+    .passthrough(),
 ]);
 
 const StatePayloadSchema = z.record(z.string(), z.unknown());
@@ -84,14 +91,14 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       type: z.literal('STATE'),
       payload: StatePayloadSchema,
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('EV'),
       event: z.string(),
       payload: StatePayloadSchema.optional(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('ERR'),
@@ -99,19 +106,19 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
       message: z.string(),
       data: StatePayloadSchema.optional(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('PING'),
       ts: z.number(),
     })
-    .strict(),
+    .passthrough(),
   z
     .object({
       type: z.literal('PONG'),
       ts: z.number(),
     })
-    .strict(),
+    .passthrough(),
 ]);
 
 export type Role = z.infer<typeof RoleSchema>;

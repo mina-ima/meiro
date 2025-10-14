@@ -12,6 +12,14 @@ interface SnapshotPlayer {
   position: Vector2;
   velocity: Vector2;
   angle: number;
+  predictionHits: number;
+  trapSlowUntil: number;
+  score: number;
+}
+
+interface SnapshotPoint {
+  position: Vector2;
+  value: 1 | 3 | 5;
 }
 
 interface SnapshotOwner {
@@ -19,6 +27,11 @@ interface SnapshotOwner {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  predictionLimit: number;
+  predictionHits: number;
+  predictionMarks: Vector2[];
+  traps: Vector2[];
+  points: SnapshotPoint[];
 }
 
 interface Snapshot {
@@ -26,10 +39,12 @@ interface Snapshot {
   phase: RoomState['phase'];
   phaseEndsAt?: number;
   updatedAt: number;
+  mazeSize: RoomState['mazeSize'];
   countdownDurationMs: number;
   prepDurationMs: number;
   exploreDurationMs: number;
   sessions: SnapshotSession[];
+  targetScore: number;
   player: SnapshotPlayer;
   owner: SnapshotOwner;
 }
@@ -103,9 +118,11 @@ function createSnapshot(room: RoomState): Snapshot {
     phase: room.phase,
     phaseEndsAt: room.phaseEndsAt,
     updatedAt: room.updatedAt,
+    mazeSize: room.mazeSize,
     countdownDurationMs: room.countdownDurationMs,
     prepDurationMs: room.prepDurationMs,
     exploreDurationMs: room.exploreDurationMs,
+    targetScore: room.targetScore,
     sessions: Array.from(room.sessions.values())
       .map(({ id, role, nick }) => ({ id, role, nick }))
       .sort((a, b) => a.id.localeCompare(b.id)),
@@ -113,12 +130,31 @@ function createSnapshot(room: RoomState): Snapshot {
       position: cloneVector(room.player.physics.position),
       velocity: cloneVector(room.player.physics.velocity),
       angle: room.player.physics.angle,
+      predictionHits: room.player.predictionHits,
+      trapSlowUntil: room.player.trapSlowUntil,
+      score: room.player.score,
     },
     owner: {
       wallStock: room.owner.wallStock,
       wallRemoveLeft: room.owner.wallRemoveLeft,
       trapCharges: room.owner.trapCharges,
       editCooldownUntil: room.owner.editCooldownUntil,
+      predictionLimit: room.owner.predictionLimit,
+      predictionHits: room.owner.predictionHits,
+      predictionMarks: Array.from(room.owner.predictionMarks.values())
+        .map((mark) => cloneVector(mark.cell))
+        .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x)),
+      traps: room.owner.traps
+        .map((trap) => cloneVector(trap.cell))
+        .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x)),
+      points: Array.from(room.points.values())
+        .map((point) => ({
+          position: cloneVector(point.cell),
+          value: point.value,
+        }))
+        .sort((a, b) =>
+          a.position.x === b.position.x ? a.position.y - b.position.y : a.position.x - b.position.x,
+        ),
     },
   };
 }
@@ -138,6 +174,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
     changes.updatedAt = next.updatedAt;
   }
 
+  if (previous.mazeSize !== next.mazeSize) {
+    changes.mazeSize = next.mazeSize;
+  }
+
   if (previous.countdownDurationMs !== next.countdownDurationMs) {
     changes.countdownDurationMs = next.countdownDurationMs;
   }
@@ -148,6 +188,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
 
   if (previous.exploreDurationMs !== next.exploreDurationMs) {
     changes.exploreDurationMs = next.exploreDurationMs;
+  }
+
+  if (previous.targetScore !== next.targetScore) {
+    changes.targetScore = next.targetScore;
   }
 
   if (!sessionsEqual(previous.sessions, next.sessions)) {
@@ -180,7 +224,10 @@ function playerEqual(a: SnapshotPlayer, b: SnapshotPlayer): boolean {
   return (
     vectorsEqual(a.position, b.position) &&
     vectorsEqual(a.velocity, b.velocity) &&
-    Math.abs(a.angle - b.angle) < 1e-4
+    Math.abs(a.angle - b.angle) < 1e-4 &&
+    a.predictionHits === b.predictionHits &&
+    a.trapSlowUntil === b.trapSlowUntil &&
+    a.score === b.score
   );
 }
 
@@ -197,6 +244,38 @@ function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
     a.wallStock === b.wallStock &&
     a.wallRemoveLeft === b.wallRemoveLeft &&
     a.trapCharges === b.trapCharges &&
-    a.editCooldownUntil === b.editCooldownUntil
+    a.editCooldownUntil === b.editCooldownUntil &&
+    a.predictionLimit === b.predictionLimit &&
+    a.predictionHits === b.predictionHits &&
+    predictionMarksEqual(a.predictionMarks, b.predictionMarks) &&
+    trapsEqual(a.traps, b.traps) &&
+    pointsEqual(a.points, b.points)
   );
+}
+
+function predictionMarksEqual(a: Vector2[], b: Vector2[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((mark, index) => vectorsEqual(mark, b[index]));
+}
+
+function trapsEqual(a: Vector2[], b: Vector2[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((trap, index) => vectorsEqual(trap, b[index]));
+}
+
+function pointsEqual(a: SnapshotPoint[], b: SnapshotPoint[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((point, index) => {
+    const other = b[index];
+    return point.value === other.value && vectorsEqual(point.position, other.position);
+  });
 }

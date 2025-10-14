@@ -12,6 +12,7 @@ export function startCountdown(state: RoomState, now: number): void {
 
   state.phase = 'countdown';
   state.updatedAt = now;
+  state.phaseStartedAt = now;
   state.countdownDurationMs = COUNTDOWN_DURATION_MS;
   state.phaseEndsAt = now + state.countdownDurationMs;
 }
@@ -71,6 +72,8 @@ export function resetForRematch(
     clientTimestamp: now,
     receivedAt: now,
   };
+  state.player.predictionHits = 0;
+  state.player.trapSlowUntil = now;
   state.solidCells.clear();
 
   state.sessions.set(ownerSession.id, ownerSession);
@@ -92,6 +95,7 @@ export function progressPhase(state: RoomState, now: number): void {
     case 'countdown': {
       state.phase = 'prep';
       state.updatedAt = now;
+      state.phaseStartedAt = now;
       state.prepDurationMs = PREP_DURATION_MS;
       state.phaseEndsAt = now + state.prepDurationMs;
       return;
@@ -99,6 +103,7 @@ export function progressPhase(state: RoomState, now: number): void {
     case 'prep': {
       state.phase = 'explore';
       state.updatedAt = now;
+      state.phaseStartedAt = now;
       state.exploreDurationMs = state.exploreDurationMs || DEFAULT_EXPLORE_DURATION_MS;
       state.phaseEndsAt = now + state.exploreDurationMs;
       return;
@@ -106,6 +111,7 @@ export function progressPhase(state: RoomState, now: number): void {
     case 'explore': {
       state.phase = 'result';
       state.updatedAt = now;
+      state.phaseStartedAt = now;
       state.phaseEndsAt = undefined;
       return;
     }

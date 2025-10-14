@@ -109,8 +109,13 @@ describe('StateComposer', () => {
     expect(diff.payload.changes?.owner).toEqual({
       wallStock: 120,
       wallRemoveLeft: 1,
-      trapCharges: 0,
+      trapCharges: 1,
       editCooldownUntil: room.owner.editCooldownUntil,
+      predictionLimit: room.owner.predictionLimit,
+      predictionHits: 0,
+      predictionMarks: [],
+      traps: [],
+      points: [],
     });
   });
 });

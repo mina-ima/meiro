@@ -53,4 +53,19 @@ describe('processClientMessage', () => {
       },
     });
   });
+
+  it('ignores未知フィールドを含むメッセージ', () => {
+    const room = createInitialRoomState('ROOM', NOW);
+    const session = { id: 'player', nick: 'P', role: 'player' } as const;
+
+    const message = processClientMessage(room, session, {
+      type: 'P_INPUT',
+      yaw: 0.1,
+      forward: 1,
+      timestamp: NOW,
+      debugExtra: 'ignore-me',
+    });
+
+    expect(message).toMatchObject({ type: 'P_INPUT', yaw: 0.1, forward: 1 });
+  });
 });

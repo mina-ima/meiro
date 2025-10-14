@@ -20,6 +20,11 @@ export class ClientConnection {
     private readonly socket: Pick<WebSocket, 'send'>,
     private readonly now: () => number,
     private readonly onError?: (error: unknown) => void,
+    private readonly onMessageSent?: (info: {
+      bytes: number;
+      immediate: boolean;
+      queueDepth: number;
+    }) => void,
   ) {}
 
   enqueue(message: ServerMessage): void {
@@ -50,7 +55,7 @@ export class ClientConnection {
     }
 
     if (immediate) {
-      this.sendEncoded(encoded, this.now());
+      this.sendEncoded(encoded, this.now(), true);
       return;
     }
 
@@ -86,14 +91,14 @@ export class ClientConnection {
       return;
     }
 
-    this.sendEncoded(encoded, now);
+    this.sendEncoded(encoded, now, false);
 
     if (!this.closed && this.queue.length > 0) {
       this.scheduleFlush();
     }
   }
 
-  private sendEncoded(encoded: string, now: number): void {
+  private sendEncoded(encoded: string, now: number, immediate: boolean): void {
     if (this.closed) {
       return;
     }
@@ -112,6 +117,14 @@ export class ClientConnection {
     }
 
     this.nextSendAt = now + MIN_INTERVAL_MS;
+
+    if (this.onMessageSent) {
+      try {
+        this.onMessageSent({ bytes: encoded.length, immediate, queueDepth: this.queue.length });
+      } catch (error) {
+        console.error('metrics callback failed', error);
+      }
+    }
   }
 }
 
