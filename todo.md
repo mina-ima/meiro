@@ -176,7 +176,7 @@
 ## 16. テスト（自動化優先）
 ### 16.1 ユニット
 - [ ] `maze.generate(seed,L)`：連結性・**最短路≥4×L**（Property-Based 1,000回）
-- [ ] `rules.required(total)=ceil(0.65*total)`：境界値
+- [x] `rules.required(total)=ceil(0.65*total)`：境界値
 - [ ] `validate.edit`：禁止/資源/重なり/経路BFS/CD
 - [ ] `physics.integrate`：角抜けしない・スライド補正
 - [ ] `trap.apply`：重複踏み延長
