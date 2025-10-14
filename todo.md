@@ -174,8 +174,8 @@
   - DoD: `client/src/logging/telemetry.ts` と `NetClient`, `App` でコンソール出力を計測
 - [x] サーバ: 部屋寿命/参加離脱/Phase時間/編集拒否率/BFS時間/メッセージサイズ
   - DoD: `server/src/logic/metrics.ts` 経由でルームメトリクスをログ
-- [ ] アラート: WS失敗率/再接続率/STATE遅延>200ms
-  - DoD: ダッシュボード or ログ基準が定義済み
+- [x] アラート: WS失敗率/再接続率/STATE遅延>200ms
+  - DoD: テレメトリーで `client.ws.alert` / `client.ws.reconnect.alert` / `state.latency.alert` を発火し、閾値超過を検知
 
 ---
 
