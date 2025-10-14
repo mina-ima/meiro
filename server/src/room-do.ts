@@ -1,9 +1,13 @@
 import {
+  MOVE_SPEED,
+  PLAYER_RADIUS,
   SERVER_TICK_INTERVAL_MS,
   SERVER_TICK_INTERVAL_S,
   integrate,
   type PhysicsEnvironment,
+  type PhysicsInput,
   type PhysicsState,
+  type Vector2,
 } from '@meiro/common';
 import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
@@ -11,6 +15,7 @@ import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/l
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
 import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
 import { ClientConnection, MessageSizeExceededError } from './logic/outbound';
+import { RoomMetrics } from './logic/metrics';
 import { StateComposer } from './logic/state-sync';
 import type { PlayerInputState, PlayerSession, RoomState } from './state';
 import type { ClientMessage, ServerMessage } from './schema/ws';
@@ -32,9 +37,27 @@ interface WebSocketRequest extends Request {
 
 type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
+type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
 
 const EDIT_COOLDOWN_MS = 1_000;
 const FORBIDDEN_MANHATTAN_DISTANCE = 2;
+const PREDICTION_WALL_RATE = 0.7;
+const TRAP_SPEED_MULTIPLIER = 0.4;
+const MAX_ACTIVE_TRAPS = 2;
+const TRAP_DURATION_DIVISOR = 5;
+const POINT_PLACEMENT_WINDOW_MS = 40_000;
+const POINT_REQUIRED_RATE = 0.65;
+const POINT_COUNT_LIMITS: Record<20 | 40, number> = { 20: 12, 40: 18 };
+const POINT_TOTAL_MINIMUMS: Record<20 | 40, number> = { 20: 40, 40: 60 };
+const GOAL_BONUS_DIVISOR = 5;
+const ALLOWED_POINT_VALUES = new Set<1 | 3 | 5>([1, 3, 5]);
+const DISCONNECT_TIMEOUT_MS = 60_000;
+const INPUT_RATE_INTERVAL_MS = 1_000;
+const MAX_INPUTS_PER_INTERVAL = 30;
+const MAX_PAST_INPUT_MS = 500;
+const MAX_FUTURE_INPUT_MS = 150;
+const MAX_POSITION_DELTA = MOVE_SPEED * SERVER_TICK_INTERVAL_S * 1.25;
+const MAX_VELOCITY = MOVE_SPEED * 1.25;
 
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
@@ -43,6 +66,7 @@ export class RoomDurableObject {
   private readonly connections = new Map<WebSocket, ClientConnection>();
   private readonly socketSessions = new Map<WebSocket, PlayerSession>();
   private readonly stateComposer = new StateComposer();
+  private readonly metrics: RoomMetrics;
   private roomState: RoomState;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -53,6 +77,8 @@ export class RoomDurableObject {
     this.tickTimer = setInterval(() => {
       this.handleTick();
     }, SERVER_TICK_INTERVAL_MS);
+    this.metrics = new RoomMetrics(this.roomId);
+    this.metrics.logRoomCreated(this.roomState.mazeSize);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -147,9 +173,20 @@ export class RoomDurableObject {
 
   private registerSocket(socket: WebSocket, session: PlayerSession): void {
     this.clients.add(socket);
-    const connection = new ClientConnection(socket, () => Date.now());
+    const connection = new ClientConnection(
+      socket,
+      () => Date.now(),
+      (error) => {
+        this.metrics.logSocketError('send-failed');
+        console.error('failed to send message', error);
+      },
+      (info) => {
+        this.metrics.logStateMessage(info.bytes, info.immediate, info.queueDepth);
+      },
+    );
     this.connections.set(socket, connection);
     this.socketSessions.set(socket, session);
+    this.metrics.logSessionJoin(session.role);
 
     socket.addEventListener('message', (event) => {
       const raw = deserialize(event.data);
@@ -171,6 +208,13 @@ export class RoomDurableObject {
           }
         }
 
+        if (message.type === 'O_MRK') {
+          const accepted = this.handleOwnerMark(message, socket, now);
+          if (!accepted) {
+            return;
+          }
+        }
+
         this.roomState.updatedAt = now;
 
         const events = createServerEvents(currentSession, message);
@@ -182,7 +226,7 @@ export class RoomDurableObject {
 
         switch (message.type) {
           case 'P_INPUT':
-            this.handlePlayerInput(message, now);
+            this.handlePlayerInput(message, socket, now);
             break;
           case 'O_EDIT':
           case 'O_CONFIRM':
@@ -222,7 +266,10 @@ export class RoomDurableObject {
       this.clients.delete(socket);
       const record = this.socketSessions.get(socket);
       if (record) {
-        removeSession(this.roomState, record.id, Date.now());
+        const now = Date.now();
+        removeSession(this.roomState, record.id, now);
+        this.handleSessionDisconnected(record, now);
+        this.metrics.logSessionLeave(record.role);
       }
       this.socketSessions.delete(socket);
 
@@ -235,6 +282,8 @@ export class RoomDurableObject {
       this.publishState({ forceFull: true });
     });
 
+    const now = Date.now();
+    this.resumeFromPause(now);
     this.publishState({ forceFull: true, immediate: socket });
   }
 
@@ -260,7 +309,14 @@ export class RoomDurableObject {
 
   async alarm(alarmTime: number): Promise<void> {
     const now = alarmTime;
+    const previousPhase = this.roomState.phase;
+    const previousPhaseStartedAt = this.roomState.phaseStartedAt;
     progressPhase(this.roomState, now);
+    const currentPhase = this.roomState.phase;
+    if (currentPhase !== previousPhase) {
+      const duration = previousPhaseStartedAt ? now - previousPhaseStartedAt : 0;
+      this.handlePhaseTransition(previousPhase, currentPhase, now, duration);
+    }
     console.log('room %s phase -> %s', this.roomId, this.roomState.phase);
     await this.schedulePhaseAlarm();
     this.publishState({ forceFull: true });
@@ -272,6 +328,20 @@ export class RoomDurableObject {
     }
 
     await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
+  }
+
+  private handlePhaseTransition(
+    previous: RoomState['phase'],
+    current: RoomState['phase'],
+    now: number,
+    previousDuration: number,
+  ): void {
+    if (previous !== current) {
+      this.metrics.logPhaseTransition(previous, current, Math.max(previousDuration, 0));
+    }
+    if (previous === 'prep' && current === 'explore') {
+      this.finalizePointConfiguration(now);
+    }
   }
 
   private broadcast(message: ServerMessage): void {
@@ -297,6 +367,12 @@ export class RoomDurableObject {
       return;
     }
 
+    const updatedAt = extractUpdatedAt(message);
+    if (updatedAt != null) {
+      const latency = Date.now() - updatedAt;
+      this.metrics.logStateLatency(latency);
+    }
+
     const immediateSockets = options.immediate ? toSocketSet(options.immediate) : null;
 
     for (const [socket, connection] of this.connections.entries()) {
@@ -308,33 +384,71 @@ export class RoomDurableObject {
         sender(message);
       } catch (error) {
         if (error instanceof MessageSizeExceededError) {
+          this.metrics.logSocketError('message-too-large');
           console.error('room %s state message too large', this.roomId);
         } else {
+          this.metrics.logSocketError('send-failed');
           console.error('room %s failed to send state message', this.roomId, error);
         }
       }
     }
   }
 
-  private handlePlayerInput(message: PlayerInputMessage, receivedAt: number): void {
+  private handlePlayerInput(
+    message: PlayerInputMessage,
+    socket: WebSocket,
+    receivedAt: number,
+  ): void {
+    const windowElapsed = receivedAt - this.roomState.player.inputWindowStart;
+    if (windowElapsed >= INPUT_RATE_INTERVAL_MS) {
+      this.roomState.player.inputWindowStart = receivedAt;
+      this.roomState.player.inputCountInWindow = 0;
+    }
+
+    if (this.roomState.player.inputCountInWindow >= MAX_INPUTS_PER_INTERVAL) {
+      this.metrics.logPlayerInputRejected('rate_limit');
+      this.sendError(socket, 'INPUT_RATE_LIMIT', 'Player input rate limit exceeded.');
+      return;
+    }
+
+    const previousTimestamp = this.roomState.player.input.clientTimestamp;
+    if (message.timestamp < previousTimestamp - MAX_PAST_INPUT_MS) {
+      this.metrics.logPlayerInputRejected('timestamp_past');
+      this.sendError(socket, 'INPUT_TIMESTAMP_PAST', 'Player input timestamp too old.');
+      return;
+    }
+
+    let adjustedTimestamp = message.timestamp;
+    if (adjustedTimestamp > receivedAt + MAX_FUTURE_INPUT_MS) {
+      adjustedTimestamp = receivedAt;
+    }
+
     this.roomState.player.input = {
       forward: clampInput(message.forward),
       turn: clampInput(message.yaw),
-      clientTimestamp: message.timestamp,
+      clientTimestamp: adjustedTimestamp,
       receivedAt,
     } satisfies PlayerInputState;
+
+    this.roomState.player.lastInputReceivedAt = receivedAt;
+    this.roomState.player.inputCountInWindow += 1;
   }
 
   private handleOwnerEdit(message: OwnerEditMessage, socket: WebSocket, now: number): boolean {
     const { owner } = this.roomState;
 
     if (now < owner.editCooldownUntil) {
+      this.metrics.logOwnerEditRejected('EDIT_COOLDOWN');
       this.sendError(socket, 'EDIT_COOLDOWN', 'Edit action is on cooldown.');
       return false;
     }
 
     const targetCell = message.edit.cell;
-    if (isEditInForbiddenArea(targetCell, this.roomState.player.physics.position)) {
+    if (
+      message.edit.action !== 'PLACE_POINT' &&
+      isEditInForbiddenArea(targetCell, this.roomState.player.physics.position)
+    ) {
+      this.metrics.logOwnerEditRejected('EDIT_FORBIDDEN');
       this.sendError(
         socket,
         'EDIT_FORBIDDEN',
@@ -346,6 +460,7 @@ export class RoomDurableObject {
     switch (message.edit.action) {
       case 'ADD_WALL': {
         if (owner.wallStock <= 0) {
+          this.metrics.logOwnerEditRejected('WALL_STOCK_EMPTY');
           this.sendError(socket, 'WALL_STOCK_EMPTY', 'No wall stock remaining.');
           return false;
         }
@@ -355,6 +470,7 @@ export class RoomDurableObject {
       }
       case 'DEL_WALL': {
         if (owner.wallRemoveLeft === 0) {
+          this.metrics.logOwnerEditRejected('WALL_REMOVE_EXHAUSTED');
           this.sendError(
             socket,
             'WALL_REMOVE_EXHAUSTED',
@@ -369,16 +485,99 @@ export class RoomDurableObject {
       }
       case 'PLACE_TRAP': {
         if (owner.trapCharges <= 0) {
+          this.metrics.logOwnerEditRejected('TRAP_CHARGE_EMPTY');
           this.sendError(socket, 'TRAP_CHARGE_EMPTY', 'No trap charges remaining.');
           return false;
         }
+
+        if (owner.traps.length >= MAX_ACTIVE_TRAPS) {
+          this.metrics.logOwnerEditRejected('LIMIT_REACHED');
+          this.sendError(socket, 'LIMIT_REACHED', 'Trap limit reached.');
+          return false;
+        }
+
         if (
           !isTrapPlacementCellValid(targetCell, this.roomState.mazeSize, this.roomState.solidCells)
         ) {
+          this.metrics.logOwnerEditRejected('TRAP_INVALID_CELL');
           this.sendError(socket, 'TRAP_INVALID_CELL', 'Trap must be placed on a walkable cell.');
           return false;
         }
+
+        if (this.roomState.points.has(pointKey(targetCell))) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Cannot overlap trap with a point.');
+          return false;
+        }
+
+        if (
+          owner.traps.some((trap) => trap.cell.x === targetCell.x && trap.cell.y === targetCell.y)
+        ) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Trap already exists at the specified cell.');
+          return false;
+        }
+
         owner.trapCharges -= 1;
+        owner.traps.push({
+          cell: { x: targetCell.x, y: targetCell.y },
+          placedAt: now,
+        });
+        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
+        return true;
+      }
+      case 'PLACE_POINT': {
+        if (!this.canPlacePoint(now)) {
+          this.metrics.logOwnerEditRejected('POINT_PHASE_CLOSED');
+          this.sendError(socket, 'POINT_PHASE_CLOSED', 'Point placement window has closed.');
+          return false;
+        }
+
+        const value = message.edit.value;
+        if (!ALLOWED_POINT_VALUES.has(value)) {
+          this.metrics.logOwnerEditRejected('POINT_VALUE_INVALID');
+          this.sendError(socket, 'POINT_VALUE_INVALID', 'Invalid point value.');
+          return false;
+        }
+
+        if (
+          !isTrapPlacementCellValid(targetCell, this.roomState.mazeSize, this.roomState.solidCells)
+        ) {
+          this.metrics.logOwnerEditRejected('POINT_INVALID_CELL');
+          this.sendError(socket, 'POINT_INVALID_CELL', 'Point must be placed on a walkable cell.');
+          return false;
+        }
+
+        const limit = POINT_COUNT_LIMITS[this.roomState.mazeSize];
+        if (this.roomState.points.size >= limit) {
+          this.metrics.logOwnerEditRejected('LIMIT_REACHED');
+          this.sendError(socket, 'LIMIT_REACHED', 'Point limit reached.');
+          return false;
+        }
+
+        const key = pointKey(targetCell);
+        if (this.roomState.points.has(key)) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Point already exists at the specified cell.');
+          return false;
+        }
+
+        if (
+          owner.traps.some((trap) => trap.cell.x === targetCell.x && trap.cell.y === targetCell.y)
+        ) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Cannot overlap point with a trap.');
+          return false;
+        }
+
+        this.roomState.points.set(key, {
+          cell: { x: targetCell.x, y: targetCell.y },
+          value,
+        });
+        this.roomState.pointTotalValue += value;
+        if (!this.roomState.targetScoreLocked) {
+          this.recalculateTargetScore();
+        }
         owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
       }
@@ -387,8 +586,47 @@ export class RoomDurableObject {
     }
   }
 
+  private handleOwnerMark(message: OwnerMarkMessage, socket: WebSocket, now: number): boolean {
+    const { owner } = this.roomState;
+    const key = predictionKey(message.cell);
+    const shouldActivate = message.active ?? true;
+
+    if (shouldActivate) {
+      if (owner.predictionMarks.has(key)) {
+        return true;
+      }
+
+      if (owner.predictionMarks.size >= owner.predictionLimit) {
+        this.sendError(socket, 'LIMIT_REACHED', 'Prediction mark limit reached.');
+        return false;
+      }
+
+      owner.predictionMarks.set(key, {
+        cell: { x: message.cell.x, y: message.cell.y },
+        createdAt: now,
+      });
+      return true;
+    }
+
+    owner.predictionMarks.delete(key);
+    return true;
+  }
+
   private handleTick(): void {
-    if (this.roomState.phase !== 'explore' || !this.hasPlayerSession()) {
+    const now = Date.now();
+    const stateChanged = this.checkDisconnectTimeout(now);
+
+    if (!this.hasPlayerSession() || this.roomState.paused) {
+      if (stateChanged) {
+        this.publishState({ forceFull: true });
+      }
+      return;
+    }
+
+    if (this.roomState.phase !== 'explore') {
+      if (stateChanged) {
+        this.publishState({ forceFull: true });
+      }
       return;
     }
 
@@ -396,17 +634,198 @@ export class RoomDurableObject {
     const input = this.roomState.player.input;
     const environment = this.createPhysicsEnvironment();
 
-    const next = integrate(current, input, { deltaTime: SERVER_TICK_INTERVAL_S }, environment);
+    const speedMultiplier = this.roomState.player.trapSlowUntil > now ? TRAP_SPEED_MULTIPLIER : 1;
+    const adjustedInput: PhysicsInput = {
+      forward: input.forward * speedMultiplier,
+      turn: input.turn,
+    };
+
+    const rawNext = integrate(
+      current,
+      adjustedInput,
+      { deltaTime: SERVER_TICK_INTERVAL_S },
+      environment,
+    );
+    const sanitized = sanitizePhysicsState(current, rawNext, this.roomState.mazeSize);
+    const next = sanitized.state;
+
+    const rewardApplied = this.processPredictionBonus(next.position);
+    const trapTriggered = this.processTrapCollision(next.position, now);
+    const pointCollected = this.processPointCollection(next.position, now);
+    const goalAchieved = this.processGoalAchievement(next.position, now);
     const changed = physicsStateChanged(current, next);
 
     this.roomState.player.physics = next;
+    if (sanitized.snapped) {
+      this.metrics.logPlayerInputRejected('position_snap');
+    }
 
-    if (!changed) {
+    const phaseAfterUpdate = this.roomState.phase as string;
+    const forceFull = stateChanged || phaseAfterUpdate === 'result' || sanitized.snapped;
+
+    if (
+      !changed &&
+      !rewardApplied &&
+      !trapTriggered &&
+      !pointCollected &&
+      !goalAchieved &&
+      !forceFull &&
+      !sanitized.snapped
+    ) {
       return;
     }
 
-    this.roomState.updatedAt = Date.now();
-    this.publishState({ forceFull: false });
+    this.roomState.updatedAt = now;
+    this.publishState({ forceFull });
+  }
+
+  private processTrapCollision(position: Vector2, now: number): boolean {
+    const tileX = Math.floor(position.x);
+    const tileY = Math.floor(position.y);
+    const index = this.roomState.owner.traps.findIndex(
+      (trap) => trap.cell.x === tileX && trap.cell.y === tileY,
+    );
+
+    if (index === -1) {
+      return false;
+    }
+
+    this.roomState.owner.traps.splice(index, 1);
+
+    const phaseEndsAt = this.roomState.phaseEndsAt ?? now;
+    const remaining = Math.max(phaseEndsAt - now, 0);
+    const duration = remaining / TRAP_DURATION_DIVISOR;
+    const base = Math.max(this.roomState.player.trapSlowUntil ?? now, now);
+    this.roomState.player.trapSlowUntil = duration > 0 ? base + duration : base;
+
+    return true;
+  }
+
+  private processPointCollection(position: Vector2, now: number): boolean {
+    if (this.roomState.points.size === 0) {
+      return false;
+    }
+
+    const tileX = Math.floor(position.x);
+    const tileY = Math.floor(position.y);
+    const key = pointKey({ x: tileX, y: tileY });
+    const point = this.roomState.points.get(key);
+    if (!point) {
+      return false;
+    }
+
+    this.roomState.points.delete(key);
+    this.roomState.player.score += point.value;
+    this.evaluateScoreCompletion(now);
+    return true;
+  }
+
+  private processGoalAchievement(position: Vector2, now: number): boolean {
+    const goal = this.roomState.goalCell;
+    if (!goal || this.roomState.player.goalBonusAwarded) {
+      return false;
+    }
+
+    const tileX = Math.floor(position.x);
+    const tileY = Math.floor(position.y);
+    if (tileX !== goal.x || tileY !== goal.y) {
+      return false;
+    }
+
+    this.roomState.player.goalBonusAwarded = true;
+    const bonus = Math.ceil(this.roomState.targetScore / GOAL_BONUS_DIVISOR);
+    if (bonus > 0) {
+      this.roomState.player.score += bonus;
+      this.evaluateScoreCompletion(now);
+      return true;
+    }
+
+    this.evaluateScoreCompletion(now);
+    return true;
+  }
+
+  private evaluateScoreCompletion(now: number): void {
+    if (this.roomState.phase !== 'explore') {
+      return;
+    }
+
+    if (!this.roomState.targetScoreLocked) {
+      return;
+    }
+
+    if (this.roomState.player.score < this.roomState.targetScore) {
+      return;
+    }
+
+    this.roomState.phase = 'result';
+    this.roomState.phaseEndsAt = undefined;
+    this.roomState.phaseStartedAt = now;
+  }
+
+  private processPredictionBonus(position: Vector2): boolean {
+    const tileX = Math.floor(position.x);
+    const tileY = Math.floor(position.y);
+    const key = predictionKey({ x: tileX, y: tileY });
+    const mark = this.roomState.owner.predictionMarks.get(key);
+
+    if (!mark) {
+      return false;
+    }
+
+    this.roomState.owner.predictionMarks.delete(key);
+    this.roomState.owner.predictionHits += 1;
+    this.roomState.player.predictionHits += 1;
+
+    if (Math.random() < PREDICTION_WALL_RATE) {
+      this.roomState.owner.wallStock += 1;
+    } else {
+      this.roomState.owner.trapCharges += 1;
+    }
+
+    return true;
+  }
+
+  private canPlacePoint(now: number): boolean {
+    if (this.roomState.phase !== 'prep') {
+      return false;
+    }
+
+    if (this.roomState.targetScoreLocked) {
+      return false;
+    }
+
+    const elapsed = now - this.roomState.phaseStartedAt;
+    return elapsed <= POINT_PLACEMENT_WINDOW_MS;
+  }
+
+  private recalculateTargetScore(): void {
+    const total = this.roomState.pointTotalValue;
+    const required = Math.ceil(total * POINT_REQUIRED_RATE);
+    this.roomState.targetScore = required;
+  }
+
+  private finalizePointConfiguration(now: number): void {
+    if (!this.roomState.targetScoreLocked) {
+      this.recalculateTargetScore();
+      this.roomState.targetScoreLocked = true;
+    }
+
+    if (!this.roomState.pointShortageCompensated) {
+      const minimum = POINT_TOTAL_MINIMUMS[this.roomState.mazeSize];
+      const shortage = Math.max(0, minimum - this.roomState.pointTotalValue);
+      if (shortage > 0) {
+        const required = this.roomState.targetScore;
+        const bonusCapacity = Math.max(0, required - 1 - this.roomState.player.score);
+        const bonus = Math.min(shortage, bonusCapacity);
+        if (bonus > 0) {
+          this.roomState.player.score += bonus;
+        }
+      }
+      this.roomState.pointShortageCompensated = true;
+    }
+
+    this.roomState.updatedAt = now;
+    this.evaluateScoreCompletion(now);
   }
 
   private hasPlayerSession(): boolean {
@@ -415,6 +834,108 @@ export class RoomDurableObject {
         return true;
       }
     }
+    return false;
+  }
+
+  private hasOwnerSession(): boolean {
+    for (const session of this.roomState.sessions.values()) {
+      if (session.role === 'owner') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private handleSessionDisconnected(_session: PlayerSession, now: number): void {
+    if (this.roomState.phase === 'lobby' || this.roomState.phase === 'result') {
+      return;
+    }
+
+    if (this.roomState.paused && this.roomState.pauseReason === 'disconnect') {
+      this.roomState.pauseExpiresAt = now + DISCONNECT_TIMEOUT_MS;
+      return;
+    }
+
+    const ownerPresent = this.hasOwnerSession();
+    const playerPresent = this.hasPlayerSession();
+    if (ownerPresent && playerPresent) {
+      return;
+    }
+
+    this.pauseForDisconnect(now);
+  }
+
+  private pauseForDisconnect(now: number): void {
+    if (this.roomState.paused && this.roomState.pauseReason === 'disconnect') {
+      this.roomState.pauseExpiresAt = now + DISCONNECT_TIMEOUT_MS;
+      return;
+    }
+
+    if (this.roomState.phaseEndsAt != null) {
+      const remaining = Math.max(this.roomState.phaseEndsAt - now, 0);
+      this.roomState.pauseRemainingMs = remaining;
+      this.roomState.phaseEndsAt = undefined;
+    } else {
+      this.roomState.pauseRemainingMs = undefined;
+    }
+
+    this.roomState.paused = true;
+    this.roomState.pauseReason = 'disconnect';
+    this.roomState.pausePhase = this.roomState.phase;
+    this.roomState.pauseExpiresAt = now + DISCONNECT_TIMEOUT_MS;
+    this.roomState.updatedAt = now;
+  }
+
+  private resumeFromPause(now: number): boolean {
+    if (!this.roomState.paused || this.roomState.pauseReason !== 'disconnect') {
+      return false;
+    }
+
+    if (!this.hasOwnerSession() || !this.hasPlayerSession()) {
+      return false;
+    }
+
+    const remaining = this.roomState.pauseRemainingMs;
+    if (remaining != null) {
+      this.roomState.phaseEndsAt = now + remaining;
+      this.roomState.phaseStartedAt = now;
+      void this.schedulePhaseAlarm();
+    }
+
+    this.roomState.paused = false;
+    this.roomState.pauseReason = undefined;
+    this.roomState.pauseExpiresAt = undefined;
+    this.roomState.pauseRemainingMs = undefined;
+    this.roomState.pausePhase = undefined;
+    this.roomState.updatedAt = now;
+    return true;
+  }
+
+  private checkDisconnectTimeout(now: number): boolean {
+    if (!this.roomState.paused || this.roomState.pauseReason !== 'disconnect') {
+      return false;
+    }
+
+    if (this.hasOwnerSession() && this.hasPlayerSession()) {
+      return this.resumeFromPause(now);
+    }
+
+    const expiresAt = this.roomState.pauseExpiresAt;
+    if (expiresAt != null && now >= expiresAt) {
+      this.roomState.paused = false;
+      this.roomState.pauseReason = undefined;
+      this.roomState.pauseExpiresAt = undefined;
+      this.roomState.pauseRemainingMs = undefined;
+      this.roomState.pausePhase = undefined;
+      if (this.roomState.phase !== 'result') {
+        this.roomState.phase = 'result';
+        this.roomState.phaseEndsAt = undefined;
+        this.roomState.phaseStartedAt = now;
+      }
+      this.roomState.updatedAt = now;
+      return true;
+    }
+
     return false;
   }
 
@@ -432,6 +953,7 @@ export class RoomDurableObject {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
     }
+    this.metrics.logRoomDisposed();
   }
 
   private sendError(socket: WebSocket, code: string, message: string): void {
@@ -473,6 +995,138 @@ function toSocketSet(source: PublishStateOptions['immediate']): Set<WebSocket> {
   return new Set([source]);
 }
 
+interface SanitizedPhysicsResult {
+  state: PhysicsState;
+  snapped: boolean;
+}
+
+function sanitizePhysicsState(
+  previous: PhysicsState,
+  next: PhysicsState,
+  mazeSize: number,
+): SanitizedPhysicsResult {
+  const minPos = PLAYER_RADIUS;
+  const maxPos = Math.max(minPos, mazeSize - PLAYER_RADIUS);
+  const fallbackPos = clampNumber(mazeSize / 2, minPos, maxPos);
+
+  const safePrevX = sanitizeBasePosition(previous.position.x, minPos, maxPos, fallbackPos);
+  const safePrevY = sanitizeBasePosition(previous.position.y, minPos, maxPos, fallbackPos);
+  const safePrevAngle = Number.isFinite(previous.angle) ? previous.angle : 0;
+
+  let snapped = false;
+  const markSnapped = (): void => {
+    snapped = true;
+  };
+
+  let positionX = sanitizePositionComponent(
+    next.position.x,
+    safePrevX,
+    minPos,
+    maxPos,
+    markSnapped,
+  );
+  let positionY = sanitizePositionComponent(
+    next.position.y,
+    safePrevY,
+    minPos,
+    maxPos,
+    markSnapped,
+  );
+  let velocityX = sanitizeVelocityComponent(next.velocity.x, markSnapped);
+  let velocityY = sanitizeVelocityComponent(next.velocity.y, markSnapped);
+  const angle = sanitizeAngle(next.angle, safePrevAngle, markSnapped);
+
+  const dx = positionX - safePrevX;
+  const dy = positionY - safePrevY;
+  const maxDistance = MAX_POSITION_DELTA;
+  if (dx * dx + dy * dy > maxDistance * maxDistance) {
+    positionX = safePrevX;
+    positionY = safePrevY;
+    velocityX = 0;
+    velocityY = 0;
+    markSnapped();
+  }
+
+  return {
+    state: {
+      position: { x: positionX, y: positionY },
+      velocity: { x: velocityX, y: velocityY },
+      angle,
+    },
+    snapped,
+  };
+}
+
+function sanitizeBasePosition(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return clampNumber(value, min, max);
+}
+
+function sanitizePositionComponent(
+  candidate: number,
+  fallback: number,
+  min: number,
+  max: number,
+  onSnap: () => void,
+): number {
+  if (!Number.isFinite(candidate)) {
+    onSnap();
+    return fallback;
+  }
+  if (candidate < min || candidate > max) {
+    onSnap();
+    return clampNumber(candidate, min, max);
+  }
+  return candidate;
+}
+
+function sanitizeVelocityComponent(candidate: number, onSnap: () => void): number {
+  if (!Number.isFinite(candidate)) {
+    onSnap();
+    return 0;
+  }
+  if (Math.abs(candidate) > MAX_VELOCITY) {
+    onSnap();
+    return clampNumber(candidate, -MAX_VELOCITY, MAX_VELOCITY);
+  }
+  return candidate;
+}
+
+function sanitizeAngle(candidate: number, fallback: number, onSnap: () => void): number {
+  if (!Number.isFinite(candidate)) {
+    onSnap();
+    return fallback;
+  }
+  if (candidate < -Math.PI || candidate > Math.PI) {
+    onSnap();
+    return normalizeRadians(candidate);
+  }
+  return candidate;
+}
+
+function normalizeRadians(value: number): number {
+  const twoPi = Math.PI * 2;
+  let result = value % twoPi;
+  if (result <= -Math.PI) {
+    result += twoPi;
+  } else if (result > Math.PI) {
+    result -= twoPi;
+  }
+  return result;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
 const INPUT_MIN = -1;
 const INPUT_MAX = 1;
 const FLOAT_EPSILON = 1e-4;
@@ -502,6 +1156,32 @@ function physicsStateChanged(a: PhysicsState, b: PhysicsState): boolean {
 
 function differs(a: number, b: number, epsilon = FLOAT_EPSILON): boolean {
   return Math.abs(a - b) > epsilon;
+}
+
+function extractUpdatedAt(message: ServerMessage): number | null {
+  if (message.type !== 'STATE') {
+    return null;
+  }
+
+  const payload = message.payload as {
+    full: boolean;
+    snapshot?: { updatedAt?: number };
+    changes?: { updatedAt?: number };
+  };
+
+  if (payload.full) {
+    return payload.snapshot?.updatedAt ?? null;
+  }
+
+  return payload.changes?.updatedAt ?? null;
+}
+
+function pointKey(cell: { x: number; y: number }): string {
+  return `${cell.x},${cell.y}`;
+}
+
+function predictionKey(cell: { x: number; y: number }): string {
+  return `${cell.x},${cell.y}`;
 }
 
 function solidKey(x: number, y: number): string {

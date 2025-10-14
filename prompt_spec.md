@@ -86,11 +86,13 @@ type Maze = {
 type OwnerState = {
   wallStock: number; wallRemoveLeft: 0|1; trapRights: number;
   traps: Trap[]; predictSites: Vec2[]; cdUntil: number;
+  points: PointItem[]; pointLimit: number; pointTotal: number;
 };
 
 type PlayerState = {
   pos: {x:number,y:number,angle:number};
   vx:number; vy:number; slowedUntil:number; score:number; previewSeed:string;
+  goalBonusAwarded:boolean;
 };
 
 type Rules = {
@@ -138,6 +140,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 { "t":"O_EDIT", "op":"ADD_WALL", "edge": {"x":10,"y":5,"dir":"E"} }
 { "t":"O_EDIT", "op":"DEL_WALL", "edge": {"x":10,"y":5,"dir":"E"} }   // 1回のみ
 { "t":"O_EDIT", "op":"PLACE_TRAP", "pos":{"x":12,"y":7} }
+{ "t":"O_EDIT", "op":"PLACE_POINT", "cell":{"x":8,"y":9}, "value":1|3|5 }
 { "t":"O_MRK",  "pos":{"x":11,"y":9} }                                // 予測地点(準備15s)
 { "t":"O_CONFIRM", "target":"<opaque-id>" }                            // 2度押し確定
 { "t":"O_CANCEL",  "target":"<opaque-id>" }
@@ -174,8 +177,8 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * 単位は**1辺=1本**。初期本数（20×20:48本 / 40×40:140本）はRoomDO生成時に `owner.wallStock` へ割り当てる。
 * 壁削除権は `owner.wallRemoveLeft` で管理し、**1回のみ**使用可（使用時は壁本数+1で返却）。
-* 罠権利は `owner.trapCharges` としてサーバが保持し、残数0時は `PLACE_TRAP` を拒否。
-* **予測地点ボーナス**：通過ごとに**壁+1(70%) or 罠権利+1(30%)**。
+* 罠権利は `owner.trapCharges` としてサーバが保持し、**初期値=1**（準備フェーズ即時設置可）。残数0時は `PLACE_TRAP` を拒否。
+* **予測地点ボーナス**：通過ごとに**壁+1(70%) or 罠権利+1(30%)**。（RoomDO実装済 / server/tests/prediction-bonus.test.ts）
 * **禁止エリア**：プレイヤー**マンハッタン距離2**以内編集不可。
 
 ### 7.6 ポイント/勝敗
@@ -195,13 +198,13 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 8.1 プレイヤー
 
 * **ミニマップなし**、**ヘッドボブなし**。HUD：残時間（mm:ssタイマー）、現在ポイント/規定ポイント、ゴール到達ボーナス値、達成率(%)進捗バー。
-* 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。
+* 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。v1実装ではテキストオーバーレイでクリップを案内（client/src/views/PlayerView.tsx / client/tests/PlayerViewPreview.test.tsx）。
 * Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
 
 ### 8.2 オーナー
 
-* 俯瞰全体マップ、**ズーム/パン**（最小=全体, 最大=9マスを画面内）。
-* HUD：時間、プレイヤー位置、**壁残数**、**壁削除残(0/1)**、**罠権利/同時設置数**、**クールダウン**, **禁止エリア**, **規定ポイント/現ポイント**。
+* 俯瞰全体マップ、**ズーム/パン**（最小=全体, 最大=9マスを画面内）。v1実装では SVG ベースの簡易マップを `client/src/views/OwnerView.tsx` で提供。
+* HUD：時間、プレイヤー位置、**壁残数**、**壁削除残(0/1)**、**罠権利/同時設置数**、**クールダウン**, **禁止エリア**, **規定ポイント/現ポイント**。（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）
 * 編集は**確認ポップ→同じ場所を再クリックで確定**。**右クリック/Escでキャンセル**。**1.0秒CD**。
 
 ### 8.3 サウンド
@@ -251,7 +254,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ## 11. セキュリティ/公平性
 
 * クライアント入力は**速度/回転の制約内**でサーバ積分。
-* 不正検知：入力レート上限、**過去時刻ts拒否**, 未来時刻補正、位置スナップ。
+* 不正検知：入力レート上限、**過去時刻ts拒否**, 未来時刻補正、位置スナップ（迷路境界外/非有限値は再配置し、許容距離超過は直前座標へスナップ＋記録）。
 * オーナー操作は**1.0秒CD**＋フェーズ/範囲検証。
 
 ---

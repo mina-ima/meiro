@@ -119,4 +119,46 @@ describe('RoomDurableObject プレイヤー物理挙動', () => {
 
     room.dispose();
   });
+
+  it('迷路外に逸脱したプレイヤー位置を境界内にスナップする', async () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internalRoom = room as unknown as {
+      roomState: {
+        phase: string;
+        mazeSize: number;
+        player: {
+          physics: {
+            position: { x: number; y: number };
+            velocity: { x: number; y: number };
+          };
+        };
+      };
+    };
+
+    internalRoom.roomState.phase = 'explore';
+    internalRoom.roomState.player.physics.position = { x: -5, y: internalRoom.roomState.mazeSize + 5 };
+    internalRoom.roomState.player.physics.velocity = { x: 100, y: 100 };
+
+    vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);
+
+    const { position } = internalRoom.roomState.player.physics;
+    const min = PLAYER_RADIUS;
+    const max = internalRoom.roomState.mazeSize - PLAYER_RADIUS;
+
+    expect(position.x).toBeGreaterThanOrEqual(min - 1e-6);
+    expect(position.x).toBeLessThanOrEqual(max + 1e-6);
+    expect(position.y).toBeGreaterThanOrEqual(min - 1e-6);
+    expect(position.y).toBeLessThanOrEqual(max + 1e-6);
+
+    room.dispose();
+  });
 });
