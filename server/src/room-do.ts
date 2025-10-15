@@ -1204,8 +1204,8 @@ function isEditInForbiddenArea(
   cell: { x: number; y: number },
   playerPosition: { x: number; y: number },
 ): boolean {
-  const playerCellX = Math.round(playerPosition.x);
-  const playerCellY = Math.round(playerPosition.y);
+  const playerCellX = Math.floor(playerPosition.x);
+  const playerCellY = Math.floor(playerPosition.y);
   const distance = Math.abs(cell.x - playerCellX) + Math.abs(cell.y - playerCellY);
   return distance <= FORBIDDEN_MANHATTAN_DISTANCE;
 }

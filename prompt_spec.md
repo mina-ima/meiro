@@ -179,7 +179,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 壁削除権は `owner.wallRemoveLeft` で管理し、**1回のみ**使用可（使用時は壁本数+1で返却）。
 * 罠権利は `owner.trapCharges` としてサーバが保持し、**初期値=1**（準備フェーズ即時設置可）。残数0時は `PLACE_TRAP` を拒否。
 * **予測地点ボーナス**：通過ごとに**壁+1(70%) or 罠権利+1(30%)**。（RoomDO実装済 / server/tests/prediction-bonus.test.ts）
-* **禁止エリア**：プレイヤー**マンハッタン距離2**以内編集不可。
+* **禁止エリア**：プレイヤー**マンハッタン距離2**以内編集不可。距離判定はプレイヤー座標をセルインデックスへ切り捨てて算出し、境界付近でも誤検知しない。
 
 ### 7.6 ポイント/勝敗
 
@@ -338,8 +338,8 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * `maze.generate(seed,L)`：**連結性**、**最短路≥4×L**、ランダム種で**1,000回**性質テスト（Property-Based）。
 * `rules.required(total)=ceil(0.65*total)` 正確性。
-* `validate.edit`：禁止エリア/資源/重なり/経路BFS/クールダウン。
-* `physics.integrate`：壁スライド/角抜けしない。
+* `validate.edit`：禁止エリア/資源/重なり/経路BFS/クールダウン（`server/tests/owner-path-block.test.ts` で禁止距離と経路維持を担保）。
+* `physics.integrate`：壁スライド/角抜けしない（`packages/common/tests/physics.integrate.test.ts` で担保）。
 * `trap.apply`：重複踏み延長。
 * `points.lowerBound補填`：上限=規定−1のクリップ。
 

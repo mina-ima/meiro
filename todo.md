@@ -183,8 +183,10 @@
 ### 16.1 ユニット
 - [ ] `maze.generate(seed,L)`：連結性・**最短路≥4×L**（Property-Based 1,000回）
 - [x] `rules.required(total)=ceil(0.65*total)`：境界値
-- [ ] `validate.edit`：禁止/資源/重なり/経路BFS/CD
-- [ ] `physics.integrate`：角抜けしない・スライド補正
+- [x] `validate.edit`：禁止/資源/重なり/経路BFS/CD
+  - DoD: `server/tests/owner-path-block.test.ts` で禁止エリアと経路維持を検証
+- [x] `physics.integrate`：角抜けしない・スライド補正
+  - DoD: `packages/common/tests/physics.integrate.test.ts` でスライドと角押し停止を検証
 - [ ] `trap.apply`：重複踏み延長
 - [ ] ポイント下限補填：上限=規定−1 クリップ
 
