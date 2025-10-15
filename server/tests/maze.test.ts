@@ -22,11 +22,13 @@ describe('generateMaze', () => {
     expect(shortest).toBeGreaterThanOrEqual(size * 4);
   });
 
-  it('1,000通りの生成で常に最短路が4L以上になる', () => {
+  it('1,000通りの生成で常に連結かつ最短路が4L以上になる', () => {
     const attempts = 1_000;
     for (const size of [20, 40] as const) {
       for (let i = 0; i < attempts; i += 1) {
         const maze = generateMaze({ size, seed: `${size}-property-${i}` });
+        const reachable = exploreReachable(maze.start, maze);
+        expect(reachable.size).toBe(size * size);
         const shortest = shortestPathLength(maze.start, maze.goal, maze);
         expect(shortest).toBeGreaterThanOrEqual(size * 4);
       }
