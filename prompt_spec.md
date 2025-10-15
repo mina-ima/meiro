@@ -341,7 +341,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * `validate.edit`：禁止エリア/資源/重なり/経路BFS/クールダウン（`server/tests/owner-path-block.test.ts` で禁止距離と経路維持を担保）。
 * `physics.integrate`：壁スライド/角抜けしない（`packages/common/tests/physics.integrate.test.ts` で担保）。
 * `trap.apply`：重複踏み延長（`server/tests/trap-apply.test.ts` で既存slowUntilへの加算を検証）。
-* `points.lowerBound補填`：上限=規定−1のクリップ。
+* `points.lowerBound補填`：上限=規定−1のクリップ（`server/tests/points-scoring.test.ts` で検証）。
 
 ### 17.2 結合/シミュレーション
 
@@ -405,7 +405,7 @@ wrangler dev --local
 * [ ] 視界：FOV90°, 到達4マス（4マス目減光）
 * [ ] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持
 * [ ] 罠：40%速度、limit/5、同時2
-* [ ] ポイント：下限不足→初期ポイント補填（上限=規定−1）
+* [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）
 * [ ] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**
 * [ ] 切断→即ポーズ→60秒勝敗
 * [ ] 30fps/20Hz/遅延100ms以下（20Hz積分・補間の初期実装済み、レイテンシ評価未）

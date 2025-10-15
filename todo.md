@@ -188,7 +188,8 @@
 - [x] `physics.integrate`：角抜けしない・スライド補正
   - DoD: `packages/common/tests/physics.integrate.test.ts` でスライドと角押し停止を検証
 - [x] `trap.apply`：重複踏み延長
-- [ ] ポイント下限補填：上限=規定−1 クリップ
+- [x] ポイント下限補填：上限=規定−1 クリップ
+  - DoD: `server/tests/points-scoring.test.ts` に不足補填のクリップ検証を追加
 
 ### 16.2 結合/シミュレーション（Bot）
 - [ ] 5,000 Tick 連続対戦で経路封鎖が常に拒否

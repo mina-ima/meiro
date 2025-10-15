@@ -67,6 +67,72 @@ describe('ポイント配置とスコアリング', () => {
     vi.restoreAllMocks();
   });
 
+  it('不足ポイント補填はターゲットスコアの1点手前でクリップされる', async () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        phaseEndsAt?: number;
+        phaseStartedAt: number;
+        mazeSize: 20 | 40;
+        owner: { editCooldownUntil: number };
+        player: { score: number };
+        pointTotalValue: number;
+        targetScore: number;
+        targetScoreLocked: boolean;
+        pointShortageCompensated: boolean;
+      };
+      alarm: (alarmTime: number) => Promise<void>;
+    };
+
+    internal.roomState.phase = 'prep';
+    internal.roomState.phaseStartedAt = NOW;
+    internal.roomState.phaseEndsAt = NOW + 60_000;
+    internal.roomState.mazeSize = 20;
+    internal.roomState.owner.editCooldownUntil = NOW;
+
+    const placePoint = (cell: { x: number; y: number }, value: 1 | 3 | 5) => {
+      ownerSocket.dispatchMessage(
+        JSON.stringify({
+          type: 'O_EDIT',
+          edit: {
+            action: 'PLACE_POINT',
+            cell,
+            value,
+          },
+        }),
+      );
+      vi.setSystemTime(Date.now() + 1_200);
+      internal.roomState.owner.editCooldownUntil = Date.now();
+    };
+
+    placePoint({ x: 1, y: 1 }, 5);
+    placePoint({ x: 2, y: 1 }, 5);
+
+    expect(internal.roomState.pointTotalValue).toBe(10);
+
+    await internal.alarm(NOW + 60_000);
+
+    expect(internal.roomState.targetScoreLocked).toBe(true);
+    expect(internal.roomState.pointShortageCompensated).toBe(true);
+    const expectedTarget = Math.ceil(10 * 0.65);
+    expect(internal.roomState.targetScore).toBe(expectedTarget);
+    const expectedBonus = Math.min(40 - 10, Math.max(0, expectedTarget - 1));
+    expect(internal.roomState.player.score).toBe(expectedBonus);
+    expect(expectedBonus).toBeLessThan(expectedTarget);
+
+    room.dispose();
+  });
+
   it('ポイント配置が上限を超えると拒否され、ターゲットポイントが再計算される', async () => {
     const room = new RoomDurableObject(
       new FakeDurableObjectState() as unknown as DurableObjectState,
