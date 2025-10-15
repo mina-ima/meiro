@@ -17,6 +17,7 @@ import { MessageValidationError, processClientMessage, createServerEvents } from
 import { ClientConnection, MessageSizeExceededError } from './logic/outbound';
 import { RoomMetrics } from './logic/metrics';
 import { StateComposer } from './logic/state-sync';
+import { apply as applyTrapEffect, MAX_ACTIVE_TRAPS, TRAP_SPEED_MULTIPLIER } from './logic/trap';
 import type { PlayerInputState, PlayerSession, RoomState } from './state';
 import type { ClientMessage, ServerMessage } from './schema/ws';
 
@@ -42,9 +43,6 @@ type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
 const EDIT_COOLDOWN_MS = 1_000;
 const FORBIDDEN_MANHATTAN_DISTANCE = 2;
 const PREDICTION_WALL_RATE = 0.7;
-const TRAP_SPEED_MULTIPLIER = 0.4;
-const MAX_ACTIVE_TRAPS = 2;
-const TRAP_DURATION_DIVISOR = 5;
 const POINT_PLACEMENT_WINDOW_MS = 40_000;
 const POINT_REQUIRED_RATE = 0.65;
 const POINT_COUNT_LIMITS: Record<20 | 40, number> = { 20: 12, 40: 18 };
@@ -692,11 +690,12 @@ export class RoomDurableObject {
 
     this.roomState.owner.traps.splice(index, 1);
 
-    const phaseEndsAt = this.roomState.phaseEndsAt ?? now;
-    const remaining = Math.max(phaseEndsAt - now, 0);
-    const duration = remaining / TRAP_DURATION_DIVISOR;
-    const base = Math.max(this.roomState.player.trapSlowUntil ?? now, now);
-    this.roomState.player.trapSlowUntil = duration > 0 ? base + duration : base;
+    const { slowUntil } = applyTrapEffect({
+      now,
+      phaseEndsAt: this.roomState.phaseEndsAt,
+      currentSlowUntil: this.roomState.player.trapSlowUntil,
+    });
+    this.roomState.player.trapSlowUntil = slowUntil;
 
     return true;
   }

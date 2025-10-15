@@ -340,7 +340,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * `rules.required(total)=ceil(0.65*total)` 正確性。
 * `validate.edit`：禁止エリア/資源/重なり/経路BFS/クールダウン（`server/tests/owner-path-block.test.ts` で禁止距離と経路維持を担保）。
 * `physics.integrate`：壁スライド/角抜けしない（`packages/common/tests/physics.integrate.test.ts` で担保）。
-* `trap.apply`：重複踏み延長。
+* `trap.apply`：重複踏み延長（`server/tests/trap-apply.test.ts` で既存slowUntilへの加算を検証）。
 * `points.lowerBound補填`：上限=規定−1のクリップ。
 
 ### 17.2 結合/シミュレーション

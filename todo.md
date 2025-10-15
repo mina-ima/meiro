@@ -187,7 +187,7 @@
   - DoD: `server/tests/owner-path-block.test.ts` で禁止エリアと経路維持を検証
 - [x] `physics.integrate`：角抜けしない・スライド補正
   - DoD: `packages/common/tests/physics.integrate.test.ts` でスライドと角押し停止を検証
-- [ ] `trap.apply`：重複踏み延長
+- [x] `trap.apply`：重複踏み延長
 - [ ] ポイント下限補填：上限=規定−1 クリップ
 
 ### 16.2 結合/シミュレーション（Bot）
