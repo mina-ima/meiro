@@ -37,6 +37,7 @@ export interface OwnerRuntimeState {
   predictionMarks: Map<string, PredictionMark>;
   predictionLimit: number;
   predictionHits: number;
+  predictionBonusDeck: ('wall' | 'trap')[];
 }
 
 export interface PredictionMark {
@@ -149,6 +150,7 @@ function createInitialOwnerState(mazeSize: 20 | 40, now: number): OwnerRuntimeSt
     predictionMarks: new Map(),
     predictionLimit: 3,
     predictionHits: 0,
+    predictionBonusDeck: [],
   };
 }
 

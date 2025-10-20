@@ -181,7 +181,8 @@
 
 ## 16. テスト（自動化優先）
 ### 16.1 ユニット
-- [ ] `maze.generate(seed,L)`：連結性・**最短路≥4×L**（Property-Based 1,000回）
+- [x] `maze.generate(seed,L)`：連結性・**最短路≥4×L**（Property-Based 1,000回）
+  - DoD: `server/tests/maze.test.ts` で直径の葉ノードを start/goal に選び、1,000 seed のテストで連結と最短距離4L以上を担保
 - [x] `rules.required(total)=ceil(0.65*total)`：境界値
 - [x] `validate.edit`：禁止/資源/重なり/経路BFS/CD
   - DoD: `server/tests/owner-path-block.test.ts` で禁止エリアと経路維持を検証
@@ -192,9 +193,12 @@
   - DoD: `server/tests/points-scoring.test.ts` に不足補填のクリップ検証を追加
 
 ### 16.2 結合/シミュレーション（Bot）
-- [ ] 5,000 Tick 連続対戦で経路封鎖が常に拒否
-- [ ] 予測地点ボーナス比率 70/30 ±5% に収束
-- [ ] `DEL_WALL` は1回のみを保証
+- [x] 5,000 Tick 連続対戦で経路封鎖が常に拒否
+  - DoD: `server/tests/owner-path-block.test.ts` で 5,000 Tick 連続編集を再現し `NO_PATH` を検証
+- [x] 予測地点ボーナス比率 70/30 ±5% に収束
+  - DoD: `server/tests/prediction-bonus-ratio.test.ts` で1,000ヒット時の比率が70/30±5%に収束することを確認
+- [x] `DEL_WALL` は1回のみを保証
+  - DoD: `server/tests/owner-wall-remove.test.ts` で既存壁のみ削除可・削除済み後は `WALL_REMOVE_EXHAUSTED` を検証
 
 ### 16.3 負荷/安定
 - [ ] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB

@@ -99,7 +99,6 @@ describe('予測地点ボーナス', () => {
   }
 
   it('プレイヤーが予測地点を通過すると70%で壁資源が増える', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2);
     placePrediction({ x: 11, y: 11 });
 
     const internal = room as unknown as {
@@ -108,10 +107,11 @@ describe('予測地点ボーナス', () => {
           physics: { position: { x: number; y: number } };
           predictionHits: number;
         };
-        owner: { wallStock: number };
+        owner: { wallStock: number; predictionBonusDeck: ('wall' | 'trap')[] };
       };
     };
 
+    internal.roomState.owner.predictionBonusDeck = ['wall'];
     internal.roomState.player.physics.position = { x: 11.3, y: 11.4 };
 
     vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);
@@ -121,7 +121,6 @@ describe('予測地点ボーナス', () => {
   });
 
   it('プレイヤーが予測地点を通過すると30%で罠権利が増える', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     placePrediction({ x: 7, y: 8 });
 
     const internal = room as unknown as {
@@ -130,10 +129,11 @@ describe('予測地点ボーナス', () => {
           physics: { position: { x: number; y: number } };
           predictionHits: number;
         };
-        owner: { trapCharges: number };
+        owner: { trapCharges: number; predictionBonusDeck: ('wall' | 'trap')[] };
       };
     };
 
+    internal.roomState.owner.predictionBonusDeck = ['trap'];
     internal.roomState.player.physics.position = { x: 7.2, y: 8.7 };
 
     vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);

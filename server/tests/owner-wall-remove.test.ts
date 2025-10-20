@@ -78,6 +78,15 @@ describe('RoomDurableObject wall removal', () => {
   });
 
   it('削除権は1回のみで壁資源を返却する', () => {
+    const internal = room as unknown as {
+      roomState: {
+        owner: { wallStock: number; wallRemoveLeft: number };
+        solidCells: Set<string>;
+      };
+    };
+
+    internal.roomState.solidCells.add('1,1');
+
     ownerSocket.dispatchMessage(
       JSON.stringify({
         type: 'O_EDIT',
@@ -89,14 +98,54 @@ describe('RoomDurableObject wall removal', () => {
       }),
     );
 
-    const state = (room as unknown as { roomState: { owner: { wallStock: number; wallRemoveLeft: number } } })
-      .roomState.owner;
+    const state = internal.roomState.owner;
 
     expect(state.wallRemoveLeft).toBe(0);
     expect(state.wallStock).toBe(141);
   });
 
+  it('存在しない壁の削除は拒否され、削除権が残る', () => {
+    const internal = room as unknown as {
+      roomState: {
+        owner: { wallStock: number; wallRemoveLeft: number };
+        solidCells: Set<string>;
+      };
+    };
+
+    internal.roomState.solidCells.clear();
+    ownerSocket.sent.length = 0;
+    const initialStock = internal.roomState.owner.wallStock;
+
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'DEL_WALL',
+          cell: { x: 3, y: 3 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    const error = ownerSocket.sent
+      .map((raw) => JSON.parse(raw))
+      .find((message) => message.type === 'ERR');
+
+    expect(error).toMatchObject({ code: 'DENY_EDIT' });
+    expect(internal.roomState.owner.wallRemoveLeft).toBe(1);
+    expect(internal.roomState.owner.wallStock).toBe(initialStock);
+  });
+
   it('2回目の壁削除はエラーになり状態が変化しない', () => {
+    const internal = room as unknown as {
+      roomState: {
+        owner: { editCooldownUntil: number; wallStock: number; wallRemoveLeft: number };
+        solidCells: Set<string>;
+      };
+    };
+
+    internal.roomState.solidCells.add('1,1');
+
     ownerSocket.dispatchMessage(
       JSON.stringify({
         type: 'O_EDIT',
@@ -110,9 +159,6 @@ describe('RoomDurableObject wall removal', () => {
 
     ownerSocket.sent.length = 0;
     vi.advanceTimersByTime(1_000);
-    const internal = room as unknown as {
-      roomState: { owner: { editCooldownUntil: number; wallStock: number; wallRemoveLeft: number } };
-    };
     internal.roomState.owner.editCooldownUntil = Date.now();
 
     ownerSocket.dispatchMessage(

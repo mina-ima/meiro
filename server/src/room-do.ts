@@ -43,6 +43,9 @@ type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
 const EDIT_COOLDOWN_MS = 1_000;
 const FORBIDDEN_MANHATTAN_DISTANCE = 2;
 const PREDICTION_WALL_RATE = 0.7;
+const PREDICTION_BONUS_BATCH_SIZE = 10;
+const PREDICTION_BONUS_WALLS = Math.round(PREDICTION_BONUS_BATCH_SIZE * PREDICTION_WALL_RATE);
+const PREDICTION_BONUS_TRAPS = PREDICTION_BONUS_BATCH_SIZE - PREDICTION_BONUS_WALLS;
 const POINT_PLACEMENT_WINDOW_MS = 40_000;
 const POINT_REQUIRED_RATE = 0.65;
 const POINT_COUNT_LIMITS: Record<20 | 40, number> = { 20: 12, 40: 18 };
@@ -462,6 +465,24 @@ export class RoomDurableObject {
           this.sendError(socket, 'WALL_STOCK_EMPTY', 'No wall stock remaining.');
           return false;
         }
+        const mazeSize = this.roomState.mazeSize;
+        if (!isWithinMazeBounds(targetCell.x, targetCell.y, mazeSize)) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Wall cell is outside of the maze bounds.');
+          return false;
+        }
+        const key = solidKey(targetCell.x, targetCell.y);
+        if (this.roomState.solidCells.has(key)) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Wall already exists at the specified cell.');
+          return false;
+        }
+        if (this.wouldBlockPlayerPath(targetCell)) {
+          this.metrics.logOwnerEditRejected('NO_PATH');
+          this.sendError(socket, 'NO_PATH', 'Edit would block the player from reaching the goal.');
+          return false;
+        }
+        this.roomState.solidCells.add(key);
         owner.wallStock -= 1;
         owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
         return true;
@@ -476,6 +497,22 @@ export class RoomDurableObject {
           );
           return false;
         }
+
+        const mazeSize = this.roomState.mazeSize;
+        if (!isWithinMazeBounds(targetCell.x, targetCell.y, mazeSize)) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'Wall cell is outside of the maze bounds.');
+          return false;
+        }
+
+        const key = solidKey(targetCell.x, targetCell.y);
+        if (!this.roomState.solidCells.has(key)) {
+          this.metrics.logOwnerEditRejected('DENY_EDIT');
+          this.sendError(socket, 'DENY_EDIT', 'No wall exists at the specified cell.');
+          return false;
+        }
+
+        this.roomState.solidCells.delete(key);
         owner.wallRemoveLeft = 0;
         owner.wallStock += 1;
         owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
@@ -582,6 +619,32 @@ export class RoomDurableObject {
       default:
         return true;
     }
+  }
+
+  private wouldBlockPlayerPath(cell: { x: number; y: number }): boolean {
+    const goal = this.roomState.goalCell;
+    if (!goal) {
+      return false;
+    }
+
+    const mazeSize = this.roomState.mazeSize;
+    if (!isWithinMazeBounds(cell.x, cell.y, mazeSize)) {
+      return false;
+    }
+
+    const start = {
+      x: Math.floor(this.roomState.player.physics.position.x),
+      y: Math.floor(this.roomState.player.physics.position.y),
+    };
+
+    if (!isWithinMazeBounds(start.x, start.y, mazeSize)) {
+      return false;
+    }
+
+    const blocked = new Set(this.roomState.solidCells);
+    blocked.add(solidKey(cell.x, cell.y));
+
+    return !hasAccessiblePath(mazeSize, blocked, start, goal);
   }
 
   private handleOwnerMark(message: OwnerMarkMessage, socket: WebSocket, now: number): boolean {
@@ -775,13 +838,46 @@ export class RoomDurableObject {
     this.roomState.owner.predictionHits += 1;
     this.roomState.player.predictionHits += 1;
 
-    if (Math.random() < PREDICTION_WALL_RATE) {
+    const bonus = this.drawPredictionBonus();
+    if (bonus === 'wall') {
       this.roomState.owner.wallStock += 1;
     } else {
       this.roomState.owner.trapCharges += 1;
     }
 
     return true;
+  }
+
+  private drawPredictionBonus(): 'wall' | 'trap' {
+    if (this.roomState.owner.predictionBonusDeck.length === 0) {
+      this.refillPredictionBonusDeck();
+    }
+    const deck = this.roomState.owner.predictionBonusDeck;
+    const bonus = deck.shift();
+    if (!bonus) {
+      this.refillPredictionBonusDeck();
+      return this.roomState.owner.predictionBonusDeck.shift() ?? 'wall';
+    }
+    return bonus;
+  }
+
+  private refillPredictionBonusDeck(): void {
+    const deck: ('wall' | 'trap')[] = [];
+    for (let i = 0; i < PREDICTION_BONUS_WALLS; i += 1) {
+      deck.push('wall');
+    }
+    for (let i = 0; i < PREDICTION_BONUS_TRAPS; i += 1) {
+      deck.push('trap');
+    }
+
+    for (let i = deck.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = deck[i];
+      deck[i] = deck[j];
+      deck[j] = tmp;
+    }
+
+    this.roomState.owner.predictionBonusDeck = deck;
   }
 
   private canPlacePoint(now: number): boolean {
@@ -1185,6 +1281,68 @@ function predictionKey(cell: { x: number; y: number }): string {
 
 function solidKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+function isWithinMazeBounds(x: number, y: number, mazeSize: number): boolean {
+  return x >= 0 && y >= 0 && x < mazeSize && y < mazeSize;
+}
+
+function hasAccessiblePath(
+  mazeSize: number,
+  solidCells: Set<string>,
+  start: { x: number; y: number },
+  goal: { x: number; y: number },
+): boolean {
+  if (!isWithinMazeBounds(goal.x, goal.y, mazeSize)) {
+    return false;
+  }
+  if (!isWithinMazeBounds(start.x, start.y, mazeSize)) {
+    return false;
+  }
+
+  const startKey = solidKey(start.x, start.y);
+  if (solidCells.has(startKey)) {
+    return false;
+  }
+  const goalKey = solidKey(goal.x, goal.y);
+  if (solidCells.has(goalKey)) {
+    return false;
+  }
+
+  const visited = new Set<string>([startKey]);
+  const queue: Array<{ x: number; y: number }> = [start];
+  const neighbors = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      break;
+    }
+    if (current.x === goal.x && current.y === goal.y) {
+      return true;
+    }
+
+    for (const { dx, dy } of neighbors) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      if (!isWithinMazeBounds(nx, ny, mazeSize)) {
+        continue;
+      }
+      const key = solidKey(nx, ny);
+      if (solidCells.has(key) || visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  return false;
 }
 
 function isTrapPlacementCellValid(
