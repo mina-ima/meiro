@@ -819,9 +819,22 @@ export class RoomDurableObject {
       return;
     }
 
+    const previousPhaseStartedAt = this.roomState.phaseStartedAt ?? now;
     this.roomState.phase = 'result';
     this.roomState.phaseEndsAt = undefined;
     this.roomState.phaseStartedAt = now;
+    const duration = Math.max(0, now - previousPhaseStartedAt);
+    this.metrics.logPhaseTransition('explore', 'result', duration);
+    this.broadcast({
+      type: 'EV',
+      event: 'RESULT',
+      at: now,
+      payload: {
+        reason: 'TARGET_REACHED',
+        score: this.roomState.player.score,
+        target: this.roomState.targetScore,
+      },
+    });
   }
 
   private processPredictionBonus(position: Vector2): boolean {

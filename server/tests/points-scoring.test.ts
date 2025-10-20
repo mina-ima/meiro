@@ -395,4 +395,62 @@ describe('ポイント配置とスコアリング', () => {
 
     room.dispose();
   });
+
+  it('規定到達時にRESULTイベントが送出され、未達では継続する', () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        phaseStartedAt: number;
+        targetScore: number;
+        targetScoreLocked: boolean;
+        player: { score: number };
+      };
+      evaluateScoreCompletion: (now: number) => void;
+      broadcast: (message: unknown) => void;
+    };
+
+    const captured: unknown[] = [];
+    internal.broadcast = (message: unknown) => {
+      captured.push(message);
+    };
+
+    internal.roomState.phase = 'explore';
+    internal.roomState.phaseStartedAt = NOW - 15_000;
+    internal.roomState.targetScoreLocked = true;
+    internal.roomState.targetScore = 10;
+    internal.roomState.player.score = 9;
+
+    internal.evaluateScoreCompletion(NOW + 30_000);
+    expect(internal.roomState.phase).toBe('explore');
+    expect(captured).toHaveLength(0);
+
+    internal.roomState.player.score = 10;
+    internal.evaluateScoreCompletion(NOW + 45_000);
+    expect(internal.roomState.phase).toBe('result');
+
+    type CapturedEvent = {
+      type?: string;
+      event?: string;
+      payload?: {
+        reason?: string;
+        score?: number;
+        target?: number;
+      };
+    };
+
+    const events = captured.map((value) => value as CapturedEvent);
+    const resultEvents = events.filter((event) => event.type === 'EV' && event.event === 'RESULT');
+    expect(resultEvents).toHaveLength(1);
+    expect(resultEvents[0]?.payload).toMatchObject({
+      reason: 'TARGET_REACHED',
+      score: 10,
+      target: 10,
+    });
+
+    room.dispose();
+  });
 });
