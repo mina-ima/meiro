@@ -137,7 +137,7 @@ export function App() {
     previousPredictionHits.current = playerState.predictionHits;
   }, [playerState.predictionHits, role]);
 
-  const ownerCooldownMs = Math.max(0, ownerState.editCooldownUntil - Date.now());
+  const ownerCooldownMs = useCountdown(ownerState.editCooldownUntil, 100);
   const forbiddenDistance = OWNER_FORBIDDEN_DISTANCE;
 
   const mainView =
@@ -196,41 +196,65 @@ export function App() {
 }
 
 function useTimeRemaining(targetMs?: number): number {
-  const [now, setNow] = useState(() => Date.now());
+  const remainingMs = useCountdown(targetMs, 1_000);
+  if (targetMs == null) {
+    return 0;
+  }
+  if (remainingMs <= 0) {
+    return 0;
+  }
+  return Math.ceil(remainingMs / 1000);
+}
+
+function useCountdown(targetMs?: number, intervalMs: number = 1_000): number {
+  const [remaining, setRemaining] = useState(() => computeRemainingMs(targetMs));
 
   useEffect(() => {
-    if (targetMs == null) {
+    const next = computeRemainingMs(targetMs);
+    setRemaining(next);
+
+    if (!shouldScheduleCountdown(targetMs)) {
       return;
     }
 
     let timerId: number | undefined;
 
     const tick = () => {
-      const current = Date.now();
-      setNow(current);
-      if (current >= targetMs && timerId !== undefined) {
+      const updated = computeRemainingMs(targetMs);
+      setRemaining((previous) => {
+        if (Math.abs(previous - updated) < 1) {
+          return previous;
+        }
+        return updated;
+      });
+
+      if (updated <= 0 && timerId !== undefined) {
         window.clearInterval(timerId);
         timerId = undefined;
       }
     };
 
-    tick();
-    timerId = window.setInterval(tick, 1_000);
+    timerId = window.setInterval(tick, intervalMs);
     return () => {
       if (timerId !== undefined) {
         window.clearInterval(timerId);
       }
     };
-  }, [targetMs]);
+  }, [targetMs, intervalMs]);
 
-  if (targetMs == null) {
+  return remaining;
+}
+
+function computeRemainingMs(targetMs?: number): number {
+  if (targetMs == null || !Number.isFinite(targetMs)) {
     return 0;
   }
+  return Math.max(0, targetMs - Date.now());
+}
 
-  const remainingMs = targetMs - now;
-  if (remainingMs <= 0) {
-    return 0;
+function shouldScheduleCountdown(targetMs?: number): boolean {
+  if (targetMs == null || !Number.isFinite(targetMs)) {
+    return false;
   }
-
-  return Math.ceil(remainingMs / 1000);
+  return targetMs > Date.now();
 }

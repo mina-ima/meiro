@@ -683,6 +683,15 @@ export class RoomDurableObject {
 
   private handleTick(): void {
     const now = Date.now();
+    if (
+      this.roomState.phase === 'lobby' &&
+      this.roomState.sessions.size > 0 &&
+      hasLobbyExpired(this.roomState, now)
+    ) {
+      this.expireLobby(now);
+      this.publishState({ forceFull: true });
+      return;
+    }
     const stateChanged = this.checkDisconnectTimeout(now);
 
     if (!this.hasPlayerSession() || this.roomState.paused) {
