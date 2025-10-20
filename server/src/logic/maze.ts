@@ -32,7 +32,7 @@ export function generateMaze(config: MazeConfig): MazeGenerationResult {
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const cells = carveMaze(size, rng);
-    const startGoal = chooseStartGoal(cells, size, rng, minPath);
+    const startGoal = findDiameterEndpoints(cells, size, rng);
 
     if (!startGoal) {
       continue;
@@ -128,37 +128,65 @@ function removeWall(a: MazeCell, b: MazeCell, direction: MazeDirection): void {
   b.walls[offset.opposite] = false;
 }
 
-function chooseStartGoal(
+function findDiameterEndpoints(
   cells: MazeCell[],
   size: number,
   rng: () => number,
-  minPath: number,
 ): { start: { x: number; y: number }; goal: { x: number; y: number }; distance: number } | null {
-  const shuffledIndices = shuffle(
-    Array.from({ length: cells.length }, (_, index) => index),
-    rng,
-  );
+  if (cells.length === 0) {
+    return null;
+  }
 
-  for (const index of shuffledIndices) {
-    const start = cells[index];
-    const distances = shortestDistancesFrom(start, cells, size);
-    const viable = distances
-      .map((distance, i) => ({ distance, cell: cells[i] }))
-      .filter((entry) => entry.distance >= minPath);
+  const initialIndex = Math.floor(rng() * cells.length);
+  const first = farthestFrom(cells[initialIndex], cells, size);
+  if (first.farthestIndices.length === 0) {
+    return null;
+  }
 
-    if (viable.length === 0) {
+  const startIndex = pickRandom(first.farthestIndices, rng);
+  const second = farthestFrom(cells[startIndex], cells, size);
+  if (second.farthestIndices.length === 0) {
+    return null;
+  }
+
+  const goalIndex = pickRandom(second.farthestIndices, rng);
+  return {
+    start: { x: cells[startIndex].x, y: cells[startIndex].y },
+    goal: { x: cells[goalIndex].x, y: cells[goalIndex].y },
+    distance: second.maxDistance,
+  };
+}
+
+function farthestFrom(
+  root: MazeCell,
+  cells: MazeCell[],
+  size: number,
+): { distances: number[]; maxDistance: number; farthestIndices: number[] } {
+  const distances = shortestDistancesFrom(root, cells, size);
+  let maxDistance = 0;
+  const farthestIndices: number[] = [];
+
+  for (let i = 0; i < distances.length; i += 1) {
+    const distance = distances[i];
+    if (distance === Infinity) {
       continue;
     }
 
-    const choice = viable[Math.floor(rng() * viable.length)];
-    return {
-      start: { x: start.x, y: start.y },
-      goal: { x: choice.cell.x, y: choice.cell.y },
-      distance: choice.distance,
-    };
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      farthestIndices.length = 0;
+      farthestIndices.push(i);
+    } else if (distance === maxDistance) {
+      farthestIndices.push(i);
+    }
   }
 
-  return null;
+  if (farthestIndices.length === 0) {
+    const index = root.y * size + root.x;
+    return { distances, maxDistance: 0, farthestIndices: [index] };
+  }
+
+  return { distances, maxDistance, farthestIndices };
 }
 
 function shortestDistancesFrom(start: MazeCell, cells: MazeCell[], size: number): number[] {
@@ -200,6 +228,14 @@ function shuffle<T>(items: T[], rng: () => number): T[] {
     [copied[i], copied[j]] = [copied[j], copied[i]];
   }
   return copied;
+}
+
+function pickRandom<T>(items: T[], rng: () => number): T {
+  if (items.length === 0) {
+    throw new Error('Cannot pick from an empty list');
+  }
+  const index = Math.floor(rng() * items.length);
+  return items[index];
 }
 
 function createRng(seed: string): () => number {

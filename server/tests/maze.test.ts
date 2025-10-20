@@ -34,6 +34,15 @@ describe('generateMaze', () => {
       }
     }
   });
+
+  it.each([20, 40] as const)('%d×%d の迷路は start/goal が葉ノードになる', (size) => {
+    const attempts = 200;
+    for (let i = 0; i < attempts; i += 1) {
+      const maze = generateMaze({ size, seed: `${size}-leaf-${i}` });
+      expect(degreeOf(maze.start, maze)).toBe(1);
+      expect(degreeOf(maze.goal, maze)).toBe(1);
+    }
+  });
 });
 
 function isWithinBounds({ x, y }: Vec2, size: number): boolean {
@@ -116,4 +125,8 @@ function neighborsOf(point: Vec2, maze: ReturnType<typeof generateMaze>): Vec2[]
 
 function keyOf({ x, y }: Vec2): string {
   return `${x},${y}`;
+}
+
+function degreeOf(point: Vec2, maze: ReturnType<typeof generateMaze>): number {
+  return neighborsOf(point, maze).length;
 }
