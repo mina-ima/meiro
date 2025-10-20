@@ -29,6 +29,7 @@ describe('PlayerView 準備プレビュー', () => {
       vi.advanceTimersByTime(10_000);
     });
     expect(screen.getByText(/ゴールの光が一瞬だけ映ります/)).toBeInTheDocument();
+    expect(screen.getByAltText('ゴールプレビュー映像')).toBeInTheDocument();
   });
 
   it('探索フェーズではキャンバスのみが表示される', () => {
