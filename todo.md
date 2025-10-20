@@ -202,7 +202,8 @@
 
 ### 16.3 負荷/安定
 - [ ] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB
-- [ ] BFS検証 p95≤1ms/編集
+- [x] BFS検証 p95≤1ms/編集  
+  - DoD: `server/tests/owner-path-block.test.ts` で `owner.path_check` メトリクスの出力と値を検証
 - [ ] 連続編集CDがサーバで強制
 
 ### 16.4 受入(UX)

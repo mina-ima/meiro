@@ -119,4 +119,15 @@ export class RoomMetrics {
       reason,
     });
   }
+
+  logOwnerPathCheck(durationMs: number, blocked: boolean, checked: boolean): void {
+    this.emit({
+      type: 'owner.path_check',
+      roomId: this.roomId,
+      at: Date.now(),
+      durationMs,
+      blocked,
+      checked,
+    });
+  }
 }

@@ -329,7 +329,8 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ## 16. ロギング/計測/運用
 
 * **クライアント**：起動, 接続, Phase遷移, 操作失敗（ERR.code別）, RTT, FPS。
-* **サーバ**：部屋寿命, 参加/離脱, Phase時間, 編集拒否率, BFS所要時間, メッセージサイズ。
+* **サーバ**：部屋寿命, 参加/離脱, Phase時間, 編集拒否率, BFS所要時間, メッセージサイズ。  
+  * BFS検証は `owner.path_check` メトリクスで記録（`durationMs`, `blocked`, `checked`）
 * アラート：**WS失敗率/再接続率/STATE遅延>200ms**（`client.ws.alert` / `client.ws.reconnect.alert` / `state.latency.alert` を発火）。
 
 ---

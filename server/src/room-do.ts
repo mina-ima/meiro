@@ -622,13 +622,16 @@ export class RoomDurableObject {
   }
 
   private wouldBlockPlayerPath(cell: { x: number; y: number }): boolean {
+    const startedAt = Date.now();
     const goal = this.roomState.goalCell;
     if (!goal) {
+      this.metrics.logOwnerPathCheck(0, false, false);
       return false;
     }
 
     const mazeSize = this.roomState.mazeSize;
     if (!isWithinMazeBounds(cell.x, cell.y, mazeSize)) {
+      this.metrics.logOwnerPathCheck(0, false, false);
       return false;
     }
 
@@ -638,13 +641,18 @@ export class RoomDurableObject {
     };
 
     if (!isWithinMazeBounds(start.x, start.y, mazeSize)) {
+      this.metrics.logOwnerPathCheck(0, false, false);
       return false;
     }
 
-    const blocked = new Set(this.roomState.solidCells);
-    blocked.add(solidKey(cell.x, cell.y));
+    const blockedCells = new Set(this.roomState.solidCells);
+    blockedCells.add(solidKey(cell.x, cell.y));
 
-    return !hasAccessiblePath(mazeSize, blocked, start, goal);
+    const pathAvailable = hasAccessiblePath(mazeSize, blockedCells, start, goal);
+    const durationMs = Math.max(0, Date.now() - startedAt);
+    this.metrics.logOwnerPathCheck(durationMs, !pathAvailable, true);
+
+    return !pathAvailable;
   }
 
   private handleOwnerMark(message: OwnerMarkMessage, socket: WebSocket, now: number): boolean {
