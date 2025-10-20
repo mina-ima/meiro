@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { OwnerView, PlayerView } from './views';
-import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { NetClient } from './net/NetClient';
 import { useSessionStore, type ServerStatePayload } from './state/sessionStore';
 import { logClientInit, logClientError, logPhaseChange } from './logging/telemetry';
+import { OwnerView, PlayerView } from './views';
+import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
+import { DebugHUD } from './ui/DebugHUD';
+import { OWNER_FORBIDDEN_DISTANCE } from './config/spec';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
 
@@ -136,39 +138,57 @@ export function App() {
   }, [playerState.predictionHits, role]);
 
   const ownerCooldownMs = Math.max(0, ownerState.editCooldownUntil - Date.now());
-  const forbiddenDistance = 2;
+  const forbiddenDistance = OWNER_FORBIDDEN_DISTANCE;
 
-  if (role === 'owner') {
-    return (
-      <>
-        <OwnerView
-          client={client}
-          wallCount={ownerState.wallStock}
-          trapCharges={ownerState.trapCharges}
-          wallRemoveLeft={ownerState.wallRemoveLeft}
-          editCooldownMs={ownerCooldownMs}
-          forbiddenDistance={forbiddenDistance}
-          activePredictions={ownerState.activePredictionCount}
-          predictionLimit={ownerState.predictionLimit}
-          timeRemaining={timeRemaining}
-          predictionMarks={ownerState.predictionMarks}
-          traps={ownerState.traps}
-          playerPosition={playerState.position}
-          mazeSize={mazeSize}
-        />
-        <ToastHost />
-      </>
-    );
-  }
-
-  return (
-    <>
+  const mainView =
+    role === 'owner' ? (
+      <OwnerView
+        client={client}
+        wallCount={ownerState.wallStock}
+        trapCharges={ownerState.trapCharges}
+        wallRemoveLeft={ownerState.wallRemoveLeft}
+        editCooldownMs={ownerCooldownMs}
+        forbiddenDistance={forbiddenDistance}
+        activePredictions={ownerState.activePredictionCount}
+        predictionLimit={ownerState.predictionLimit}
+        timeRemaining={timeRemaining}
+        predictionMarks={ownerState.predictionMarks}
+        traps={ownerState.traps}
+        playerPosition={playerState.position}
+        mazeSize={mazeSize}
+      />
+    ) : (
       <PlayerView
         points={score}
         targetPoints={targetScore}
         predictionHits={playerState.predictionHits}
         phase={phase}
         timeRemaining={timeRemaining}
+      />
+    );
+
+  return (
+    <>
+      {mainView}
+      <DebugHUD
+        role={role}
+        mazeSize={mazeSize}
+        timeRemaining={timeRemaining}
+        owner={{
+          wallStock: ownerState.wallStock,
+          trapCharges: ownerState.trapCharges,
+          wallRemoveLeft: ownerState.wallRemoveLeft,
+          predictionLimit: ownerState.predictionLimit,
+          activePredictionCount: ownerState.activePredictionCount,
+          predictionHits: ownerState.predictionHits,
+          predictionMarks: ownerState.predictionMarks,
+          traps: ownerState.traps,
+        }}
+        player={{
+          position: playerState.position,
+          predictionHits: playerState.predictionHits,
+        }}
+        ownerCooldownMs={ownerCooldownMs}
       />
       <ToastHost />
     </>

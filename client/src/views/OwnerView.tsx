@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { NetClient } from '../net/NetClient';
 import { HUD } from './HUD';
+import { OWNER_ZOOM_LEVELS } from '../config/spec';
 
 interface Vector2 {
   x: number;
   y: number;
 }
-
-const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 export interface OwnerViewProps {
   client: NetClient | null;
@@ -45,7 +44,7 @@ export function OwnerView({
   const clampedPredictions = Math.max(0, Math.min(activePredictions, predictionLimit));
 
   const [zoomIndex, setZoomIndex] = useState(3);
-  const zoom = ZOOM_LEVELS[zoomIndex];
+  const zoom = OWNER_ZOOM_LEVELS[zoomIndex];
   const [offset, setOffset] = useState(() => centerOffset(mazeSize, zoom));
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export function OwnerView({
   }, [mazeSize, zoom]);
 
   const handleZoomIn = useCallback(() => {
-    setZoomIndex((index) => Math.min(index + 1, ZOOM_LEVELS.length - 1));
+    setZoomIndex((index) => Math.min(index + 1, OWNER_ZOOM_LEVELS.length - 1));
   }, []);
 
   const handleZoomOut = useCallback(() => {
@@ -188,7 +187,7 @@ function OwnerMap({
   }, [mazeSize]);
 
   const zoomOutDisabled = zoomIndex === 0;
-  const zoomInDisabled = zoomIndex === ZOOM_LEVELS.length - 1;
+  const zoomInDisabled = zoomIndex === OWNER_ZOOM_LEVELS.length - 1;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

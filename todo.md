@@ -207,7 +207,8 @@
 - [ ] 連続編集CDがサーバで強制
 
 ### 16.4 受入(UX)
-- [ ] デバッグHUDで全パラメータが可視
+- [x] デバッグHUDで全パラメータが可視
+  - DoD: `client/tests/DebugHUD.test.tsx` で仕様値の表示を確認
 - [ ] 準備中プレビューにゴール映像が含まれる
 - [x] 規定到達で終了（到達未満なら継続）  
   - DoD: `server/tests/points-scoring.test.ts` でターゲット到達時の `RESULT` 通知と未達時継続を検証

@@ -214,6 +214,10 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * SEのみ。初期音量70%。**壁/罠の視界反映は無演出即時**。
 * `SoundBus` が全SEの音量を0〜1でクランプ管理し、トグルで一括ミュート・未登録ID再生時は警告のみを出す。
 
+### 8.4 デバッグHUD
+
+* `App` 下部に `DebugHUD` を常設し、**速度/視界/ズーム倍率/編集CD/禁止距離/資源上限/ポイント係数/罠効果**などの仕様値と現在値を一覧表示（client/src/ui/DebugHUD.tsx / client/tests/DebugHUD.test.tsx）。
+
 ---
 
 ## 9. エラーハンドリング/リジェクト理由
