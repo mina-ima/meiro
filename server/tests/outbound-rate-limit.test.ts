@@ -98,4 +98,43 @@ describe('ClientConnection', () => {
     expect(() => connection.enqueue(message)).toThrow(MessageSizeExceededError);
     expect(socket.sentPayloads).toHaveLength(0);
   });
+
+  it('STATE差分はキューで最新のみ保持する', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    const now = () => Date.now();
+    const socket = new FakeSocket(now);
+    const connection = new ClientConnection(socket, now);
+
+    const createStateDiff = (seq: number, updatedAt: number): ServerMessage => ({
+      type: 'STATE',
+      payload: {
+        seq,
+        full: false,
+        changes: {
+          updatedAt,
+        },
+      },
+    });
+
+    for (let i = 1; i <= 5; i += 1) {
+      connection.enqueue(createStateDiff(i, i * 10), { updatedAt: i * 10 });
+    }
+
+    vi.runOnlyPendingTimers();
+
+    expect(socket.sentPayloads).toHaveLength(1);
+    const sent = JSON.parse(socket.sentPayloads[0]) as {
+      payload: { seq: number; full: boolean; changes?: { updatedAt?: number } };
+    };
+    expect(sent.payload.full).toBe(false);
+    expect(sent.payload.seq).toBe(5);
+    expect(sent.payload.changes?.updatedAt).toBe(50);
+
+    vi.advanceTimersByTime(1_000);
+    expect(socket.sentPayloads).toHaveLength(1);
+
+    vi.useRealTimers();
+  });
 });

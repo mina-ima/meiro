@@ -14,6 +14,7 @@ interface InternalMessageMeta extends MessageMeta {
 interface QueueEntry {
   encoded: string;
   meta?: InternalMessageMeta;
+  replaceable: boolean;
 }
 
 export class MessageSizeExceededError extends Error {
@@ -69,6 +70,8 @@ export class ClientConnection {
       throw new MessageSizeExceededError(encoded.length);
     }
 
+    const replaceable = !immediate && isStateDiffMessage(message);
+
     const now = this.now();
     const entryMeta: InternalMessageMeta | undefined = meta
       ? { ...meta, enqueuedAt: now }
@@ -79,7 +82,11 @@ export class ClientConnection {
       return;
     }
 
-    this.queue.push({ encoded, meta: entryMeta });
+    if (replaceable && this.queue.length > 0) {
+      this.dropReplaceableMessages();
+    }
+
+    this.queue.push({ encoded, meta: entryMeta, replaceable });
     this.scheduleFlush();
   }
 
@@ -174,6 +181,17 @@ export class ClientConnection {
       }
     }
   }
+
+  private dropReplaceableMessages(): void {
+    if (this.queue.length === 0) {
+      return;
+    }
+    for (let i = this.queue.length - 1; i >= 0; i -= 1) {
+      if (this.queue[i]?.replaceable) {
+        this.queue.splice(i, 1);
+      }
+    }
+  }
 }
 
 export function getMaxMessageBytes(): number {
@@ -182,4 +200,16 @@ export function getMaxMessageBytes(): number {
 
 export function getMinIntervalMs(): number {
   return MIN_INTERVAL_MS;
+}
+
+function isStateDiffMessage(message: ServerMessage): boolean {
+  if (message.type !== 'STATE') {
+    return false;
+  }
+  const payload = message.payload as
+    | { full?: unknown }
+    | { full?: unknown; changes?: Record<string, unknown> }
+    | undefined;
+
+  return Boolean(payload && payload.full === false);
 }
