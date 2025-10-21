@@ -65,8 +65,9 @@ const INPUT_RATE_INTERVAL_MS = 1_000;
 const MAX_INPUTS_PER_INTERVAL = 30;
 const MAX_PAST_INPUT_MS = 500;
 const MAX_FUTURE_INPUT_MS = 150;
-const MAX_POSITION_DELTA = MOVE_SPEED * SERVER_TICK_INTERVAL_S * 1.25;
+const MAX_POSITION_DELTA_PER_SECOND = MOVE_SPEED * 1.25;
 const MAX_VELOCITY = MOVE_SPEED * 1.25;
+const MAX_TICK_DELTA_S = SERVER_TICK_INTERVAL_S * 10;
 
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
@@ -78,6 +79,7 @@ export class RoomDurableObject {
   private readonly metrics: RoomMetrics;
   private roomState: RoomState;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private lastTickAt: number;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -88,6 +90,7 @@ export class RoomDurableObject {
     }, SERVER_TICK_INTERVAL_MS);
     this.metrics = new RoomMetrics(this.roomId);
     this.metrics.logRoomCreated(this.roomState.mazeSize);
+    this.lastTickAt = Date.now();
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -734,6 +737,10 @@ export class RoomDurableObject {
 
   private handleTick(): void {
     const now = Date.now();
+    const deltaMs = Math.max(0, now - this.lastTickAt);
+    this.lastTickAt = now;
+    const deltaSeconds = Math.min(deltaMs / 1000, MAX_TICK_DELTA_S);
+
     if (
       this.roomState.phase === 'lobby' &&
       this.roomState.sessions.size > 0 &&
@@ -769,13 +776,15 @@ export class RoomDurableObject {
       turn: input.turn,
     };
 
-    const rawNext = integrate(
+    const stepSeconds = deltaSeconds;
+    const rawNext = integrate(current, adjustedInput, { deltaTime: stepSeconds }, environment);
+    const maxStepDistance = Math.max(stepSeconds * MAX_POSITION_DELTA_PER_SECOND, FLOAT_EPSILON);
+    const sanitized = sanitizePhysicsState(
       current,
-      adjustedInput,
-      { deltaTime: SERVER_TICK_INTERVAL_S },
-      environment,
+      rawNext,
+      this.roomState.mazeSize,
+      maxStepDistance,
     );
-    const sanitized = sanitizePhysicsState(current, rawNext, this.roomState.mazeSize);
     const next = sanitized.state;
 
     const rewardApplied = this.processPredictionBonus(next.position);
@@ -1229,6 +1238,7 @@ function sanitizePhysicsState(
   previous: PhysicsState,
   next: PhysicsState,
   mazeSize: number,
+  maxDistance: number,
 ): SanitizedPhysicsResult {
   const minPos = PLAYER_RADIUS;
   const maxPos = Math.max(minPos, mazeSize - PLAYER_RADIUS);
@@ -1263,8 +1273,8 @@ function sanitizePhysicsState(
 
   const dx = positionX - safePrevX;
   const dy = positionY - safePrevY;
-  const maxDistance = MAX_POSITION_DELTA;
-  if (dx * dx + dy * dy > maxDistance * maxDistance) {
+  const allowedDistance = Math.max(maxDistance, FLOAT_EPSILON);
+  if (dx * dx + dy * dy > allowedDistance * allowedDistance) {
     positionX = safePrevX;
     positionY = safePrevY;
     velocityX = 0;

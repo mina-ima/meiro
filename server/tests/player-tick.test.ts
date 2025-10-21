@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { RoomDurableObject } from '../src/room-do';
-import { SERVER_TICK_INTERVAL_MS, PLAYER_RADIUS } from '@meiro/common';
+import { SERVER_TICK_INTERVAL_MS, PLAYER_RADIUS, MOVE_SPEED } from '@meiro/common';
 
 class FakeDurableObjectState {
   public readonly id = { toString: () => 'ROOM-TEST' };
@@ -158,6 +158,56 @@ describe('RoomDurableObject プレイヤー物理挙動', () => {
     expect(position.x).toBeLessThanOrEqual(max + 1e-6);
     expect(position.y).toBeGreaterThanOrEqual(min - 1e-6);
     expect(position.y).toBeLessThanOrEqual(max + 1e-6);
+
+    room.dispose();
+  });
+
+  it('Tick処理は実際に経過した時間を用いてプレイヤー速度を積分する', async () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internalRoom = room as unknown as {
+      roomState: {
+        phase: string;
+        player: {
+          physics: {
+            position: { x: number; y: number };
+            angle: number;
+          };
+        };
+        solidCells: Set<string>;
+      };
+      lastTickAt?: number;
+    };
+
+    internalRoom.roomState.phase = 'explore';
+    internalRoom.roomState.player.physics.position = { x: 0.5, y: 0.5 };
+    internalRoom.roomState.player.physics.angle = 0;
+    internalRoom.roomState.solidCells = new Set();
+
+    playerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'P_INPUT',
+        yaw: 0,
+        forward: 1,
+        timestamp: NOW,
+      }),
+    );
+
+    internalRoom.lastTickAt = NOW - 450;
+    vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);
+
+    const { position } = internalRoom.roomState.player.physics;
+    const expectedDisplacement = MOVE_SPEED * 0.5;
+    expect(position.x).toBeCloseTo(0.5 + expectedDisplacement, 3);
+    expect(position.y).toBeCloseTo(0.5, 6);
 
     room.dispose();
   });
