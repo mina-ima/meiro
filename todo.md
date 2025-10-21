@@ -241,7 +241,8 @@
   - DoD: `server/tests/wrangler-config.test.ts` で local/dev/prod 環境とルーティング/ENVIRONMENT 変数が検証される
 - [ ] ページ/ワーカー デプロイパイプライン（PRでpreviews）
 - [x] CI: lint/format/typecheck/unit/e2e
-- [ ] エラートラッキング（Sentry 任意）
+- [x] エラートラッキング（Sentry 任意）
+  - DoD: `client/tests/SentryInit.test.ts` で DSN 初期化と例外転送を検証
 - [ ] リリースタグとCHANGELOG運用
 
 ---

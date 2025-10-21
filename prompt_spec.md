@@ -341,6 +341,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **サーバ**：部屋寿命, 参加/離脱, Phase時間, 編集拒否率, BFS所要時間, メッセージサイズ。  
   * BFS検証は `owner.path_check` メトリクスで記録（`durationMs`, `blocked`, `checked`）
 * アラート：**WS失敗率/再接続率/STATE遅延>100ms**（`client.ws.alert` / `client.ws.reconnect.alert` / `client.latency.alert` を発火）。
+* **エラートラッキング**：`client/src/logging/sentry.ts` で Sentry を初期化し、`VITE_SENTRY_DSN` 指定時のみ `@sentry/browser` を有効化。`client/tests/SentryInit.test.ts` で DSN 有無と例外送信を検証。
 
 ---
 
