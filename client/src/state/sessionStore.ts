@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+export type SessionPhase = 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
+export type PauseReason = 'disconnect';
+
 export type PlayerRole = 'owner' | 'player';
 
 export interface ServerVector {
@@ -43,7 +46,7 @@ export interface ServerPlayerState {
 
 export interface ServerSnapshot {
   roomId: string;
-  phase: 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
+  phase: SessionPhase;
   phaseEndsAt?: number;
   updatedAt: number;
   mazeSize: 20 | 40;
@@ -51,6 +54,11 @@ export interface ServerSnapshot {
   prepDurationMs: number;
   exploreDurationMs: number;
   targetScore: number;
+  paused: boolean;
+  pauseReason?: PauseReason;
+  pauseExpiresAt?: number;
+  pauseRemainingMs?: number;
+  pausePhase?: SessionPhase;
   sessions: ServerSessionEntry[];
   player: ServerPlayerState;
   owner: ServerOwnerState;
@@ -80,6 +88,11 @@ export interface NetworkSnapshot {
   prepDurationMs: number;
   exploreDurationMs: number;
   targetScore: number;
+  paused: boolean;
+  pauseReason?: PauseReason | null;
+  pauseExpiresAt?: number | null;
+  pauseRemainingMs?: number | null;
+  pausePhase?: SessionPhase | null;
   sessions: ServerSessionEntry[];
   player: NetworkPlayerState;
   owner: NetworkOwnerState;
@@ -143,6 +156,11 @@ export interface SessionState {
   role: PlayerRole | null;
   phase: ServerSnapshot['phase'];
   phaseEndsAt?: number;
+  paused: boolean;
+  pauseReason?: PauseReason;
+  pauseExpiresAt?: number;
+  pauseRemainingMs?: number;
+  pausePhase?: SessionPhase;
   mazeSize: 20 | 40;
   score: number;
   targetScore: number;
@@ -211,6 +229,20 @@ function unpackPoints(list: PackedPoint[]): ServerPoint[] {
   return list.map(unpackPoint);
 }
 
+function normalizePauseReasonValue(value: PauseReason | null | undefined): PauseReason | undefined {
+  return value ?? undefined;
+}
+
+function normalizeOptionalNumber(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function normalizePausePhaseValue(
+  value: SessionPhase | null | undefined,
+): SessionPhase | undefined {
+  return value ?? undefined;
+}
+
 function normalizeOwnerState(owner: NetworkOwnerState): ServerOwnerState {
   return {
     wallStock: owner.wallStock,
@@ -259,6 +291,11 @@ function normalizeSnapshot(snapshot: NetworkSnapshot): ServerSnapshot {
     prepDurationMs: snapshot.prepDurationMs,
     exploreDurationMs: snapshot.exploreDurationMs,
     targetScore: snapshot.targetScore,
+    paused: snapshot.paused,
+    pauseReason: normalizePauseReasonValue(snapshot.pauseReason),
+    pauseExpiresAt: normalizeOptionalNumber(snapshot.pauseExpiresAt),
+    pauseRemainingMs: normalizeOptionalNumber(snapshot.pauseRemainingMs),
+    pausePhase: normalizePausePhaseValue(snapshot.pausePhase),
     sessions: snapshot.sessions.map((session) => ({ ...session })),
     player: {
       angle: snapshot.player.angle,
@@ -301,7 +338,30 @@ function normalizePlayerPatch(
 
 function normalizePartialSnapshot(changes: PartialNetworkSnapshot): PartialServerSnapshot {
   const { owner, player, sessions, ...rest } = changes;
-  const normalized: PartialServerSnapshot = { ...(rest as PartialServerSnapshot) };
+  const restSnapshot = rest as PartialServerSnapshot & {
+    pauseReason?: PauseReason | null;
+    pauseExpiresAt?: number | null;
+    pauseRemainingMs?: number | null;
+    pausePhase?: SessionPhase | null;
+  };
+
+  const normalized: PartialServerSnapshot = { ...restSnapshot };
+
+  if ('pauseReason' in restSnapshot) {
+    normalized.pauseReason = normalizePauseReasonValue(restSnapshot.pauseReason);
+  }
+
+  if ('pauseExpiresAt' in restSnapshot) {
+    normalized.pauseExpiresAt = normalizeOptionalNumber(restSnapshot.pauseExpiresAt);
+  }
+
+  if ('pauseRemainingMs' in restSnapshot) {
+    normalized.pauseRemainingMs = normalizeOptionalNumber(restSnapshot.pauseRemainingMs);
+  }
+
+  if ('pausePhase' in restSnapshot) {
+    normalized.pausePhase = normalizePausePhaseValue(restSnapshot.pausePhase);
+  }
 
   if (sessions) {
     normalized.sessions = sessions.map((session) => ({ ...session }));
@@ -433,6 +493,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   role: null,
   phase: 'lobby',
   phaseEndsAt: undefined,
+  paused: false,
+  pauseReason: undefined,
+  pauseExpiresAt: undefined,
+  pauseRemainingMs: undefined,
+  pausePhase: undefined,
   mazeSize: 40,
   score: 0,
   targetScore: 0,
@@ -460,6 +525,11 @@ export const useSessionStore = create<SessionState>((set) => ({
         mazeSize: nextSnapshot.mazeSize,
         phase: nextSnapshot.phase,
         phaseEndsAt: nextSnapshot.phaseEndsAt,
+        paused: nextSnapshot.paused,
+        pauseReason: nextSnapshot.pauseReason,
+        pauseExpiresAt: nextSnapshot.pauseExpiresAt,
+        pauseRemainingMs: nextSnapshot.pauseRemainingMs,
+        pausePhase: nextSnapshot.pausePhase,
         score: nextSnapshot.player.score,
         targetScore: nextSnapshot.targetScore,
         owner: {
@@ -485,6 +555,11 @@ export const useSessionStore = create<SessionState>((set) => ({
       role: null,
       phase: 'lobby',
       phaseEndsAt: undefined,
+      paused: false,
+      pauseReason: undefined,
+      pauseExpiresAt: undefined,
+      pauseRemainingMs: undefined,
+      pausePhase: undefined,
       mazeSize: 40,
       score: 0,
       targetScore: 0,

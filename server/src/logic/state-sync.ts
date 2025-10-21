@@ -43,6 +43,11 @@ interface Snapshot {
   exploreDurationMs: number;
   sessions: SnapshotSession[];
   targetScore: number;
+  paused: boolean;
+  pauseReason?: RoomState['pauseReason'] | null;
+  pauseExpiresAt?: number | null;
+  pauseRemainingMs?: number | null;
+  pausePhase?: RoomState['phase'] | null;
   player: SnapshotPlayer;
   owner: SnapshotOwner;
 }
@@ -121,6 +126,11 @@ function createSnapshot(room: RoomState): Snapshot {
     prepDurationMs: room.prepDurationMs,
     exploreDurationMs: room.exploreDurationMs,
     targetScore: room.targetScore,
+    paused: room.paused,
+    pauseReason: room.pauseReason,
+    pauseExpiresAt: room.pauseExpiresAt,
+    pauseRemainingMs: room.pauseRemainingMs,
+    pausePhase: room.pausePhase,
     sessions: Array.from(room.sessions.values())
       .map(({ id, role, nick }) => ({ id, role, nick }))
       .sort((a, b) => a.id.localeCompare(b.id)),
@@ -183,6 +193,34 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
 
   if (previous.targetScore !== next.targetScore) {
     changes.targetScore = next.targetScore;
+  }
+
+  if (previous.paused !== next.paused) {
+    changes.paused = next.paused;
+  }
+
+  const nextPauseReason = next.pauseReason ?? null;
+  const previousPauseReason = previous.pauseReason ?? null;
+  if (previousPauseReason !== nextPauseReason) {
+    changes.pauseReason = next.pauseReason ?? null;
+  }
+
+  const nextPauseExpiresAt = next.pauseExpiresAt ?? null;
+  const previousPauseExpiresAt = previous.pauseExpiresAt ?? null;
+  if (previousPauseExpiresAt !== nextPauseExpiresAt) {
+    changes.pauseExpiresAt = next.pauseExpiresAt ?? null;
+  }
+
+  const nextPauseRemainingMs = next.pauseRemainingMs ?? null;
+  const previousPauseRemainingMs = previous.pauseRemainingMs ?? null;
+  if (previousPauseRemainingMs !== nextPauseRemainingMs) {
+    changes.pauseRemainingMs = next.pauseRemainingMs ?? null;
+  }
+
+  const nextPausePhase = next.pausePhase ?? null;
+  const previousPausePhase = previous.pausePhase ?? null;
+  if (previousPausePhase !== nextPausePhase) {
+    changes.pausePhase = next.pausePhase ?? null;
   }
 
   if (!sessionsEqual(previous.sessions, next.sessions)) {

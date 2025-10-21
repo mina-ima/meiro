@@ -42,6 +42,7 @@ describe('楽観UI禁止', () => {
         exploreDurationMs: 300_000,
         phaseEndsAt: Date.now() + 30_000,
         targetScore: 0,
+        paused: false,
         sessions: [],
         player: {
           position: { x: 0, y: 0 },

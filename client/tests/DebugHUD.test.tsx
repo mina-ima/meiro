@@ -38,6 +38,7 @@ describe('DebugHUD 仕様表示', () => {
         exploreDurationMs: 300_000,
         phaseEndsAt: 300_000,
         targetScore: 100,
+        paused: false,
         sessions: [],
         player: {
           position: { x: 5, y: 5 },

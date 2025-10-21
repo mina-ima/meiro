@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { NetClient } from '../net/NetClient';
 import { HUD } from './HUD';
 import { OWNER_ZOOM_LEVELS } from '../config/spec';
+import type { PauseReason } from '../state/sessionStore';
 
 interface Vector2 {
   x: number;
@@ -22,6 +23,8 @@ export interface OwnerViewProps {
   traps: Vector2[];
   playerPosition: Vector2;
   mazeSize: 20 | 40;
+  pauseReason?: PauseReason;
+  pauseSecondsRemaining?: number;
 }
 
 export function OwnerView({
@@ -38,6 +41,8 @@ export function OwnerView({
   traps,
   playerPosition,
   mazeSize,
+  pauseReason,
+  pauseSecondsRemaining,
 }: OwnerViewProps) {
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
   const cooldownText = formatCooldown(editCooldownMs);
@@ -115,6 +120,9 @@ export function OwnerView({
           <p>
             プレイヤー座標: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)})
           </p>
+          {pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined ? (
+            <p aria-live="polite">通信再開待ち: 残り {pauseSecondsRemaining} 秒</p>
+          ) : null}
         </HUD>
       </div>
     </div>

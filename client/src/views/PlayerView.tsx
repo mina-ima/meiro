@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HUD } from './HUD';
+import { useFixedFrameLoop } from '../game/frameLoop';
+import {
+  castRays,
+  type RayHit,
+  type RaycasterEnvironment,
+  type RaycasterState,
+} from '../game/Raycaster';
+import { PLAYER_FOV_DEGREES, PLAYER_MAX_RAY_COUNT, PLAYER_VIEW_RANGE } from '../config/spec';
+import { useSessionStore, type PauseReason } from '../state/sessionStore';
 
 function createSvgDataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
@@ -86,7 +95,16 @@ export interface PlayerViewProps {
   predictionHits: number;
   phase: 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
   timeRemaining: number;
+  pauseReason?: PauseReason;
+  pauseSecondsRemaining?: number;
 }
+
+const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
+const DEFAULT_BACKGROUND = '#020617';
+const SKY_GRADIENT_TOP = '#0f172a';
+const SKY_GRADIENT_BOTTOM = '#1e293b';
+const FLOOR_COLOR = '#082f49';
+const COLUMN_MIN_RATIO = 0.18;
 
 export function PlayerView({
   points,
@@ -94,10 +112,97 @@ export function PlayerView({
   predictionHits,
   phase,
   timeRemaining,
+  pauseReason,
+  pauseSecondsRemaining,
 }: PlayerViewProps) {
   const clips = useMemo(() => PREVIEW_CLIPS, []);
   const [clipIndex, setClipIndex] = useState(0);
   const [secondsUntilNextClip, setSecondsUntilNextClip] = useState(PREVIEW_INTERVAL_MS / 1000);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const playerPosition = useSessionStore((state) =>
+    state.serverSnapshot ? state.serverSnapshot.player.position : state.player.position,
+  );
+  const playerAngle = useSessionStore((state) =>
+    state.serverSnapshot ? state.serverSnapshot.player.angle : 0,
+  );
+  const mazeSize = useSessionStore((state) => state.mazeSize);
+
+  const rayStateRef = useRef<RaycasterState>({
+    position: { ...playerPosition },
+    angle: playerAngle,
+  });
+
+  const environmentRef = useRef<RaycasterEnvironment>(createBoundaryEnvironment(mazeSize));
+  const exploringRef = useRef(phase === 'explore');
+
+  useEffect(() => {
+    environmentRef.current = createBoundaryEnvironment(mazeSize);
+  }, [mazeSize]);
+
+  useEffect(() => {
+    rayStateRef.current = {
+      position: { ...playerPosition },
+      angle: playerAngle,
+    };
+  }, [playerPosition, playerAngle]);
+
+  useEffect(() => {
+    exploringRef.current = phase === 'explore';
+    if (phase !== 'explore') {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        return;
+      }
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return;
+      }
+      clearScene(context);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+    clearScene(context);
+  }, []);
+
+  useFixedFrameLoop(() => {
+    if (!exploringRef.current) {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+
+    const baseResolution = Math.max(1, Math.floor(canvas.width / 4));
+    const resolution = Math.min(PLAYER_MAX_RAY_COUNT, baseResolution);
+
+    const hits = castRays(
+      rayStateRef.current,
+      {
+        fov: PLAYER_FOV_RADIANS,
+        range: PLAYER_VIEW_RANGE,
+        resolution,
+      },
+      environmentRef.current,
+    );
+
+    renderRaycastScene(context, hits, PLAYER_VIEW_RANGE);
+  });
 
   useEffect(() => {
     if (phase !== 'prep') {
@@ -131,7 +236,7 @@ export function PlayerView({
     <div>
       <h2>プレイヤービュー</h2>
       <div style={{ position: 'relative', width: 640, height: 360 }}>
-        <canvas width={640} height={360} aria-label="レイキャスト表示" />
+        <canvas ref={canvasRef} width={640} height={360} aria-label="レイキャスト表示" />
         {showPreview ? (
           <div
             role="group"
@@ -192,7 +297,95 @@ export function PlayerView({
       </div>
       <HUD timeRemaining={timeRemaining} score={points} targetScore={targetPoints}>
         <p>予測地点ヒット: {predictionHits}</p>
+        {pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined ? (
+          <p aria-live="polite">通信再開待ち: 残り {pauseSecondsRemaining} 秒</p>
+        ) : null}
       </HUD>
     </div>
   );
+}
+
+function createBoundaryEnvironment(size: number): RaycasterEnvironment {
+  const limit = Math.max(0, size);
+  return {
+    isWall(tileX: number, tileY: number) {
+      if (!Number.isFinite(tileX) || !Number.isFinite(tileY)) {
+        return true;
+      }
+      if (tileX < 0 || tileY < 0) {
+        return true;
+      }
+      if (tileX >= limit || tileY >= limit) {
+        return true;
+      }
+      return false;
+    },
+  };
+}
+
+function clearScene(context: CanvasRenderingContext2D): void {
+  const { width, height } = context.canvas;
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, SKY_GRADIENT_TOP);
+  gradient.addColorStop(0.6, SKY_GRADIENT_BOTTOM);
+  gradient.addColorStop(1, FLOOR_COLOR);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  context.canvas.dataset.lastRayIntensity = '';
+}
+
+function renderRaycastScene(
+  context: CanvasRenderingContext2D,
+  hits: RayHit[],
+  viewRange: number,
+): void {
+  const { width, height } = context.canvas;
+
+  context.fillStyle = DEFAULT_BACKGROUND;
+  context.fillRect(0, 0, width, height);
+
+  if (hits.length === 0) {
+    context.canvas.dataset.lastRayIntensity = '';
+    return;
+  }
+
+  const columnWidth = width / hits.length;
+
+  hits.forEach((hit, index) => {
+    const columnHeight = computeColumnHeight(hit.distance, viewRange, height);
+    const x = Math.floor(index * columnWidth);
+    const y = Math.floor((height - columnHeight) / 2);
+    const w = Math.max(1, Math.ceil(columnWidth));
+
+    context.fillStyle = intensityToColor(hit.intensity);
+    context.fillRect(x, y, w, columnHeight);
+  });
+
+  const lastIntensity = hits[hits.length - 1]?.intensity;
+  context.canvas.dataset.lastRayIntensity =
+    lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
+}
+
+function computeColumnHeight(distance: number, viewRange: number, canvasHeight: number): number {
+  if (!Number.isFinite(distance) || distance <= 0) {
+    return canvasHeight;
+  }
+
+  const clampedDistance = Math.min(Math.max(distance, 0), Math.max(viewRange, 0.0001));
+  const normalized = 1 - clampedDistance / Math.max(viewRange, 0.0001);
+  const minHeight = canvasHeight * COLUMN_MIN_RATIO;
+  const variableHeight = normalized * (canvasHeight * (1 - COLUMN_MIN_RATIO));
+  return Math.max(minHeight, variableHeight + minHeight);
+}
+
+function intensityToColor(intensity: number): string {
+  const clamped = Math.max(0, Math.min(1, intensity));
+  const near = { r: 226, g: 232, b: 240 };
+  const far = { r: 15, g: 23, b: 42 };
+
+  const r = Math.round(far.r + (near.r - far.r) * clamped);
+  const g = Math.round(far.g + (near.g - far.g) * clamped);
+  const b = Math.round(far.b + (near.b - far.b) * clamped);
+
+  return `rgb(${r}, ${g}, ${b})`;
 }

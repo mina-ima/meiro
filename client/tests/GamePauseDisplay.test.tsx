@@ -10,7 +10,7 @@ function applyServerState(payload: ServerStatePayload): void {
   });
 }
 
-describe('オーナー編集クールダウン表示', () => {
+describe('切断ポーズ表示', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -24,9 +24,9 @@ describe('オーナー編集クールダウン表示', () => {
     vi.useRealTimers();
   });
 
-  it('サーバーから受け取ったクールダウンが時間経過に合わせて短縮される', async () => {
+  it('切断による一時停止中は警告と残り秒数を表示する', async () => {
     act(() => {
-      useSessionStore.getState().setRoom('ROOM-COOLDOWN', 'owner');
+      useSessionStore.getState().setRoom('ROOM-PAUSE', 'player');
     });
 
     render(<App />);
@@ -35,29 +35,32 @@ describe('オーナー編集クールダウン表示', () => {
       seq: 1,
       full: true,
       snapshot: {
-        roomId: 'ROOM-COOLDOWN',
+        roomId: 'ROOM-PAUSE',
         phase: 'explore',
-        phaseEndsAt: 10_000,
-        mazeSize: 40,
+        phaseEndsAt: undefined,
+        mazeSize: 20,
         updatedAt: 0,
         countdownDurationMs: 3_000,
         prepDurationMs: 60_000,
         exploreDurationMs: 300_000,
-        targetScore: 0,
+        targetScore: 15,
         paused: false,
-        sessions: [],
+        sessions: [
+          { id: 'owner', role: 'owner', nick: 'Owner' },
+          { id: 'player', role: 'player', nick: 'Runner' },
+        ],
         player: {
-          position: { x: 0, y: 0 },
+          position: { x: 2, y: 2 },
           velocity: { x: 0, y: 0 },
           angle: 0,
           predictionHits: 0,
-          score: 0,
+          score: 3,
         },
         owner: {
           wallStock: 48,
           wallRemoveLeft: 1,
           trapCharges: 1,
-          editCooldownUntil: 1_500,
+          editCooldownUntil: 0,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],
@@ -67,13 +70,27 @@ describe('オーナー編集クールダウン表示', () => {
       },
     } as unknown as ServerStatePayload);
 
-    expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
-    expect(useSessionStore.getState().owner.editCooldownUntil).toBe(1_500);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(600);
+    act(() => {
+      useSessionStore.setState((state) => ({
+        ...state,
+        paused: true,
+        pauseReason: 'disconnect',
+        pauseExpiresAt: Date.now() + 60_000,
+        pauseRemainingMs: 60_000,
+      }));
     });
 
-    expect(screen.getByText('編集クールダウン: 0.9秒')).toBeInTheDocument();
+    expect(screen.getByText('通信が途切れています')).toBeInTheDocument();
+    expect(
+      screen.getByText('再接続を待機しています。残り 60 秒で不在側の敗北となります。'),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+
+    expect(
+      screen.getByText('再接続を待機しています。残り 45 秒で不在側の敗北となります。'),
+    ).toBeInTheDocument();
   });
 });

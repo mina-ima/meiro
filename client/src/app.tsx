@@ -43,6 +43,11 @@ export function App() {
   const playerState = useSessionStore((state) => state.player);
   const phase = useSessionStore((state) => state.phase);
   const phaseEndsAt = useSessionStore((state) => state.phaseEndsAt);
+  const paused = useSessionStore((state) => state.paused);
+  const pauseReason = useSessionStore((state) => state.pauseReason);
+  const pauseExpiresAt = useSessionStore((state) => state.pauseExpiresAt);
+  const pauseRemainingMs = useSessionStore((state) => state.pauseRemainingMs);
+  const pausePhase = useSessionStore((state) => state.pausePhase);
   const mazeSize = useSessionStore((state) => state.mazeSize);
   const serverSnapshot = useSessionStore((state) => state.serverSnapshot);
   const applyServerState = useSessionStore((state) => state.applyServerState);
@@ -137,6 +142,25 @@ export function App() {
   const hasAuthoritativeState = serverSnapshot !== null;
   const isRoleAssigned = role === 'owner' || role === 'player';
   const readyForGameplay = hasAuthoritativeState && isRoleAssigned;
+  const pauseTargetMs =
+    paused && pauseReason === 'disconnect' ? (pauseExpiresAt ?? undefined) : undefined;
+  const pauseCountdownMs = useCountdown(pauseTargetMs, 1_000);
+  const rawPauseRemainingMs =
+    paused && pauseReason === 'disconnect'
+      ? pauseTargetMs != null
+        ? pauseCountdownMs
+        : (pauseRemainingMs ?? 0)
+      : 0;
+  const pauseSecondsRemaining =
+    paused && pauseReason === 'disconnect' ? Math.max(0, Math.ceil(rawPauseRemainingMs / 1000)) : 0;
+  const pauseInfo =
+    paused && pauseReason === 'disconnect'
+      ? {
+          reason: pauseReason,
+          secondsRemaining: pauseSecondsRemaining,
+          phase: pausePhase,
+        }
+      : null;
 
   const mainView = !readyForGameplay ? (
     <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} />
@@ -155,6 +179,8 @@ export function App() {
       traps={ownerState.traps}
       playerPosition={playerState.position}
       mazeSize={mazeSize}
+      pauseReason={pauseInfo?.reason}
+      pauseSecondsRemaining={pauseInfo?.secondsRemaining}
     />
   ) : (
     <PlayerView
@@ -163,12 +189,44 @@ export function App() {
       predictionHits={playerState.predictionHits}
       phase={phase}
       timeRemaining={timeRemaining}
+      pauseReason={pauseInfo?.reason}
+      pauseSecondsRemaining={pauseInfo?.secondsRemaining}
     />
   );
 
+  const pauseOverlay = pauseInfo ? (
+    <div
+      role="alert"
+      aria-live="assertive"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        color: '#f8fafc',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        textAlign: 'center',
+        gap: '0.75rem',
+        padding: '1.5rem',
+        fontSize: '1rem',
+      }}
+    >
+      <h3 style={{ margin: 0, fontSize: '1.4rem' }}>通信が途切れています</h3>
+      <p style={{ margin: 0 }}>
+        再接続を待機しています。残り {pauseInfo.secondsRemaining} 秒で不在側の敗北となります。
+      </p>
+      <p style={{ margin: 0 }}>どちらかが復帰すると自動で再開します。</p>
+    </div>
+  ) : null;
+
   return (
     <>
-      {mainView}
+      <div style={{ position: 'relative' }}>
+        {mainView}
+        {pauseOverlay}
+      </div>
       {readyForGameplay ? (
         <DebugHUD
           role={role}

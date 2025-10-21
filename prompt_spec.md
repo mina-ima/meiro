@@ -205,6 +205,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **ミニマップなし**、**ヘッドボブなし**。HUD：残時間（mm:ssタイマー）、現在ポイント/規定ポイント、ゴール到達ボーナス値、達成率(%)進捗バー。
 * 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。v1実装ではテキストオーバーレイでクリップを案内（client/src/views/PlayerView.tsx / client/tests/PlayerViewPreview.test.tsx）。
 * Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
+* **切断ポーズ中**はプレイヤー/オーナー共通で画面中央に半透明オーバーレイを重ね、「通信が途切れています」「残りXX秒で不在側敗北」をカウントダウン表示する（復帰で自動解除）。
 
 ### 8.2 オーナー
 

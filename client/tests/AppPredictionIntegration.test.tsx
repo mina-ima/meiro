@@ -43,6 +43,7 @@ describe('App prediction integration', () => {
         prepDurationMs: 60_000,
         exploreDurationMs: 300_000,
         targetScore: 0,
+        paused: false,
         sessions: [],
         player: {
           position: { x: 0, y: 0 },
@@ -93,6 +94,7 @@ describe('App prediction integration', () => {
         prepDurationMs: 60_000,
         exploreDurationMs: 300_000,
         targetScore: 0,
+        paused: false,
         sessions: [],
         player: {
           position: { x: 0, y: 0 },

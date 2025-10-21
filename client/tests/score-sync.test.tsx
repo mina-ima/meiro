@@ -37,6 +37,7 @@ describe('セッションストアのスコア同期', () => {
         prepDurationMs: 60_000,
         exploreDurationMs: 300_000,
         targetScore: 42,
+        paused: false,
         sessions: [],
         owner: {
           wallStock: 10,

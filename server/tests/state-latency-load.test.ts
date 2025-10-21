@@ -27,6 +27,7 @@ function createStateMessage(seq: number, updatedAt: number): ServerMessage {
         updatedAt,
         roomId: 'ROOM',
         phase: 'explore',
+        paused: false,
       },
     },
   } satisfies ServerMessage;
