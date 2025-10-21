@@ -5,6 +5,7 @@ import {
   type RaycasterEnvironment,
   type RaycasterState,
 } from '../src/game/Raycaster';
+import { PLAYER_MAX_RAY_COUNT } from '../src/config/spec';
 
 describe('Raycaster', () => {
   const defaultConfig: RaycasterConfig = {
@@ -85,6 +86,47 @@ describe('Raycaster', () => {
     expect(center.tile).toBeNull();
     expect(center.distance).toBe(defaultConfig.range);
     expect(center.intensity).toBe(0);
+  });
+
+  it('プレイヤー視界はどの方向でも最大4マスで打ち切られる', () => {
+    const openEnvironment: RaycasterEnvironment = {
+      isWall() {
+        return false;
+      },
+    };
+
+    const hits = castRays(
+      state,
+      {
+        ...defaultConfig,
+        range: 12,
+      },
+      openEnvironment,
+    );
+
+    expect(hits).not.toHaveLength(0);
+    for (const hit of hits) {
+      expect(hit.distance).toBeCloseTo(4, 6);
+      expect(hit.intensity).toBe(0);
+    }
+  });
+
+  it('レイ数は上限値でクリップされてFOVをカバーする', () => {
+    const hits = castRays(
+      state,
+      {
+        ...defaultConfig,
+        resolution: 512,
+      },
+      environment,
+    );
+
+    expect(hits).toHaveLength(PLAYER_MAX_RAY_COUNT);
+    const first = hits[0];
+    const last = hits[hits.length - 1];
+
+    expect(first.angle).toBeCloseTo(state.angle - defaultConfig.fov / 2, 6);
+    expect(last.angle).toBeCloseTo(state.angle + defaultConfig.fov / 2, 6);
   });
 });
 

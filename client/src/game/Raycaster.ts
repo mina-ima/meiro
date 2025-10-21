@@ -1,3 +1,4 @@
+import { PLAYER_MAX_RAY_COUNT, PLAYER_VIEW_RANGE } from '../config/spec';
 import type { Vector2 } from './Physics';
 
 export interface RayHit {
@@ -29,18 +30,23 @@ export function castRays(
   config: RaycasterConfig,
   environment: RaycasterEnvironment,
 ): RayHit[] {
-  if (config.resolution <= 0 || config.range <= 0) {
+  const clampedRange = Math.min(Math.max(config.range, 0), PLAYER_VIEW_RANGE);
+  const requestedRays = Math.ceil(config.resolution);
+
+  if (requestedRays <= 0 || clampedRange <= 0) {
     return [];
   }
+
+  const clampedResolution = Math.min(PLAYER_MAX_RAY_COUNT, requestedRays);
 
   const hits: RayHit[] = [];
   const origin = state.position;
   const startAngle = state.angle - config.fov / 2;
-  const step = config.resolution === 1 ? 0 : config.fov / (config.resolution - 1);
+  const step = clampedResolution === 1 ? 0 : config.fov / (clampedResolution - 1);
 
-  for (let i = 0; i < config.resolution; i += 1) {
-    const angle = config.resolution === 1 ? state.angle : startAngle + step * i;
-    hits.push(castSingleRay(origin, angle, config.range, environment));
+  for (let i = 0; i < clampedResolution; i += 1) {
+    const angle = clampedResolution === 1 ? state.angle : startAngle + step * i;
+    hits.push(castSingleRay(origin, angle, clampedRange, environment));
   }
 
   return hits;
