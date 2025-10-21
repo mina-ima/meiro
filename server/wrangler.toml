@@ -13,3 +13,29 @@ bindings = [
 name = "init-room-object"
 timestamp = "2025-01-01T00:00:00.000Z"
 new_classes = ["RoomDurableObject"]
+
+[env.local]
+name = "meiro-server-local"
+workers_dev = true
+
+[env.local.vars]
+ENVIRONMENT = "local"
+WS_ORIGIN = "ws://127.0.0.1:8787"
+
+[env.dev]
+name = "meiro-server-dev"
+route = "dev.meiro.example.com/*"
+workers_dev = false
+
+[env.dev.vars]
+ENVIRONMENT = "dev"
+WS_ORIGIN = "wss://dev.meiro.example.com"
+
+[env.prod]
+name = "meiro-server-prod"
+routes = ["game.meiro.example.com/*"]
+workers_dev = false
+
+[env.prod.vars]
+ENVIRONMENT = "prod"
+WS_ORIGIN = "wss://game.meiro.example.com"

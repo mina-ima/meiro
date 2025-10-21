@@ -237,7 +237,8 @@
 ---
 
 ## 19. DevOps/CI
-- [ ] wrangler セットアップ（local/dev/prod）
+- [x] wrangler セットアップ（local/dev/prod）
+  - DoD: `server/tests/wrangler-config.test.ts` で local/dev/prod 環境とルーティング/ENVIRONMENT 変数が検証される
 - [ ] ページ/ワーカー デプロイパイプライン（PRでpreviews）
 - [x] CI: lint/format/typecheck/unit/e2e
 - [ ] エラートラッキング（Sentry 任意）

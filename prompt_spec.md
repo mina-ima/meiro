@@ -405,6 +405,7 @@ wrangler dev --local
 
   * `VITE_WS_URL=ws://127.0.0.1:8787/ws`
   * `NODE_ENV=development`
+* `wrangler.toml` はベース設定に加えて `env.local` / `env.dev` / `env.prod` を持ち、環境ごとの `name` / ルーティング / `WS_ORIGIN` / `ENVIRONMENT` を定義（`server/tests/wrangler-config.test.ts`）
 
 ---
 
