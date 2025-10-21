@@ -221,7 +221,8 @@
 ## 17. パフォーマンス/非機能
 - [x] サーバ送信20Hz/クライアント表示30fpsを遵守  
   - DoD: `server/tests/outbound-rate-limit.test.ts` でSTATE差分の合流と20Hz送信を検証
-- [ ] 体感遅延100ms以下（RTTモニタ/補間で改善）
+- [x] 体感遅延100ms以下（RTTモニタ/補間で改善）
+  - DoD: `client/tests/NetClientLatency.test.ts` でSTATE遅延アラートの閾値100msを検証
 - [ ] メッセージ圧縮不要で2KB以内に収まること
   - DoD: 本番相当で計測
 

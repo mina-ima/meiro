@@ -1,4 +1,5 @@
 import { logConnectionEvent, logRttSample, logLatencyWarning } from '../logging/telemetry';
+import { LATENCY_WARNING_THRESHOLD_MS } from '../config/spec';
 
 const RECONNECT_DELAY_MS = 2000;
 const PING_INTERVAL_MS = 5000;
@@ -93,7 +94,7 @@ export class NetClient {
         const updatedAt = extractUpdatedAtClient(data);
         if (updatedAt != null) {
           const latency = Date.now() - updatedAt;
-          if (latency > 200) {
+          if (latency > LATENCY_WARNING_THRESHOLD_MS) {
             logLatencyWarning(latency);
           }
         }

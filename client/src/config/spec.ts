@@ -4,6 +4,7 @@ export const OWNER_FORBIDDEN_DISTANCE = 2;
 
 export const PLAYER_FOV_DEGREES = 90;
 export const PLAYER_VIEW_RANGE = 4;
+export const LATENCY_WARNING_THRESHOLD_MS = 100;
 
 export const TRAP_SPEED_MULTIPLIER = 0.4;
 export const TRAP_DURATION_DIVISOR = 5;
