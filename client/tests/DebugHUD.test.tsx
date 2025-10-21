@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
 import { App } from '../src/app';
-import { useSessionStore } from '../src/state/sessionStore';
+import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
 
 describe('DebugHUD 仕様表示', () => {
@@ -9,7 +9,9 @@ describe('DebugHUD 仕様表示', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     resetToastStoreForTest();
-    useSessionStore.getState().reset();
+    act(() => {
+      useSessionStore.getState().reset();
+    });
   });
 
   afterEach(() => {
@@ -17,7 +19,50 @@ describe('DebugHUD 仕様表示', () => {
   });
 
   it('仕様で定義された主要な数値が確認できる', () => {
+    act(() => {
+      useSessionStore.getState().setRoom('ROOM-HUD', 'player');
+    });
+
     render(<App />);
+
+    const payload: ServerStatePayload = {
+      seq: 1,
+      full: true,
+      snapshot: {
+        roomId: 'ROOM-HUD',
+        phase: 'explore',
+        mazeSize: 40,
+        updatedAt: 0,
+        countdownDurationMs: 3_000,
+        prepDurationMs: 60_000,
+        exploreDurationMs: 300_000,
+        phaseEndsAt: 300_000,
+        targetScore: 100,
+        sessions: [],
+        player: {
+          position: { x: 5, y: 5 },
+          velocity: { x: 0, y: 0 },
+          angle: 0,
+          predictionHits: 0,
+          score: 0,
+        },
+        owner: {
+          wallStock: 48,
+          wallRemoveLeft: 1,
+          trapCharges: 1,
+          editCooldownUntil: 5_000,
+          predictionLimit: 3,
+          predictionHits: 0,
+          predictionMarks: [],
+          traps: [],
+          points: [],
+        },
+      },
+    };
+
+    act(() => {
+      useSessionStore.getState().applyServerState(payload);
+    });
 
     const panel = screen.getByRole('region', { name: 'デバッグHUD' });
     const scope = within(panel);

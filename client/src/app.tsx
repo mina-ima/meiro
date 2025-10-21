@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NetClient } from './net/NetClient';
-import { useSessionStore, type ServerStatePayload } from './state/sessionStore';
+import { useSessionStore, type PlayerRole, type ServerStatePayload } from './state/sessionStore';
 import { logClientInit, logClientError, logPhaseChange } from './logging/telemetry';
 import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
@@ -39,8 +39,7 @@ export function App() {
   const phase = useSessionStore((state) => state.phase);
   const phaseEndsAt = useSessionStore((state) => state.phaseEndsAt);
   const mazeSize = useSessionStore((state) => state.mazeSize);
-  const setRoom = useSessionStore((state) => state.setRoom);
-  const setScore = useSessionStore((state) => state.setScore);
+  const serverSnapshot = useSessionStore((state) => state.serverSnapshot);
   const applyServerState = useSessionStore((state) => state.applyServerState);
   const timeRemaining = useTimeRemaining(phaseEndsAt);
   const previousPhase = useRef(phase);
@@ -50,15 +49,6 @@ export function App() {
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
     });
   }, []);
-
-  useEffect(() => {
-    // 仮の初期状態。初回のみUI確認用にプレイヤー役割で起動する。
-    if (role !== null) {
-      return;
-    }
-    setRoom('DEBUGROOM', 'player');
-    setScore(0, 100);
-  }, [role, setRoom, setScore]);
 
   useEffect(() => {
     if (previousPhase.current !== phase) {
@@ -139,57 +129,63 @@ export function App() {
 
   const ownerCooldownMs = useCountdown(ownerState.editCooldownUntil, 100);
   const forbiddenDistance = OWNER_FORBIDDEN_DISTANCE;
+  const hasAuthoritativeState = serverSnapshot !== null;
+  const isRoleAssigned = role === 'owner' || role === 'player';
+  const readyForGameplay = hasAuthoritativeState && isRoleAssigned;
 
-  const mainView =
-    role === 'owner' ? (
-      <OwnerView
-        client={client}
-        wallCount={ownerState.wallStock}
-        trapCharges={ownerState.trapCharges}
-        wallRemoveLeft={ownerState.wallRemoveLeft}
-        editCooldownMs={ownerCooldownMs}
-        forbiddenDistance={forbiddenDistance}
-        activePredictions={ownerState.activePredictionCount}
-        predictionLimit={ownerState.predictionLimit}
-        timeRemaining={timeRemaining}
-        predictionMarks={ownerState.predictionMarks}
-        traps={ownerState.traps}
-        playerPosition={playerState.position}
-        mazeSize={mazeSize}
-      />
-    ) : (
-      <PlayerView
-        points={score}
-        targetPoints={targetScore}
-        predictionHits={playerState.predictionHits}
-        phase={phase}
-        timeRemaining={timeRemaining}
-      />
-    );
+  const mainView = !readyForGameplay ? (
+    <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} />
+  ) : role === 'owner' ? (
+    <OwnerView
+      client={client}
+      wallCount={ownerState.wallStock}
+      trapCharges={ownerState.trapCharges}
+      wallRemoveLeft={ownerState.wallRemoveLeft}
+      editCooldownMs={ownerCooldownMs}
+      forbiddenDistance={forbiddenDistance}
+      activePredictions={ownerState.activePredictionCount}
+      predictionLimit={ownerState.predictionLimit}
+      timeRemaining={timeRemaining}
+      predictionMarks={ownerState.predictionMarks}
+      traps={ownerState.traps}
+      playerPosition={playerState.position}
+      mazeSize={mazeSize}
+    />
+  ) : (
+    <PlayerView
+      points={score}
+      targetPoints={targetScore}
+      predictionHits={playerState.predictionHits}
+      phase={phase}
+      timeRemaining={timeRemaining}
+    />
+  );
 
   return (
     <>
       {mainView}
-      <DebugHUD
-        role={role}
-        mazeSize={mazeSize}
-        timeRemaining={timeRemaining}
-        owner={{
-          wallStock: ownerState.wallStock,
-          trapCharges: ownerState.trapCharges,
-          wallRemoveLeft: ownerState.wallRemoveLeft,
-          predictionLimit: ownerState.predictionLimit,
-          activePredictionCount: ownerState.activePredictionCount,
-          predictionHits: ownerState.predictionHits,
-          predictionMarks: ownerState.predictionMarks,
-          traps: ownerState.traps,
-        }}
-        player={{
-          position: playerState.position,
-          predictionHits: playerState.predictionHits,
-        }}
-        ownerCooldownMs={ownerCooldownMs}
-      />
+      {readyForGameplay ? (
+        <DebugHUD
+          role={role}
+          mazeSize={mazeSize}
+          timeRemaining={timeRemaining}
+          owner={{
+            wallStock: ownerState.wallStock,
+            trapCharges: ownerState.trapCharges,
+            wallRemoveLeft: ownerState.wallRemoveLeft,
+            predictionLimit: ownerState.predictionLimit,
+            activePredictionCount: ownerState.activePredictionCount,
+            predictionHits: ownerState.predictionHits,
+            predictionMarks: ownerState.predictionMarks,
+            traps: ownerState.traps,
+          }}
+          player={{
+            position: playerState.position,
+            predictionHits: playerState.predictionHits,
+          }}
+          ownerCooldownMs={ownerCooldownMs}
+        />
+      ) : null}
       <ToastHost />
     </>
   );
@@ -257,4 +253,27 @@ function shouldScheduleCountdown(targetMs?: number): boolean {
     return false;
   }
   return targetMs > Date.now();
+}
+
+interface WaitingViewProps {
+  role: PlayerRole | null;
+  hasAuthoritativeState: boolean;
+}
+
+function WaitingView({ role, hasAuthoritativeState }: WaitingViewProps) {
+  const roleLabel = role === 'owner' ? 'オーナー' : role === 'player' ? 'プレイヤー' : '未割り当て';
+  const detailMessage =
+    role == null
+      ? 'ルームに参加するとビューが表示されます。'
+      : hasAuthoritativeState
+        ? `役割（${roleLabel}）での最新STATEを取得しています。`
+        : `役割（${roleLabel}）として接続を初期化しています。`;
+
+  return (
+    <section aria-label="接続待機">
+      <h2>接続待機中</h2>
+      <p>サーバーからのSTATE更新を待機しています。</p>
+      <p>{detailMessage}</p>
+    </section>
+  );
 }
