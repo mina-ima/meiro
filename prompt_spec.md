@@ -232,7 +232,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
   * `DENY_EDIT`（禁止エリア/資源不足/重ね不可）
   * `TRAP_INVALID_CELL`（罠を通路中心に置いていない）
   * `NO_PATH`（経路保証違反）
-  * `EDIT_COOLDOWN`（連続編集。`data.remainingMs` で残りCDを通知）
+  * `EDIT_COOLDOWN`（連続編集。`data.remainingMs` で残りCDを通知。`server/tests/owner-edit-cooldown.test.ts` で検証済み）
   * `LIMIT_REACHED`（予測/罠/本数上限）
   * `PHASE_LOCKED`（フェーズ外操作）
 * 表示文言例：

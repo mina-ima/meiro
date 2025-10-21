@@ -204,7 +204,8 @@
 - [ ] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB
 - [x] BFS検証 p95≤1ms/編集  
   - DoD: `server/tests/owner-path-block.test.ts` で `owner.path_check` メトリクスの出力と値を検証
-- [ ] 連続編集CDがサーバで強制
+- [x] 連続編集CDがサーバで強制  
+  - DoD: `server/tests/owner-edit-cooldown.test.ts` で `EDIT_COOLDOWN` エラーと残りCD通知を確認
 
 ### 16.4 受入(UX)
 - [x] デバッグHUDで全パラメータが可視
