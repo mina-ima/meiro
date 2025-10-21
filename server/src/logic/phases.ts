@@ -72,6 +72,7 @@ export function resetForRematch(
     clientTimestamp: now,
     receivedAt: now,
   };
+  state.player.inputSequence = 0;
   state.player.predictionHits = 0;
   state.player.trapSlowUntil = now;
   state.solidCells.clear();

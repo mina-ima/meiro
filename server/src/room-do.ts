@@ -423,6 +423,17 @@ export class RoomDurableObject {
     }
 
     const previousTimestamp = this.roomState.player.input.clientTimestamp;
+    const hasAcceptedInput = this.roomState.player.inputSequence > 0;
+    if (hasAcceptedInput && message.timestamp < previousTimestamp) {
+      this.metrics.logPlayerInputRejected('timestamp_replay');
+      this.sendError(
+        socket,
+        'INPUT_TIMESTAMP_REPLAY',
+        'Player input timestamp is older than the last accepted input.',
+      );
+      return;
+    }
+
     if (message.timestamp < previousTimestamp - MAX_PAST_INPUT_MS) {
       this.metrics.logPlayerInputRejected('timestamp_past');
       this.sendError(socket, 'INPUT_TIMESTAMP_PAST', 'Player input timestamp too old.');
@@ -441,6 +452,7 @@ export class RoomDurableObject {
       receivedAt,
     } satisfies PlayerInputState;
 
+    this.roomState.player.inputSequence += 1;
     this.roomState.player.lastInputReceivedAt = receivedAt;
     this.roomState.player.inputCountInWindow += 1;
   }

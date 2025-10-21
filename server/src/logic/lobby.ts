@@ -73,6 +73,7 @@ export function resetLobby(state: RoomState, now: number): void {
     clientTimestamp: now,
     receivedAt: now,
   };
+  state.player.inputSequence = 0;
   state.solidCells.clear();
 }
 

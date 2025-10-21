@@ -11,6 +11,7 @@ export interface PlayerInputState extends PhysicsInput {
 export interface PlayerRuntimeState {
   physics: PhysicsState;
   input: PlayerInputState;
+  inputSequence: number;
   predictionHits: number;
   trapSlowUntil: number;
   score: number;
@@ -118,6 +119,7 @@ export function createInitialRoomState(
         clientTimestamp: now,
         receivedAt: now,
       },
+      inputSequence: 0,
       predictionHits: 0,
       trapSlowUntil: now,
       score: 0,
@@ -166,6 +168,7 @@ export function resetOwnerState(state: RoomState, now: number): void {
   state.player.lastInputReceivedAt = now;
   state.player.inputWindowStart = now;
   state.player.inputCountInWindow = 0;
+  state.player.inputSequence = 0;
   state.points = new Map();
   state.pointTotalValue = 0;
   state.targetScore = 0;

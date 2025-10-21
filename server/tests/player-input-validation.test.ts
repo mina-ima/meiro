@@ -153,4 +153,53 @@ describe('プレイヤー入力バリデーション', () => {
 
     room.dispose();
   });
+
+  it('直前より過去のタイムスタンプ入力はリプレイとして拒否される', async () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    playerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'P_INPUT',
+        yaw: 0.1,
+        forward: 1,
+        timestamp: NOW,
+      }),
+    );
+
+    playerSocket.sent.length = 0;
+
+    playerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'P_INPUT',
+        yaw: -0.3,
+        forward: -1,
+        timestamp: NOW - 100,
+      }),
+    );
+
+    const error = playerSocket.sent
+      .map((entry) => JSON.parse(entry))
+      .find((msg) => msg.type === 'ERR');
+
+    expect(error).toMatchObject({ code: 'INPUT_TIMESTAMP_REPLAY' });
+
+    const internal = room as unknown as {
+      roomState: {
+        player: {
+          input: { clientTimestamp: number };
+        };
+      };
+    };
+
+    expect(internal.roomState.player.input.clientTimestamp).toBe(NOW);
+
+    room.dispose();
+  });
 });
