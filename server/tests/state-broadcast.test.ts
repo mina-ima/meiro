@@ -15,18 +15,28 @@ vi.mock('../src/logic/outbound', async () => {
       private readonly socket: Pick<WebSocket, 'send'>,
       _now: () => number,
       _onError?: (error: unknown) => void,
+      _onMessageSent?: (info: {
+        bytes: number;
+        immediate: boolean;
+        queueDepth: number;
+        latencyMs?: number;
+        queuedMs?: number;
+      }) => void,
     ) {
       void this.socket;
       void _now;
       void _onError;
+      void _onMessageSent;
     }
 
-    enqueue(message: unknown): void {
+    enqueue(message: unknown, _meta?: unknown): void {
       this.enqueued.push(message);
+      void _meta;
     }
 
-    sendImmediate(message: unknown): void {
+    sendImmediate(message: unknown, _meta?: unknown): void {
       this.sentImmediate.push(message);
+      void _meta;
     }
 
     dispose(): void {}

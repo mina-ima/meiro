@@ -361,7 +361,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ### 17.3 負荷/安定
 
-* 20ルーム同時（40接続）で**STATE遅延p95≤150ms**, メッセージp95≤2KB。
+* 20ルーム同時（40接続）で**STATE遅延p95≤150ms**, メッセージp95≤2KB（`server/tests/state-latency-load.test.ts`）。
 * BFS検証p95≤1ms/編集。
 * 連続編集CDの**サーバ強制**確認。
 

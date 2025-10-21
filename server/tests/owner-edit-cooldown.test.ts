@@ -13,7 +13,13 @@ vi.mock('../src/logic/outbound', async () => {
       _socket: Pick<WebSocket, 'send'>,
       _now: () => number,
       _onError?: (error: unknown) => void,
-      _onMessageSent?: (info: { bytes: number; immediate: boolean; queueDepth: number }) => void,
+      _onMessageSent?: (info: {
+        bytes: number;
+        immediate: boolean;
+        queueDepth: number;
+        latencyMs?: number;
+        queuedMs?: number;
+      }) => void,
     ) {
       void _socket;
       void _now;
@@ -21,9 +27,15 @@ vi.mock('../src/logic/outbound', async () => {
       void _onMessageSent;
     }
 
-    enqueue(): void {}
+    enqueue(_message?: unknown, _meta?: unknown): void {
+      void _message;
+      void _meta;
+    }
 
-    sendImmediate(): void {}
+    sendImmediate(_message?: unknown, _meta?: unknown): void {
+      void _message;
+      void _meta;
+    }
 
     dispose(): void {}
   }

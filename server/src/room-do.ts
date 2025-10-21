@@ -191,6 +191,9 @@ export class RoomDurableObject {
       },
       (info) => {
         this.metrics.logStateMessage(info.bytes, info.immediate, info.queueDepth);
+        if (info.latencyMs != null) {
+          this.metrics.logStateLatency(info.latencyMs);
+        }
       },
     );
     this.connections.set(socket, connection);
@@ -377,20 +380,19 @@ export class RoomDurableObject {
     }
 
     const updatedAt = extractUpdatedAt(message);
-    if (updatedAt != null) {
-      const latency = Date.now() - updatedAt;
-      this.metrics.logStateLatency(latency);
-    }
+    const meta = updatedAt != null ? { updatedAt } : undefined;
 
     const immediateSockets = options.immediate ? toSocketSet(options.immediate) : null;
 
     for (const [socket, connection] of this.connections.entries()) {
-      const sender = immediateSockets?.has(socket)
-        ? connection.sendImmediate.bind(connection)
-        : connection.enqueue.bind(connection);
+      const useImmediate = immediateSockets?.has(socket) ?? false;
 
       try {
-        sender(message);
+        if (useImmediate) {
+          connection.sendImmediate(message, meta);
+        } else {
+          connection.enqueue(message, meta);
+        }
       } catch (error) {
         if (error instanceof MessageSizeExceededError) {
           this.metrics.logSocketError('message-too-large');

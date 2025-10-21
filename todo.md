@@ -201,7 +201,8 @@
   - DoD: `server/tests/owner-wall-remove.test.ts` で既存壁のみ削除可・削除済み後は `WALL_REMOVE_EXHAUSTED` を検証
 
 ### 16.3 負荷/安定
-- [ ] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB
+- [x] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB  
+  - DoD: `server/tests/state-latency-load.test.ts` で40接続×4送信のシナリオを再現し、STATE遅延とメッセージサイズのp95が基準内であることを検証
 - [x] BFS検証 p95≤1ms/編集  
   - DoD: `server/tests/owner-path-block.test.ts` で `owner.path_check` メトリクスの出力と値を検証
 - [x] 連続編集CDがサーバで強制  

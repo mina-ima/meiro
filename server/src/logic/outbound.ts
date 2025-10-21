@@ -3,6 +3,19 @@ import type { ServerMessage } from '../schema/ws';
 const MAX_MESSAGE_BYTES = 2 * 1024;
 const MIN_INTERVAL_MS = 50;
 
+interface MessageMeta {
+  updatedAt?: number;
+}
+
+interface InternalMessageMeta extends MessageMeta {
+  enqueuedAt: number;
+}
+
+interface QueueEntry {
+  encoded: string;
+  meta?: InternalMessageMeta;
+}
+
 export class MessageSizeExceededError extends Error {
   constructor(size: number) {
     super(`encoded message size ${size} exceeds ${MAX_MESSAGE_BYTES} bytes limit`);
@@ -11,7 +24,7 @@ export class MessageSizeExceededError extends Error {
 }
 
 export class ClientConnection {
-  private readonly queue: string[] = [];
+  private readonly queue: QueueEntry[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private nextSendAt = 0;
   private closed = false;
@@ -24,15 +37,17 @@ export class ClientConnection {
       bytes: number;
       immediate: boolean;
       queueDepth: number;
+      latencyMs?: number;
+      queuedMs?: number;
     }) => void,
   ) {}
 
-  enqueue(message: ServerMessage): void {
-    this.push(message, false);
+  enqueue(message: ServerMessage, meta?: MessageMeta): void {
+    this.push(message, false, meta);
   }
 
-  sendImmediate(message: ServerMessage): void {
-    this.push(message, true);
+  sendImmediate(message: ServerMessage, meta?: MessageMeta): void {
+    this.push(message, true, meta);
   }
 
   dispose(): void {
@@ -44,7 +59,7 @@ export class ClientConnection {
     }
   }
 
-  private push(message: ServerMessage, immediate: boolean): void {
+  private push(message: ServerMessage, immediate: boolean, meta?: MessageMeta): void {
     if (this.closed) {
       return;
     }
@@ -54,12 +69,17 @@ export class ClientConnection {
       throw new MessageSizeExceededError(encoded.length);
     }
 
+    const now = this.now();
+    const entryMeta: InternalMessageMeta | undefined = meta
+      ? { ...meta, enqueuedAt: now }
+      : { enqueuedAt: now };
+
     if (immediate) {
-      this.sendEncoded(encoded, this.now(), true);
+      this.sendEncoded(encoded, now, true, entryMeta);
       return;
     }
 
-    this.queue.push(encoded);
+    this.queue.push({ encoded, meta: entryMeta });
     this.scheduleFlush();
   }
 
@@ -86,19 +106,24 @@ export class ClientConnection {
       return;
     }
 
-    const encoded = this.queue.shift();
-    if (!encoded) {
+    const entry = this.queue.shift();
+    if (!entry) {
       return;
     }
 
-    this.sendEncoded(encoded, now, false);
+    this.sendEncoded(entry.encoded, now, false, entry.meta);
 
     if (!this.closed && this.queue.length > 0) {
       this.scheduleFlush();
     }
   }
 
-  private sendEncoded(encoded: string, now: number, immediate: boolean): void {
+  private sendEncoded(
+    encoded: string,
+    now: number,
+    immediate: boolean,
+    meta?: InternalMessageMeta,
+  ): void {
     if (this.closed) {
       return;
     }
@@ -120,7 +145,30 @@ export class ClientConnection {
 
     if (this.onMessageSent) {
       try {
-        this.onMessageSent({ bytes: encoded.length, immediate, queueDepth: this.queue.length });
+        const info: {
+          bytes: number;
+          immediate: boolean;
+          queueDepth: number;
+          latencyMs?: number;
+          queuedMs?: number;
+        } = {
+          bytes: encoded.length,
+          immediate,
+          queueDepth: this.queue.length,
+        };
+        if (meta) {
+          const queuedMs = now - meta.enqueuedAt;
+          if (queuedMs >= 0) {
+            info.queuedMs = queuedMs;
+          }
+          if (meta.updatedAt != null) {
+            const latency = now - meta.updatedAt;
+            if (latency >= 0) {
+              info.latencyMs = latency;
+            }
+          }
+        }
+        this.onMessageSent(info);
       } catch (error) {
         console.error('metrics callback failed', error);
       }
