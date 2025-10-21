@@ -18,6 +18,9 @@ export interface ServerSessionEntry {
   nick: string;
 }
 
+type PackedVector = readonly [number, number];
+type PackedPoint = readonly [number, number, 1 | 3 | 5];
+
 export interface ServerOwnerState {
   wallStock: number;
   wallRemoveLeft: 0 | 1;
@@ -52,6 +55,53 @@ export interface ServerSnapshot {
   player: ServerPlayerState;
   owner: ServerOwnerState;
 }
+
+type NetworkPlayerState = ServerPlayerState & { trapSlowUntil?: number };
+
+export interface NetworkOwnerState {
+  wallStock: number;
+  wallRemoveLeft: 0 | 1;
+  trapCharges: number;
+  editCooldownUntil: number;
+  predictionLimit: number;
+  predictionHits: number;
+  predictionMarks: PackedVector[];
+  traps: PackedVector[];
+  points: PackedPoint[];
+}
+
+export interface NetworkSnapshot {
+  roomId: string;
+  phase: ServerSnapshot['phase'];
+  phaseEndsAt?: number;
+  updatedAt: number;
+  mazeSize: 20 | 40;
+  countdownDurationMs: number;
+  prepDurationMs: number;
+  exploreDurationMs: number;
+  targetScore: number;
+  sessions: ServerSessionEntry[];
+  player: NetworkPlayerState;
+  owner: NetworkOwnerState;
+}
+
+type PartialNetworkSnapshot = Partial<Omit<NetworkSnapshot, 'owner' | 'player' | 'sessions'>> & {
+  owner?: Partial<NetworkOwnerState>;
+  player?: Partial<NetworkPlayerState>;
+  sessions?: ServerSessionEntry[];
+};
+
+export type NetworkStatePayload =
+  | {
+      seq: number;
+      full: true;
+      snapshot: NetworkSnapshot;
+    }
+  | {
+      seq: number;
+      full: false;
+      changes: PartialNetworkSnapshot;
+    };
 
 type PartialServerSnapshot = Partial<Omit<ServerSnapshot, 'owner' | 'player' | 'sessions'>> & {
   owner?: Partial<ServerOwnerState>;
@@ -140,6 +190,150 @@ function clonePoints(list: ServerPoint[]): ServerPoint[] {
     value: point.value,
     position: cloneVector(point.position),
   }));
+}
+
+function unpackVector(vector: PackedVector): ServerVector {
+  return { x: vector[0], y: vector[1] };
+}
+
+function unpackVectors(list: PackedVector[]): ServerVector[] {
+  return list.map(unpackVector);
+}
+
+function unpackPoint(point: PackedPoint): ServerPoint {
+  return {
+    position: { x: point[0], y: point[1] },
+    value: point[2],
+  };
+}
+
+function unpackPoints(list: PackedPoint[]): ServerPoint[] {
+  return list.map(unpackPoint);
+}
+
+function normalizeOwnerState(owner: NetworkOwnerState): ServerOwnerState {
+  return {
+    wallStock: owner.wallStock,
+    wallRemoveLeft: owner.wallRemoveLeft,
+    trapCharges: owner.trapCharges,
+    editCooldownUntil: owner.editCooldownUntil,
+    predictionLimit: owner.predictionLimit,
+    predictionHits: owner.predictionHits,
+    predictionMarks: unpackVectors(owner.predictionMarks),
+    traps: unpackVectors(owner.traps),
+    points: unpackPoints(owner.points),
+  };
+}
+
+function normalizeOwnerPatch(
+  owner?: Partial<NetworkOwnerState>,
+): Partial<ServerOwnerState> | undefined {
+  if (!owner) {
+    return undefined;
+  }
+
+  const { predictionMarks, traps, points, ...rest } = owner;
+  const normalized: Partial<ServerOwnerState> = { ...rest };
+
+  if (predictionMarks) {
+    normalized.predictionMarks = unpackVectors(predictionMarks);
+  }
+  if (traps) {
+    normalized.traps = unpackVectors(traps);
+  }
+  if (points) {
+    normalized.points = unpackPoints(points);
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeSnapshot(snapshot: NetworkSnapshot): ServerSnapshot {
+  return {
+    roomId: snapshot.roomId,
+    phase: snapshot.phase,
+    phaseEndsAt: snapshot.phaseEndsAt,
+    updatedAt: snapshot.updatedAt,
+    mazeSize: snapshot.mazeSize,
+    countdownDurationMs: snapshot.countdownDurationMs,
+    prepDurationMs: snapshot.prepDurationMs,
+    exploreDurationMs: snapshot.exploreDurationMs,
+    targetScore: snapshot.targetScore,
+    sessions: snapshot.sessions.map((session) => ({ ...session })),
+    player: {
+      angle: snapshot.player.angle,
+      predictionHits: snapshot.player.predictionHits,
+      position: { ...snapshot.player.position },
+      velocity: { ...snapshot.player.velocity },
+      score: snapshot.player.score,
+    },
+    owner: normalizeOwnerState(snapshot.owner),
+  };
+}
+
+function normalizePlayerPatch(
+  player?: Partial<NetworkPlayerState>,
+): Partial<ServerPlayerState> | undefined {
+  if (!player) {
+    return undefined;
+  }
+
+  const patch: Partial<ServerPlayerState> = {};
+
+  if (player.angle !== undefined) {
+    patch.angle = player.angle;
+  }
+  if (player.predictionHits !== undefined) {
+    patch.predictionHits = player.predictionHits;
+  }
+  if (player.position) {
+    patch.position = { ...player.position };
+  }
+  if (player.velocity) {
+    patch.velocity = { ...player.velocity };
+  }
+  if (player.score !== undefined) {
+    patch.score = player.score;
+  }
+
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
+function normalizePartialSnapshot(changes: PartialNetworkSnapshot): PartialServerSnapshot {
+  const { owner, player, sessions, ...rest } = changes;
+  const normalized: PartialServerSnapshot = { ...(rest as PartialServerSnapshot) };
+
+  if (sessions) {
+    normalized.sessions = sessions.map((session) => ({ ...session }));
+  }
+
+  const playerPatch = normalizePlayerPatch(player);
+  if (playerPatch) {
+    normalized.player = playerPatch;
+  }
+
+  const ownerPatch = normalizeOwnerPatch(owner);
+  if (ownerPatch) {
+    normalized.owner = ownerPatch;
+  }
+
+  return normalized;
+}
+
+export function normalizeServerPayload(payload: NetworkStatePayload): ServerStatePayload {
+  if (payload.full) {
+    return {
+      seq: payload.seq,
+      full: true,
+      snapshot: normalizeSnapshot(payload.snapshot),
+    };
+  }
+
+  return {
+    seq: payload.seq,
+    full: false,
+    changes: normalizePartialSnapshot(payload.changes),
+  };
 }
 
 function cloneOwner(owner: ServerOwnerState): ServerOwnerState {

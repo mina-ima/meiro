@@ -8,6 +8,9 @@ interface SnapshotSession {
   nick: string;
 }
 
+type PackedVector = readonly [number, number];
+type PackedPoint = readonly [number, number, 1 | 3 | 5];
+
 interface SnapshotPlayer {
   position: Vector2;
   velocity: Vector2;
@@ -17,11 +20,6 @@ interface SnapshotPlayer {
   score: number;
 }
 
-interface SnapshotPoint {
-  position: Vector2;
-  value: 1 | 3 | 5;
-}
-
 interface SnapshotOwner {
   wallStock: number;
   wallRemoveLeft: 0 | 1;
@@ -29,9 +27,9 @@ interface SnapshotOwner {
   editCooldownUntil: number;
   predictionLimit: number;
   predictionHits: number;
-  predictionMarks: Vector2[];
-  traps: Vector2[];
-  points: SnapshotPoint[];
+  predictionMarks: PackedVector[];
+  traps: PackedVector[];
+  points: PackedPoint[];
 }
 
 interface Snapshot {
@@ -142,19 +140,12 @@ function createSnapshot(room: RoomState): Snapshot {
       predictionLimit: room.owner.predictionLimit,
       predictionHits: room.owner.predictionHits,
       predictionMarks: Array.from(room.owner.predictionMarks.values())
-        .map((mark) => cloneVector(mark.cell))
-        .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x)),
-      traps: room.owner.traps
-        .map((trap) => cloneVector(trap.cell))
-        .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x)),
+        .map((mark) => packVector(mark.cell))
+        .sort(comparePackedVector),
+      traps: room.owner.traps.map((trap) => packVector(trap.cell)).sort(comparePackedVector),
       points: Array.from(room.points.values())
-        .map((point) => ({
-          position: cloneVector(point.cell),
-          value: point.value,
-        }))
-        .sort((a, b) =>
-          a.position.x === b.position.x ? a.position.y - b.position.y : a.position.x - b.position.x,
-        ),
+        .map((point) => packPoint(point))
+        .sort(comparePackedPoint),
     },
   };
 }
@@ -209,6 +200,31 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
   return changes;
 }
 
+function packVector(source: Vector2): PackedVector {
+  return [Number(source.x), Number(source.y)];
+}
+
+function packPoint(point: { cell: Vector2; value: 1 | 3 | 5 }): PackedPoint {
+  return [Number(point.cell.x), Number(point.cell.y), point.value];
+}
+
+function comparePackedVector(a: PackedVector, b: PackedVector): number {
+  if (a[0] !== b[0]) {
+    return a[0] - b[0];
+  }
+  return a[1] - b[1];
+}
+
+function comparePackedPoint(a: PackedPoint, b: PackedPoint): number {
+  if (a[0] !== b[0]) {
+    return a[0] - b[0];
+  }
+  if (a[1] !== b[1]) {
+    return a[1] - b[1];
+  }
+  return a[2] - b[2];
+}
+
 function sessionsEqual(a: SnapshotSession[], b: SnapshotSession[]): boolean {
   if (a.length !== b.length) {
     return false;
@@ -247,35 +263,27 @@ function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
     a.editCooldownUntil === b.editCooldownUntil &&
     a.predictionLimit === b.predictionLimit &&
     a.predictionHits === b.predictionHits &&
-    predictionMarksEqual(a.predictionMarks, b.predictionMarks) &&
-    trapsEqual(a.traps, b.traps) &&
-    pointsEqual(a.points, b.points)
+    packedVectorsEqual(a.predictionMarks, b.predictionMarks) &&
+    packedVectorsEqual(a.traps, b.traps) &&
+    packedPointsEqual(a.points, b.points)
   );
 }
 
-function predictionMarksEqual(a: Vector2[], b: Vector2[]): boolean {
+function packedVectorsEqual(a: PackedVector[], b: PackedVector[]): boolean {
   if (a.length !== b.length) {
     return false;
   }
 
-  return a.every((mark, index) => vectorsEqual(mark, b[index]));
+  return a.every((mark, index) => mark[0] === b[index][0] && mark[1] === b[index][1]);
 }
 
-function trapsEqual(a: Vector2[], b: Vector2[]): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  return a.every((trap, index) => vectorsEqual(trap, b[index]));
-}
-
-function pointsEqual(a: SnapshotPoint[], b: SnapshotPoint[]): boolean {
+function packedPointsEqual(a: PackedPoint[], b: PackedPoint[]): boolean {
   if (a.length !== b.length) {
     return false;
   }
 
   return a.every((point, index) => {
     const other = b[index];
-    return point.value === other.value && vectorsEqual(point.position, other.position);
+    return point[0] === other[0] && point[1] === other[1] && point[2] === other[2];
   });
 }

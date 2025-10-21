@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NetClient } from './net/NetClient';
-import { useSessionStore, type PlayerRole, type ServerStatePayload } from './state/sessionStore';
+import {
+  useSessionStore,
+  type PlayerRole,
+  type NetworkStatePayload,
+  normalizeServerPayload,
+} from './state/sessionStore';
 import { logClientInit, logClientError, logPhaseChange } from './logging/telemetry';
 import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
@@ -13,7 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isServerStatePayload(value: unknown): value is ServerStatePayload {
+function isNetworkStatePayload(value: unknown): value is NetworkStatePayload {
   if (!isRecord(value)) {
     return false;
   }
@@ -66,8 +71,8 @@ export function App() {
 
       if (data.type === 'STATE') {
         const payload = (data as { payload?: unknown }).payload;
-        if (isServerStatePayload(payload)) {
-          applyServerState(payload);
+        if (isNetworkStatePayload(payload)) {
+          applyServerState(normalizeServerPayload(payload));
         }
         return;
       }

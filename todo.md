@@ -223,8 +223,8 @@
   - DoD: `server/tests/outbound-rate-limit.test.ts` でSTATE差分の合流と20Hz送信を検証
 - [x] 体感遅延100ms以下（RTTモニタ/補間で改善）
   - DoD: `client/tests/NetClientLatency.test.ts` でSTATE遅延アラートの閾値100msを検証
-- [ ] メッセージ圧縮不要で2KB以内に収まること
-  - DoD: 本番相当で計測
+- [x] メッセージ圧縮不要で2KB以内に収まること
+  - DoD: `server/tests/state-message-size.test.ts` で最大スナップショットが1,200bytes以内であることを検証
 
 ---
 
