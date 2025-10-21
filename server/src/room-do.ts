@@ -47,6 +47,14 @@ const PREDICTION_BONUS_BATCH_SIZE = 10;
 const PREDICTION_BONUS_WALLS = Math.round(PREDICTION_BONUS_BATCH_SIZE * PREDICTION_WALL_RATE);
 const PREDICTION_BONUS_TRAPS = PREDICTION_BONUS_BATCH_SIZE - PREDICTION_BONUS_WALLS;
 const POINT_PLACEMENT_WINDOW_MS = 40_000;
+const PREP_TOTAL_DURATION_MS = 60_000;
+const TRAP_STAGE_DURATION_MS = 5_000;
+const TRAP_STAGE_START_MS = POINT_PLACEMENT_WINDOW_MS;
+const TRAP_STAGE_END_MS = TRAP_STAGE_START_MS + TRAP_STAGE_DURATION_MS;
+const PREDICTION_STAGE_DURATION_MS =
+  PREP_TOTAL_DURATION_MS - POINT_PLACEMENT_WINDOW_MS - TRAP_STAGE_DURATION_MS;
+const PREDICTION_STAGE_START_MS = TRAP_STAGE_END_MS;
+const PREDICTION_STAGE_END_MS = PREDICTION_STAGE_START_MS + PREDICTION_STAGE_DURATION_MS;
 const POINT_REQUIRED_RATE = 0.65;
 const POINT_COUNT_LIMITS: Record<20 | 40, number> = { 20: 12, 40: 18 };
 const POINT_TOTAL_MINIMUMS: Record<20 | 40, number> = { 20: 40, 40: 60 };
@@ -440,7 +448,10 @@ export class RoomDurableObject {
 
     if (now < owner.editCooldownUntil) {
       this.metrics.logOwnerEditRejected('EDIT_COOLDOWN');
-      this.sendError(socket, 'EDIT_COOLDOWN', 'Edit action is on cooldown.');
+      const remainingMs = Math.max(0, owner.editCooldownUntil - now);
+      this.sendError(socket, 'EDIT_COOLDOWN', 'Edit action is on cooldown.', {
+        remainingMs,
+      });
       return false;
     }
 
@@ -519,6 +530,18 @@ export class RoomDurableObject {
         return true;
       }
       case 'PLACE_TRAP': {
+        const trapWindow = this.evaluateTrapWindow(now);
+        if (trapWindow === 'locked') {
+          this.metrics.logOwnerEditRejected('TRAP_PHASE_LOCKED');
+          this.sendError(socket, 'TRAP_PHASE_LOCKED', 'Trap placement window has not opened yet.');
+          return false;
+        }
+        if (trapWindow === 'closed') {
+          this.metrics.logOwnerEditRejected('TRAP_PHASE_CLOSED');
+          this.sendError(socket, 'TRAP_PHASE_CLOSED', 'Trap placement window has closed.');
+          return false;
+        }
+
         if (owner.trapCharges <= 0) {
           this.metrics.logOwnerEditRejected('TRAP_CHARGE_EMPTY');
           this.sendError(socket, 'TRAP_CHARGE_EMPTY', 'No trap charges remaining.');
@@ -661,6 +684,20 @@ export class RoomDurableObject {
     const shouldActivate = message.active ?? true;
 
     if (shouldActivate) {
+      const windowState = this.evaluatePredictionWindow(now);
+      if (windowState === 'locked') {
+        this.sendError(
+          socket,
+          'PREDICTION_PHASE_LOCKED',
+          'Prediction marking is not available yet.',
+        );
+        return false;
+      }
+      if (windowState === 'closed') {
+        this.sendError(socket, 'PREDICTION_PHASE_CLOSED', 'Prediction marking window has closed.');
+        return false;
+      }
+
       if (owner.predictionMarks.has(key)) {
         return true;
       }
@@ -919,8 +956,43 @@ export class RoomDurableObject {
       return false;
     }
 
-    const elapsed = now - this.roomState.phaseStartedAt;
+    const elapsed = this.getPrepElapsed(now);
     return elapsed <= POINT_PLACEMENT_WINDOW_MS;
+  }
+
+  private getPrepElapsed(now: number): number {
+    const startedAt = this.roomState.phaseStartedAt ?? now;
+    return Math.max(0, now - startedAt);
+  }
+
+  private evaluateTrapWindow(now: number): 'locked' | 'ok' | 'closed' {
+    if (this.roomState.phase !== 'prep') {
+      return 'ok';
+    }
+
+    const elapsed = this.getPrepElapsed(now);
+    if (elapsed < TRAP_STAGE_START_MS) {
+      return 'locked';
+    }
+    if (elapsed >= PREDICTION_STAGE_START_MS) {
+      return 'closed';
+    }
+    return 'ok';
+  }
+
+  private evaluatePredictionWindow(now: number): 'locked' | 'ok' | 'closed' {
+    if (this.roomState.phase !== 'prep') {
+      return 'closed';
+    }
+
+    const elapsed = this.getPrepElapsed(now);
+    if (elapsed < PREDICTION_STAGE_START_MS) {
+      return 'locked';
+    }
+    if (elapsed >= PREDICTION_STAGE_END_MS) {
+      return 'closed';
+    }
+    return 'ok';
   }
 
   private recalculateTargetScore(): void {
@@ -1081,14 +1153,28 @@ export class RoomDurableObject {
     this.metrics.logRoomDisposed();
   }
 
-  private sendError(socket: WebSocket, code: string, message: string): void {
-    socket.send(
-      JSON.stringify({
-        type: 'ERR',
-        code,
-        message,
-      }),
-    );
+  private sendError(
+    socket: WebSocket,
+    code: string,
+    message: string,
+    data?: Record<string, unknown>,
+  ): void {
+    const payload: {
+      type: 'ERR';
+      code: string;
+      message: string;
+      data?: Record<string, unknown>;
+    } = {
+      type: 'ERR',
+      code,
+      message,
+    };
+
+    if (data && Object.keys(data).length > 0) {
+      payload.data = data;
+    }
+
+    socket.send(JSON.stringify(payload));
   }
 }
 

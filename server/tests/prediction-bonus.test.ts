@@ -90,12 +90,29 @@ describe('予測地点ボーナス', () => {
   });
 
   function placePrediction(cell: { x: number; y: number }): void {
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        phaseStartedAt: number;
+        phaseEndsAt?: number;
+      };
+    };
+
+    const prepStartedAt = NOW - 46_000;
+    internal.roomState.phase = 'prep';
+    internal.roomState.phaseStartedAt = prepStartedAt;
+    internal.roomState.phaseEndsAt = prepStartedAt + 60_000;
+
     ownerSocket.dispatchMessage(
       JSON.stringify({
         type: 'O_MRK',
         cell,
       }),
     );
+
+    internal.roomState.phase = 'explore';
+    internal.roomState.phaseStartedAt = NOW;
+    internal.roomState.phaseEndsAt = undefined;
   }
 
   it('プレイヤーが予測地点を通過すると70%で壁資源が増える', () => {

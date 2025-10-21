@@ -232,7 +232,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
   * `DENY_EDIT`（禁止エリア/資源不足/重ね不可）
   * `TRAP_INVALID_CELL`（罠を通路中心に置いていない）
   * `NO_PATH`（経路保証違反）
-  * `COOLDOWN`（連続編集）
+  * `EDIT_COOLDOWN`（連続編集。`data.remainingMs` で残りCDを通知）
   * `LIMIT_REACHED`（予測/罠/本数上限）
   * `PHASE_LOCKED`（フェーズ外操作）
 * 表示文言例：
@@ -407,7 +407,7 @@ wrangler dev --local
 ## 21. 受け入れチェックリスト（抜粋）
 
 * [x] ロビー5分自動解散
-* [ ] カウントダウン3s → 準備(40/5/15)固定
+* [x] カウントダウン3s → 準備(40/5/15)固定（`server/tests/prep-phase-windows.test.ts`）
 * [ ] 20×20/40×40、**最短≥4×L**
 * [ ] 視界：FOV90°, 到達4マス（4マス目減光）
 * [ ] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持

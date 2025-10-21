@@ -150,6 +150,17 @@ describe('RoomDurableObject state broadcast', () => {
 
     vi.setSystemTime(NOW + 1234);
 
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        phaseStartedAt: number;
+        phaseEndsAt?: number;
+      };
+    };
+    internal.roomState.phase = 'prep';
+    internal.roomState.phaseStartedAt = NOW - 46_000;
+    internal.roomState.phaseEndsAt = NOW + 14_000;
+
     expect(() =>
       socket.dispatchMessage(
         JSON.stringify({
