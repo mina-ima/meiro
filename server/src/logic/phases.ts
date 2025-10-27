@@ -1,4 +1,4 @@
-import { resetOwnerState, type RoomState } from '../state';
+import { regenerateMaze, resetOwnerState, type RoomState } from '../state';
 
 export const DEFAULT_EXPLORE_DURATION_MS = 5 * 60 * 1000;
 const COUNTDOWN_DURATION_MS = 3_000;
@@ -54,18 +54,15 @@ export function resetForRematch(
 
   ownerSession.role = 'owner';
   playerSession.role = 'player';
+  ownerSession.lastSeenAt = now;
+  playerSession.lastSeenAt = now;
 
   state.phase = 'lobby';
   state.phaseEndsAt = undefined;
   state.createdAt = now;
   state.updatedAt = now;
+  regenerateMaze(state, { mazeSize: state.mazeSize });
   resetOwnerState(state, now);
-
-  state.player.physics = {
-    position: { x: 0.5, y: 0.5 },
-    angle: 0,
-    velocity: { x: 0, y: 0 },
-  };
   state.player.input = {
     forward: 0,
     turn: 0,
@@ -73,9 +70,6 @@ export function resetForRematch(
     receivedAt: now,
   };
   state.player.inputSequence = 0;
-  state.player.predictionHits = 0;
-  state.player.trapSlowUntil = now;
-  state.solidCells.clear();
 
   state.sessions.set(ownerSession.id, ownerSession);
   state.sessions.set(playerSession.id, playerSession);

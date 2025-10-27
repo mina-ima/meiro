@@ -1,5 +1,5 @@
 import type { Role } from '../schema/ws';
-import { resetOwnerState, type PlayerSession, type RoomState } from '../state';
+import { regenerateMaze, resetOwnerState, type PlayerSession, type RoomState } from '../state';
 
 export const LOBBY_CAPACITY = 2;
 export const LOBBY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -40,6 +40,7 @@ export function joinLobby(
     id: newId(),
     nick: payload.nick,
     role: payload.role,
+    lastSeenAt: now,
   };
 
   state.sessions.set(session.id, session);
@@ -61,12 +62,8 @@ export function resetLobby(state: RoomState, now: number): void {
   state.phase = 'lobby';
   state.createdAt = now;
   state.updatedAt = now;
+  regenerateMaze(state, { mazeSize: state.mazeSize });
   resetOwnerState(state, now);
-  state.player.physics = {
-    position: { x: 0.5, y: 0.5 },
-    angle: 0,
-    velocity: { x: 0, y: 0 },
-  };
   state.player.input = {
     forward: 0,
     turn: 0,
@@ -74,7 +71,6 @@ export function resetLobby(state: RoomState, now: number): void {
     receivedAt: now,
   };
   state.player.inputSequence = 0;
-  state.solidCells.clear();
 }
 
 export function hasLobbyExpired(state: RoomState, now: number): boolean {

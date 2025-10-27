@@ -253,7 +253,8 @@
 - [x] ロビー5分自動解散  
 - [x] カウントダウン3s → 準備(40/5/15)固定  
   - DoD: `server/tests/prep-phase-windows.test.ts` でポイント/罠/予測の時間窓を検証
-- [ ] 20×20/40×40、**最短≥4×L**  
+- [x] 20×20/40×40、**最短≥4×L**  
+  - DoD: `server/tests/room-maze-initialization.test.ts` で `createInitialRoomState` が生成する迷路の start/goal と最短距離を検証
 - [ ] 視界：FOV90°, 到達4マス（4マス目減光）  
 - [ ] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持  
 - [ ] 罠：40%速度、limit/5、同時2  

@@ -61,6 +61,7 @@ const POINT_TOTAL_MINIMUMS: Record<20 | 40, number> = { 20: 40, 40: 60 };
 const GOAL_BONUS_DIVISOR = 5;
 const ALLOWED_POINT_VALUES = new Set<1 | 3 | 5>([1, 3, 5]);
 const DISCONNECT_TIMEOUT_MS = 60_000;
+const SESSION_HEARTBEAT_TIMEOUT_MS = 15_000;
 const INPUT_RATE_INTERVAL_MS = 1_000;
 const MAX_INPUTS_PER_INTERVAL = 30;
 const MAX_PAST_INPUT_MS = 500;
@@ -80,6 +81,7 @@ export class RoomDurableObject {
   private roomState: RoomState;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private lastTickAt: number;
+  private readonly heartbeatTimeoutSockets = new Set<WebSocket>();
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -201,6 +203,7 @@ export class RoomDurableObject {
     );
     this.connections.set(socket, connection);
     this.socketSessions.set(socket, session);
+    session.lastSeenAt = Date.now();
     this.metrics.logSessionJoin(session.role);
 
     socket.addEventListener('message', (event) => {
@@ -208,8 +211,13 @@ export class RoomDurableObject {
       const currentSession = this.roomState.sessions.get(session.id) ?? session;
 
       try {
-        const message = processClientMessage(this.roomState, currentSession, raw);
         const now = Date.now();
+        currentSession.lastSeenAt = now;
+        this.socketSessions.set(socket, currentSession);
+        this.roomState.sessions.set(currentSession.id, currentSession);
+        this.heartbeatTimeoutSockets.delete(socket);
+
+        const message = processClientMessage(this.roomState, currentSession, raw);
 
         if (message.type === 'PING') {
           socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
@@ -278,6 +286,7 @@ export class RoomDurableObject {
     });
 
     socket.addEventListener('close', () => {
+      this.heartbeatTimeoutSockets.delete(socket);
       this.clients.delete(socket);
       const record = this.socketSessions.get(socket);
       if (record) {
@@ -750,7 +759,8 @@ export class RoomDurableObject {
       this.publishState({ forceFull: true });
       return;
     }
-    const stateChanged = this.checkDisconnectTimeout(now);
+    const heartbeatTriggered = this.checkHeartbeatTimeouts(now);
+    const stateChanged = this.checkDisconnectTimeout(now) || heartbeatTriggered;
 
     if (!this.hasPlayerSession() || this.roomState.paused) {
       if (stateChanged) {
@@ -1104,6 +1114,38 @@ export class RoomDurableObject {
     this.roomState.pausePhase = this.roomState.phase;
     this.roomState.pauseExpiresAt = now + DISCONNECT_TIMEOUT_MS;
     this.roomState.updatedAt = now;
+  }
+
+  private checkHeartbeatTimeouts(now: number): boolean {
+    if (this.roomState.phase === 'lobby') {
+      return false;
+    }
+
+    let triggered = false;
+    for (const socket of Array.from(this.clients)) {
+      const session = this.socketSessions.get(socket);
+      if (!session) {
+        continue;
+      }
+
+      if (now - session.lastSeenAt < SESSION_HEARTBEAT_TIMEOUT_MS) {
+        continue;
+      }
+
+      if (this.heartbeatTimeoutSockets.has(socket)) {
+        triggered = true;
+        continue;
+      }
+
+      this.heartbeatTimeoutSockets.add(socket);
+      try {
+        socket.close(4001, 'HEARTBEAT_TIMEOUT');
+      } catch (error) {
+        console.warn('room %s heartbeat close failed', this.roomId, error);
+      }
+      triggered = true;
+    }
+    return triggered;
   }
 
   private resumeFromPause(now: number): boolean {

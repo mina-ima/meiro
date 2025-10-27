@@ -7,7 +7,7 @@ const NOW = 1_700_000_000_000;
 describe('processClientMessage', () => {
   it('throws on malformed message', () => {
     const room = createInitialRoomState('ROOM', NOW);
-    const session = { id: 'owner', nick: 'A', role: 'owner' } as const;
+    const session = { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW } as const;
 
     expect(() =>
       processClientMessage(room, session, {
@@ -19,7 +19,7 @@ describe('processClientMessage', () => {
 
   it('accepts valid ping', () => {
     const room = createInitialRoomState('ROOM', NOW);
-    const session = { id: 'owner', nick: 'A', role: 'owner' } as const;
+    const session = { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW } as const;
 
     const message = processClientMessage(room, session, { type: 'PING', ts: NOW });
     expect(message.type).toBe('PING');
@@ -27,7 +27,7 @@ describe('processClientMessage', () => {
 
   it('produces owner edit events', () => {
     const room = createInitialRoomState('ROOM', NOW);
-    const session = { id: 'owner', nick: 'A', role: 'owner' } as const;
+    const session = { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW } as const;
 
     const message = processClientMessage(room, session, {
       type: 'O_EDIT',
@@ -56,7 +56,7 @@ describe('processClientMessage', () => {
 
   it('ignores未知フィールドを含むメッセージ', () => {
     const room = createInitialRoomState('ROOM', NOW);
-    const session = { id: 'player', nick: 'P', role: 'player' } as const;
+    const session = { id: 'player', nick: 'P', role: 'player', lastSeenAt: NOW } as const;
 
     const message = processClientMessage(room, session, {
       type: 'P_INPUT',

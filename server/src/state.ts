@@ -1,4 +1,5 @@
 import type { PhysicsInput, PhysicsState, Vector2 } from '@meiro/common';
+import { generateMaze, type MazeGenerationResult } from './logic/maze';
 import type { Role } from './schema/ws';
 
 export type RoomPhase = 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
@@ -27,6 +28,7 @@ export interface PlayerSession {
   id: string;
   role: Role;
   nick: string;
+  lastSeenAt: number;
 }
 
 export interface OwnerRuntimeState {
@@ -68,6 +70,7 @@ export interface RoomState {
   exploreDurationMs: number;
   sessions: Map<string, PlayerSession>;
   mazeSize: 20 | 40;
+  maze: MazeGenerationResult;
   owner: OwnerRuntimeState;
   player: PlayerRuntimeState;
   solidCells: Set<string>;
@@ -86,6 +89,8 @@ export interface RoomState {
 
 export interface RoomStateOptions {
   mazeSize?: 20 | 40;
+  mazeSeed?: string;
+  maze?: MazeGenerationResult;
 }
 
 export function createInitialRoomState(
@@ -95,7 +100,13 @@ export function createInitialRoomState(
   options: RoomStateOptions = {},
 ): RoomState {
   const mazeSize = options.mazeSize ?? 40;
-  return {
+  const maze =
+    options.maze ??
+    generateMaze({
+      size: mazeSize,
+      seed: options.mazeSeed,
+    });
+  const state: RoomState = {
     id,
     phase: 'lobby',
     createdAt: now,
@@ -106,10 +117,11 @@ export function createInitialRoomState(
     exploreDurationMs,
     sessions: new Map(),
     mazeSize,
+    maze,
     owner: createInitialOwnerState(mazeSize, now),
     player: {
       physics: {
-        position: defaultPlayerPosition(),
+        position: { x: 0, y: 0 },
         angle: 0,
         velocity: { x: 0, y: 0 },
       },
@@ -136,10 +148,37 @@ export function createInitialRoomState(
     pointShortageCompensated: false,
     paused: false,
   };
+
+  applyMazeToState(state, maze);
+  return state;
 }
 
-function defaultPlayerPosition(): Vector2 {
-  return { x: 0.5, y: 0.5 };
+function startPositionForMaze(maze: MazeGenerationResult): Vector2 {
+  return {
+    x: maze.start.x + 0.5,
+    y: maze.start.y + 0.5,
+  };
+}
+
+function applyMazeToState(state: RoomState, maze: MazeGenerationResult): void {
+  state.mazeSize = maze.size;
+  state.maze = maze;
+  state.goalCell = { x: maze.goal.x, y: maze.goal.y };
+  state.player.physics.position = startPositionForMaze(maze);
+  state.player.physics.angle = 0;
+  state.player.physics.velocity = { x: 0, y: 0 };
+  state.solidCells.clear();
+}
+
+export function regenerateMaze(state: RoomState, options: RoomStateOptions = {}): void {
+  const mazeSize = options.mazeSize ?? state.mazeSize;
+  const maze =
+    options.maze ??
+    generateMaze({
+      size: mazeSize,
+      seed: options.mazeSeed,
+    });
+  applyMazeToState(state, maze);
 }
 
 function createInitialOwnerState(mazeSize: 20 | 40, now: number): OwnerRuntimeState {
@@ -165,6 +204,7 @@ export function resetOwnerState(state: RoomState, now: number): void {
   state.player.trapSlowUntil = now;
   state.player.score = 0;
   state.player.goalBonusAwarded = false;
+  state.player.predictionHits = 0;
   state.player.lastInputReceivedAt = now;
   state.player.inputWindowStart = now;
   state.player.inputCountInWindow = 0;

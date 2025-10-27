@@ -233,6 +233,7 @@ describe('オーナー編集の経路維持検証', () => {
     internal.roomState.owner.wallStock = 3;
     internal.roomState.owner.editCooldownUntil = Date.now();
     internal.roomState.player.physics.position = { x: 0.51, y: 0.51 };
+    internal.roomState.goalCell = { x: 5, y: 5 };
 
     ownerSocket.sent.length = 0;
     ownerSocket.dispatchMessage(

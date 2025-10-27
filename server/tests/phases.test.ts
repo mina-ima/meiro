@@ -54,10 +54,10 @@ describe('phase progression', () => {
     const state = createInitialRoomState('ROOM', NOW);
     expect(maybeStartCountdown(state, NOW)).toBe(false);
 
-    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner' });
+    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW });
     expect(maybeStartCountdown(state, NOW)).toBe(false);
 
-    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player' });
+    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player', lastSeenAt: NOW });
     expect(maybeStartCountdown(state, NOW)).toBe(true);
     expect(state.phase).toBe('countdown');
     expect(state.phaseEndsAt).toBe(NOW + 3_000);
@@ -66,8 +66,8 @@ describe('phase progression', () => {
   it('resetForRematchでフェーズをロビーに戻し役割を保持', () => {
     const state = createInitialRoomState('ROOM', NOW);
     state.phase = 'result';
-    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner' });
-    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player' });
+    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW });
+    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player', lastSeenAt: NOW });
 
     const success = resetForRematch(state, NOW + 1_000, () => 0.4);
     expect(success).toBe(true);
@@ -81,8 +81,8 @@ describe('phase progression', () => {
   it('resetForRematchで役割を入れ替える', () => {
     const state = createInitialRoomState('ROOM', NOW);
     state.phase = 'result';
-    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner' });
-    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player' });
+    state.sessions.set('owner', { id: 'owner', nick: 'A', role: 'owner', lastSeenAt: NOW });
+    state.sessions.set('player', { id: 'player', nick: 'B', role: 'player', lastSeenAt: NOW });
 
     const success = resetForRematch(state, NOW + 2_000, () => 0.6);
     expect(success).toBe(true);
