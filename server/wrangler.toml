@@ -31,6 +31,14 @@ workers_dev = false
 ENVIRONMENT = "dev"
 WS_ORIGIN = "wss://dev.meiro.example.com"
 
+[env.preview]
+name = "meiro-server-preview"
+workers_dev = true
+
+[env.preview.vars]
+ENVIRONMENT = "preview"
+WS_ORIGIN = "wss://preview.meiro.example.com"
+
 [env.prod]
 name = "meiro-server-prod"
 routes = ["game.meiro.example.com/*"]

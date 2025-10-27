@@ -239,7 +239,8 @@
 ## 19. DevOps/CI
 - [x] wrangler セットアップ（local/dev/prod）
   - DoD: `server/tests/wrangler-config.test.ts` で local/dev/prod 環境とルーティング/ENVIRONMENT 変数が検証される
-- [ ] ページ/ワーカー デプロイパイプライン（PRでpreviews）
+- [x] ページ/ワーカー デプロイパイプライン（PRでpreviews）
+  - DoD: `.github/workflows/deploy-preview.yml` で lint/typecheck/test 実行後に `wrangler deploy --env preview` と Cloudflare Pages へのアップロードを実施し、`CF_ACCOUNT_ID`/`CF_WORKERS_API_TOKEN`/`CF_PAGES_API_TOKEN`/`CF_PAGES_PROJECT` を参照する
 - [x] CI: lint/format/typecheck/unit/e2e
 - [x] エラートラッキング（Sentry 任意）
   - DoD: `client/tests/SentryInit.test.ts` で DSN 初期化と例外転送を検証
