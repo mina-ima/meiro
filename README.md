@@ -47,3 +47,13 @@ pnpm install
 - `.github/workflows/ci.yml` で `main` への push・pull request をトリガーに自動実行。
 - フォーマットチェック（`pnpm -r exec prettier --check "**/*.{ts,tsx,js,jsx,md,json}"`）、Lint、Typecheck、テストを順番に実行します。
 - ワークフローは Node.js 20 + pnpm 9 を使用し、`pnpm install --frozen-lockfile` で依存関係を固定します。
+
+## リリースフロー
+
+1. `CHANGELOG.md` の `Unreleased` セクションに変更内容を追記し、必要に応じてバージョン節を確定します。
+2. `pnpm format && pnpm lint && pnpm typecheck && pnpm test` を実行して品質チェックを通します。
+3. リリースバージョンを決定し、例として `1.1.0` を出す場合は `git tag -a v1.1.0 -m "v1.1.0"` を作成します。
+4. `git push origin main --tags` でタグとブランチをリモートへ送信します。
+5. GitHub のリリースノートに `CHANGELOG.md` の該当節を転載し、必要なアセットを添付します。
+
+> 補足: プレビューデプロイは PR 作成時に自動実行されるため、本番リリース前に `Deploy Preview` ワークフローの結果を確認してください。

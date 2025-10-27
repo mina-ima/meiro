@@ -244,7 +244,8 @@
 - [x] CI: lint/format/typecheck/unit/e2e
 - [x] エラートラッキング（Sentry 任意）
   - DoD: `client/tests/SentryInit.test.ts` で DSN 初期化と例外転送を検証
-- [ ] リリースタグとCHANGELOG運用
+- [x] リリースタグとCHANGELOG運用
+  - DoD: `CHANGELOG.md` と README「リリースフロー」に手順を定義し、`packages/common/tests/release-process.test.ts` で存在と記述を検証
 
 ---
 

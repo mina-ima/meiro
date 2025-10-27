@@ -321,6 +321,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * ブランチ戦略は `main` を安定ブランチとし、`feature/*`・`fix/*` からPR経由で取り込む。
 * CI は `.github/workflows/ci.yml` でフォーマットチェック・Lint・Typecheck・Test を自動実行。
 * PR作成時は `.github/workflows/deploy-preview.yml` で Cloudflare Workers/Pages のプレビューデプロイを実施。`pnpm lint` → `pnpm typecheck` → `pnpm test` → `pnpm --filter @meiro/client build` を経て、`cloudflare/wrangler-action@3` で `wrangler deploy --env preview` を実行し、続けて `cloudflare/pages-action@v1` で `client/dist` を Pages プロジェクトへアップロード。必要なシークレットは `CF_ACCOUNT_ID`/`CF_WORKERS_API_TOKEN`/`CF_PAGES_API_TOKEN`/`CF_PAGES_PROJECT` を想定。
+* リリース作業は `CHANGELOG.md` を更新し、`pnpm format && pnpm lint && pnpm typecheck && pnpm test` を通したうえで `git tag -a vX.Y.Z` を発行し push するフローを README「リリースフロー」に明記し、`packages/common/tests/release-process.test.ts` で検証。
 
 ---
 
