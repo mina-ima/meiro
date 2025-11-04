@@ -153,6 +153,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **サーバ→クライアント送信**は**20Hz**上限の送信キューで排出（1メッセージ≤2KB）。クライアント補間表示。
 * STATEペイロード内の座標データは `[x,y]`（点/罠/予測）や `[x,y,value]`（ポイント）形式に圧縮し、フルスナップショットでも約1.2KB以内に収める。
 * 差分STATEは送信キューで最新のみ保持し、古い差分は破棄して**遅延を100ms以下に抑える**。
+* STATEの `owner` スナップショットには `wallStock`/`wallRemoveLeft`/`trapCharges` に加えて `editCooldownDuration`（ms）と `forbiddenDistance`（マンハッタン距離）が含まれ、クライアントHUDでそのまま表示する（`server/tests/state-sync.test.ts` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）。
 
 ---
 
@@ -322,7 +323,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * ブランチ戦略は `main` を安定ブランチとし、`feature/*`・`fix/*` からPR経由で取り込む。
 * CI は `.github/workflows/ci.yml` でフォーマットチェック・Lint・Typecheck・Test を自動実行。
 * PR作成時は `.github/workflows/deploy-preview.yml` で Cloudflare Workers/Pages のプレビューデプロイを実施。`pnpm lint` → `pnpm typecheck` → `pnpm test` → `pnpm --filter @meiro/client build` を経て、`cloudflare/wrangler-action@3` で `wrangler deploy --env preview` を実行し、続けて `cloudflare/pages-action@v1` で `client/dist` を Pages プロジェクトへアップロード。必要なシークレットは `CF_ACCOUNT_ID`/`CF_WORKERS_API_TOKEN`/`CF_PAGES_API_TOKEN`/`CF_PAGES_PROJECT` を想定。
-* リリース作業は `CHANGELOG.md` を更新し、`pnpm format && pnpm lint && pnpm typecheck && pnpm test` を通したうえで `git tag -a vX.Y.Z` を発行し push するフローを README「リリースフロー」に明記し、`packages/common/tests/release-process.test.ts` で検証。
+* リリース作業は `CHANGELOG.md` を更新し、`pnpm format && pnpm lint && pnpm typecheck && pnpm test` を通したうえで `git tag -a vX.Y.Z` を発行し push するフローを README「リリースフロー」に明記する。併せてロールバック手順と過去リリース保持方針も README に記載し、`packages/common/tests/release-process.test.ts` で両方を検証。
 
 ---
 
@@ -418,9 +419,9 @@ wrangler dev --local
 
 * [x] ロビー5分自動解散
 * [x] カウントダウン3s → 準備(40/5/15)固定（`server/tests/prep-phase-windows.test.ts`）
-* [ ] 20×20/40×40、**最短≥4×L**
-* [ ] 視界：FOV90°, 到達4マス（4マス目減光）
-* [ ] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持
+* [x] 20×20/40×40、**最短≥4×L**（`server/tests/room-maze-initialization.test.ts`）
+* [x] 視界：FOV90°, 到達4マス（4マス目減光）（`client/tests/PlayerViewRaycaster.test.tsx`）
+* [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持（`server/tests/owner-resources.test.ts` / `server/tests/owner-path-block.test.ts` / `client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）
 * [ ] 罠：40%速度、limit/5、同時2
 * [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）
 * [x] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**（`server/tests/points-scoring.test.ts`）

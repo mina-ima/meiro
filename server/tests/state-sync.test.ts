@@ -111,6 +111,8 @@ describe('StateComposer', () => {
       wallRemoveLeft: 1,
       trapCharges: 1,
       editCooldownUntil: room.owner.editCooldownUntil,
+      editCooldownDuration: room.owner.editCooldownDuration,
+      forbiddenDistance: room.owner.forbiddenDistance,
       predictionLimit: room.owner.predictionLimit,
       predictionHits: 0,
       predictionMarks: [],

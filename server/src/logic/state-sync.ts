@@ -25,6 +25,8 @@ interface SnapshotOwner {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  editCooldownDuration: number;
+  forbiddenDistance: number;
   predictionLimit: number;
   predictionHits: number;
   predictionMarks: PackedVector[];
@@ -147,6 +149,8 @@ function createSnapshot(room: RoomState): Snapshot {
       wallRemoveLeft: room.owner.wallRemoveLeft,
       trapCharges: room.owner.trapCharges,
       editCooldownUntil: room.owner.editCooldownUntil,
+      editCooldownDuration: room.owner.editCooldownDuration,
+      forbiddenDistance: room.owner.forbiddenDistance,
       predictionLimit: room.owner.predictionLimit,
       predictionHits: room.owner.predictionHits,
       predictionMarks: Array.from(room.owner.predictionMarks.values())
@@ -299,6 +303,8 @@ function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
     a.wallRemoveLeft === b.wallRemoveLeft &&
     a.trapCharges === b.trapCharges &&
     a.editCooldownUntil === b.editCooldownUntil &&
+    a.editCooldownDuration === b.editCooldownDuration &&
+    a.forbiddenDistance === b.forbiddenDistance &&
     a.predictionLimit === b.predictionLimit &&
     a.predictionHits === b.predictionHits &&
     packedVectorsEqual(a.predictionMarks, b.predictionMarks) &&

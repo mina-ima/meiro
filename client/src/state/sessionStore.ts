@@ -29,6 +29,8 @@ export interface ServerOwnerState {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  editCooldownDuration: number;
+  forbiddenDistance: number;
   predictionLimit: number;
   predictionHits: number;
   predictionMarks: ServerVector[];
@@ -71,6 +73,8 @@ export interface NetworkOwnerState {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  editCooldownDuration: number;
+  forbiddenDistance: number;
   predictionLimit: number;
   predictionHits: number;
   predictionMarks: PackedVector[];
@@ -139,6 +143,8 @@ export interface OwnerClientState {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  editCooldownDuration: number;
+  forbiddenDistance: number;
   predictionLimit: number;
   activePredictionCount: number;
   predictionHits: number;
@@ -180,6 +186,8 @@ function createInitialOwnerClientState(): OwnerClientState {
     wallRemoveLeft: 1,
     trapCharges: 1,
     editCooldownUntil: 0,
+    editCooldownDuration: 1_000,
+    forbiddenDistance: 2,
     predictionLimit: 3,
     activePredictionCount: 0,
     predictionHits: 0,
@@ -249,6 +257,8 @@ function normalizeOwnerState(owner: NetworkOwnerState): ServerOwnerState {
     wallRemoveLeft: owner.wallRemoveLeft,
     trapCharges: owner.trapCharges,
     editCooldownUntil: owner.editCooldownUntil,
+    editCooldownDuration: owner.editCooldownDuration,
+    forbiddenDistance: owner.forbiddenDistance,
     predictionLimit: owner.predictionLimit,
     predictionHits: owner.predictionHits,
     predictionMarks: unpackVectors(owner.predictionMarks),
@@ -455,6 +465,8 @@ function mergeOwner(base: ServerOwnerState, patch?: Partial<ServerOwnerState>): 
     wallRemoveLeft: patch.wallRemoveLeft ?? base.wallRemoveLeft,
     trapCharges: patch.trapCharges ?? base.trapCharges,
     editCooldownUntil: patch.editCooldownUntil ?? base.editCooldownUntil,
+    editCooldownDuration: patch.editCooldownDuration ?? base.editCooldownDuration,
+    forbiddenDistance: patch.forbiddenDistance ?? base.forbiddenDistance,
     predictionLimit: patch.predictionLimit ?? base.predictionLimit,
     predictionHits: patch.predictionHits ?? base.predictionHits,
     predictionMarks: cloneVectorList(patch.predictionMarks ?? base.predictionMarks),
@@ -537,6 +549,8 @@ export const useSessionStore = create<SessionState>((set) => ({
           wallRemoveLeft: nextSnapshot.owner.wallRemoveLeft,
           trapCharges: nextSnapshot.owner.trapCharges,
           editCooldownUntil: nextSnapshot.owner.editCooldownUntil,
+          editCooldownDuration: nextSnapshot.owner.editCooldownDuration,
+          forbiddenDistance: nextSnapshot.owner.forbiddenDistance,
           predictionLimit: nextSnapshot.owner.predictionLimit,
           activePredictionCount: nextSnapshot.owner.predictionMarks.length,
           predictionHits: nextSnapshot.owner.predictionHits,

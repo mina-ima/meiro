@@ -20,6 +20,7 @@ import { StateComposer } from './logic/state-sync';
 import { apply as applyTrapEffect, MAX_ACTIVE_TRAPS, TRAP_SPEED_MULTIPLIER } from './logic/trap';
 import type { PlayerInputState, PlayerSession, RoomState } from './state';
 import type { ClientMessage, ServerMessage } from './schema/ws';
+import { OWNER_EDIT_COOLDOWN_MS, OWNER_FORBIDDEN_DISTANCE } from './config/spec';
 
 interface SessionPayload {
   roomId: string;
@@ -40,8 +41,6 @@ type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
 
-const EDIT_COOLDOWN_MS = 1_000;
-const FORBIDDEN_MANHATTAN_DISTANCE = 2;
 const PREDICTION_WALL_RATE = 0.7;
 const PREDICTION_BONUS_BATCH_SIZE = 10;
 const PREDICTION_BONUS_WALLS = Math.round(PREDICTION_BONUS_BATCH_SIZE * PREDICTION_WALL_RATE);
@@ -521,7 +520,7 @@ export class RoomDurableObject {
         }
         this.roomState.solidCells.add(key);
         owner.wallStock -= 1;
-        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
+        owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
         return true;
       }
       case 'DEL_WALL': {
@@ -552,7 +551,7 @@ export class RoomDurableObject {
         this.roomState.solidCells.delete(key);
         owner.wallRemoveLeft = 0;
         owner.wallStock += 1;
-        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
+        owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
         return true;
       }
       case 'PLACE_TRAP': {
@@ -607,7 +606,7 @@ export class RoomDurableObject {
           cell: { x: targetCell.x, y: targetCell.y },
           placedAt: now,
         });
-        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
+        owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
         return true;
       }
       case 'PLACE_POINT': {
@@ -662,7 +661,7 @@ export class RoomDurableObject {
         if (!this.roomState.targetScoreLocked) {
           this.recalculateTargetScore();
         }
-        owner.editCooldownUntil = now + EDIT_COOLDOWN_MS;
+        owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
         return true;
       }
       default:
@@ -1546,5 +1545,5 @@ function isEditInForbiddenArea(
   const playerCellX = Math.floor(playerPosition.x);
   const playerCellY = Math.floor(playerPosition.y);
   const distance = Math.abs(cell.x - playerCellX) + Math.abs(cell.y - playerCellY);
-  return distance <= FORBIDDEN_MANHATTAN_DISTANCE;
+  return distance <= OWNER_FORBIDDEN_DISTANCE;
 }

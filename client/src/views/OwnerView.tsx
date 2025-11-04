@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { NetClient } from '../net/NetClient';
 import { HUD } from './HUD';
-import { OWNER_ZOOM_LEVELS } from '../config/spec';
+import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
 import type { PauseReason } from '../state/sessionStore';
 
 interface Vector2 {
@@ -47,6 +47,7 @@ export function OwnerView({
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
   const cooldownText = formatCooldown(editCooldownMs);
   const clampedPredictions = Math.max(0, Math.min(activePredictions, predictionLimit));
+  const activeTrapCount = Math.min(traps.length, MAX_ACTIVE_TRAPS);
 
   const [zoomIndex, setZoomIndex] = useState(3);
   const zoom = OWNER_ZOOM_LEVELS[zoomIndex];
@@ -110,7 +111,9 @@ export function OwnerView({
 
         <HUD timeRemaining={timeRemaining} score={wallCount} targetScore={140}>
           <p>壁残数: {wallCount}本</p>
-          <p>罠権利: {trapCharges}</p>
+          <p>
+            罠: 権利{trapCharges} / 設置{activeTrapCount}/{MAX_ACTIVE_TRAPS}
+          </p>
           <p>壁削除権: 残り{wallRemoveLeft}回</p>
           <p>編集クールダウン: {cooldownText}</p>
           <p>禁止エリア距離: {forbiddenDistance}</p>

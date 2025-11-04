@@ -137,7 +137,7 @@ function castSingleRay(
 }
 
 function computeIntensity(distance: number, range: number): number {
-  if (distance >= range) {
+  if (distance > range) {
     return 0;
   }
 

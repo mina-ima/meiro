@@ -255,8 +255,10 @@
   - DoD: `server/tests/prep-phase-windows.test.ts` でポイント/罠/予測の時間窓を検証
 - [x] 20×20/40×40、**最短≥4×L**  
   - DoD: `server/tests/room-maze-initialization.test.ts` で `createInitialRoomState` が生成する迷路の start/goal と最短距離を検証
-- [ ] 視界：FOV90°, 到達4マス（4マス目減光）  
-- [ ] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持  
+- [x] 視界：FOV90°, 到達4マス（4マス目減光）  
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で境界4マス目の減光を検証
+- [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持  
+  - DoD: `server/tests/owner-resources.test.ts` で初期化値を検証し、`server/tests/owner-path-block.test.ts` で経路維持と禁止距離の拒否判定を保証。`client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx` でHUD表示を確認。
 - [ ] 罠：40%速度、limit/5、同時2  
 - [ ] ポイント：下限不足→初期ポイント補填（上限=規定−1）  
 - [ ] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**  
@@ -279,7 +281,8 @@
 - [ ] 本番環境の秘密情報/環境変数を確認
 - [ ] ログレベル/PII含有の有無を確認
 - [ ] 回帰テストパス（ユニット/結合/負荷/受入）
-- [ ] ロールバック手順/過去リリースの保持
+- [x] ロールバック手順/過去リリースの保持  
+  - DoD: `README` にロールバック手順と保持方針を明記し、`packages/common/tests/release-process.test.ts` で検証
 
 ---
 

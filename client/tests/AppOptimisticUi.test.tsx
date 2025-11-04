@@ -56,6 +56,8 @@ describe('楽観UI禁止', () => {
           wallRemoveLeft: 1,
           trapCharges: 1,
           editCooldownUntil: Date.now() + 1_000,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],

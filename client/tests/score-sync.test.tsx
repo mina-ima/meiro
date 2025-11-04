@@ -44,6 +44,8 @@ describe('セッションストアのスコア同期', () => {
           wallRemoveLeft: 1 as const,
           trapCharges: 1,
           editCooldownUntil: Date.now(),
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],

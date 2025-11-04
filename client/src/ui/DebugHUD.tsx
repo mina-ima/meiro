@@ -43,6 +43,8 @@ type SanitizedOwnerState = Pick<
   | 'predictionHits'
   | 'predictionMarks'
   | 'traps'
+  | 'forbiddenDistance'
+  | 'editCooldownDuration'
 >;
 
 type SanitizedPlayerState = Pick<PlayerClientState, 'predictionHits' | 'position'>;
@@ -118,6 +120,8 @@ export function DebugHUD({
           <li>予測ヒット累計(現在値): {owner.predictionHits}</li>
           <li>罠設置済み(現在値): {owner.traps.length}</li>
           <li>予測マーク(現在値): {owner.predictionMarks.length}</li>
+          <li>禁止エリア距離(現在値): {owner.forbiddenDistance} マス</li>
+          <li>編集クールダウン定数(現在値): {(owner.editCooldownDuration / 1000).toFixed(1)} 秒</li>
           <li>残りクールダウン(現在値): {cooldownRemaining}</li>
           <li>
             プレイヤー位置(現在値): ({formatPosition(player.position.x)},{' '}

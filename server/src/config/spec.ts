@@ -1,0 +1,2 @@
+export const OWNER_FORBIDDEN_DISTANCE = 2;
+export const OWNER_EDIT_COOLDOWN_MS = 1_000;

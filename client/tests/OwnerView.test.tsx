@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { OwnerView } from '../src/views/OwnerView';
+import { MAX_ACTIVE_TRAPS } from '../src/config/spec';
 
 describe('OwnerView', () => {
   it('HUDに壁残数・罠権利・クールダウン・禁止エリア・予測地点数を表示する', () => {
@@ -23,7 +24,7 @@ describe('OwnerView', () => {
     );
 
     expect(screen.getByText('壁残数: 12本')).toBeInTheDocument();
-    expect(screen.getByText('罠権利: 2')).toBeInTheDocument();
+    expect(screen.getByText(`罠: 権利2 / 設置1/${MAX_ACTIVE_TRAPS}`)).toBeInTheDocument();
     expect(screen.getByText('壁削除権: 残り1回')).toBeInTheDocument();
     expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
     expect(screen.getByText('禁止エリア距離: 2')).toBeInTheDocument();

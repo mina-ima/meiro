@@ -1,5 +1,6 @@
 import type { PhysicsInput, PhysicsState, Vector2 } from '@meiro/common';
 import { generateMaze, type MazeGenerationResult } from './logic/maze';
+import { OWNER_FORBIDDEN_DISTANCE, OWNER_EDIT_COOLDOWN_MS } from './config/spec';
 import type { Role } from './schema/ws';
 
 export type RoomPhase = 'lobby' | 'countdown' | 'prep' | 'explore' | 'result';
@@ -36,6 +37,8 @@ export interface OwnerRuntimeState {
   wallRemoveLeft: 0 | 1;
   trapCharges: number;
   editCooldownUntil: number;
+  editCooldownDuration: number;
+  forbiddenDistance: number;
   traps: TrapInstance[];
   predictionMarks: Map<string, PredictionMark>;
   predictionLimit: number;
@@ -187,6 +190,8 @@ function createInitialOwnerState(mazeSize: 20 | 40, now: number): OwnerRuntimeSt
     wallRemoveLeft: 1,
     trapCharges: 1,
     editCooldownUntil: now,
+    editCooldownDuration: OWNER_EDIT_COOLDOWN_MS,
+    forbiddenDistance: OWNER_FORBIDDEN_DISTANCE,
     traps: [],
     predictionMarks: new Map(),
     predictionLimit: 3,

@@ -10,13 +10,14 @@ function applyServerState(payload: ServerStatePayload): void {
   });
 }
 
-describe('切断ポーズ表示', () => {
+describe('App owner forbidden distance integration', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     resetToastStoreForTest();
     act(() => {
       useSessionStore.getState().reset();
+      useSessionStore.getState().setRoom('ROOM-FORBID', 'owner');
     });
   });
 
@@ -24,37 +25,29 @@ describe('切断ポーズ表示', () => {
     vi.useRealTimers();
   });
 
-  it('切断による一時停止中は警告と残り秒数を表示する', async () => {
-    act(() => {
-      useSessionStore.getState().setRoom('ROOM-PAUSE', 'player');
-    });
-
+  it('STATEメッセージの禁止距離をHUDに反映する', () => {
     render(<App />);
 
     applyServerState({
       seq: 1,
       full: true,
       snapshot: {
-        roomId: 'ROOM-PAUSE',
-        phase: 'explore',
-        phaseEndsAt: undefined,
-        mazeSize: 20,
+        roomId: 'ROOM-FORBID',
+        phase: 'prep',
+        mazeSize: 40,
         updatedAt: 0,
         countdownDurationMs: 3_000,
         prepDurationMs: 60_000,
         exploreDurationMs: 300_000,
-        targetScore: 15,
+        targetScore: 0,
         paused: false,
-        sessions: [
-          { id: 'owner', role: 'owner', nick: 'Owner' },
-          { id: 'player', role: 'player', nick: 'Runner' },
-        ],
+        sessions: [],
         player: {
-          position: { x: 2, y: 2 },
+          position: { x: 10, y: 10 },
           velocity: { x: 0, y: 0 },
           angle: 0,
           predictionHits: 0,
-          score: 3,
+          score: 0,
         },
         owner: {
           wallStock: 48,
@@ -62,37 +55,16 @@ describe('切断ポーズ表示', () => {
           trapCharges: 1,
           editCooldownUntil: 0,
           editCooldownDuration: 1_000,
-          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],
           traps: [],
           points: [],
+          forbiddenDistance: 4,
         },
       },
-    } as unknown as ServerStatePayload);
-
-    act(() => {
-      useSessionStore.setState((state) => ({
-        ...state,
-        paused: true,
-        pauseReason: 'disconnect',
-        pauseExpiresAt: Date.now() + 60_000,
-        pauseRemainingMs: 60_000,
-      }));
     });
 
-    expect(screen.getByText('通信が途切れています')).toBeInTheDocument();
-    expect(
-      screen.getByText('再接続を待機しています。残り 60 秒で不在側の敗北となります。'),
-    ).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
-    });
-
-    expect(
-      screen.getByText('再接続を待機しています。残り 45 秒で不在側の敗北となります。'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('禁止エリア距離: 4')).toBeInTheDocument();
   });
 });

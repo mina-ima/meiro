@@ -57,6 +57,8 @@ describe('App prediction integration', () => {
           wallRemoveLeft: 1,
           trapCharges: 2,
           editCooldownUntil: 1_500,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [
@@ -70,7 +72,7 @@ describe('App prediction integration', () => {
     });
 
     expect(screen.getByText('壁残数: 12本')).toBeInTheDocument();
-    expect(screen.getByText('罠権利: 2')).toBeInTheDocument();
+    expect(screen.getByText('罠: 権利2 / 設置0/2')).toBeInTheDocument();
     expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
     expect(screen.getByText('予測地点: 2 / 3')).toBeInTheDocument();
   });
@@ -108,6 +110,8 @@ describe('App prediction integration', () => {
           wallRemoveLeft: 1,
           trapCharges: 1,
           editCooldownUntil: 0,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],
@@ -130,6 +134,8 @@ describe('App prediction integration', () => {
           wallRemoveLeft: 1,
           trapCharges: 1,
           editCooldownUntil: 0,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 2,
           predictionMarks: [],

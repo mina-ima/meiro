@@ -24,4 +24,13 @@ describe('リリース運用', () => {
     expect(readme).toMatch(/git tag -a/);
     expect(readme).toMatch(/CHANGELOG\.md/);
   });
+
+  it('README にロールバック手順と過去リリース保持の方針が記載されている', () => {
+    const readmePath = resolve(ROOT, 'README.md');
+    const readme = readFileSync(readmePath, 'utf8');
+
+    expect(readme).toMatch(/### ロールバック手順/);
+    expect(readme).toMatch(/git revert/);
+    expect(readme).toMatch(/過去リリースを保持/);
+  });
 });

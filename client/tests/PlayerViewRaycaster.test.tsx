@@ -172,6 +172,47 @@ describe('PlayerView レイキャスト仕様', () => {
 
     expect(farColumn.fillStyle).toBe(expectedColor);
   });
+
+  it('境界の壁に命中した中央レイは距離4で減光する', async () => {
+    const actualRaycaster = await vi.importActual<typeof import('../src/game/Raycaster')>(
+      '../src/game/Raycaster',
+    );
+
+    const capturedHits: RayHit[][] = [];
+
+    castRaysMock.mockImplementation((state, config, environment) => {
+      const hits = actualRaycaster.castRays(state, config, environment);
+      capturedHits.push(hits);
+      return hits;
+    });
+
+    initializeSessionState({
+      playerPosition: { x: 16, y: 2 },
+      playerAngle: 0,
+    });
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    expect(capturedHits.length).toBeGreaterThan(0);
+    const firstHits = capturedHits[0];
+    const centerIndex = Math.floor(firstHits.length / 2);
+    const centerHit = firstHits[centerIndex];
+
+    expect(centerHit.tile).not.toBeNull();
+    expect(centerHit.distance).toBeCloseTo(PLAYER_VIEW_RANGE, 6);
+    expect(centerHit.intensity).toBeCloseTo(0.5, 6);
+  });
 });
 
 function expectedColorForIntensity(intensity: number): string {
@@ -184,8 +225,15 @@ function expectedColorForIntensity(intensity: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function initializeSessionState() {
+interface SessionStateOverrides {
+  playerPosition?: { x: number; y: number };
+  playerAngle?: number;
+}
+
+function initializeSessionState(overrides: SessionStateOverrides = {}) {
   const now = Date.now();
+  const playerPosition = overrides.playerPosition ?? { x: 2, y: 2 };
+  const playerAngle = overrides.playerAngle ?? 0;
 
   useSessionStore.setState((state) => ({
     ...state,
@@ -219,9 +267,9 @@ function initializeSessionState() {
       pausePhase: undefined,
       sessions: [],
       player: {
-        position: { x: 2, y: 2 },
+        position: { ...playerPosition },
         velocity: { x: 0, y: 0 },
-        angle: 0,
+        angle: playerAngle,
         predictionHits: 0,
         score: 0,
       },
@@ -230,6 +278,8 @@ function initializeSessionState() {
         wallRemoveLeft: 1,
         trapCharges: 1,
         editCooldownUntil: now,
+        editCooldownDuration: 1_000,
+        forbiddenDistance: 2,
         predictionLimit: 3,
         predictionHits: 0,
         predictionMarks: [],
@@ -239,7 +289,7 @@ function initializeSessionState() {
     },
     player: {
       predictionHits: 0,
-      position: { x: 2, y: 2 },
+      position: { ...playerPosition },
     },
   }));
 }

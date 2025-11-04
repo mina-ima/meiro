@@ -58,6 +58,8 @@ describe('オーナー編集クールダウン表示', () => {
           wallRemoveLeft: 1,
           trapCharges: 1,
           editCooldownUntil: 1_500,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
           predictionLimit: 3,
           predictionHits: 0,
           predictionMarks: [],

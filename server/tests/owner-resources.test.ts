@@ -9,6 +9,8 @@ describe('RoomState owner resources', () => {
     expect(room.owner.wallRemoveLeft).toBe(1);
     expect(room.owner.trapCharges).toBe(1);
     expect(room.owner.editCooldownUntil).toBe(1_000);
+    expect(room.owner.editCooldownDuration).toBe(1_000);
+    expect(room.owner.forbiddenDistance).toBe(2);
     expect(room.owner.predictionMarks.size).toBe(0);
     expect(room.owner.predictionLimit).toBe(3);
     expect(room.owner.predictionHits).toBe(0);
@@ -21,6 +23,8 @@ describe('RoomState owner resources', () => {
     expect(room.owner.wallRemoveLeft).toBe(1);
     expect(room.owner.trapCharges).toBe(1);
     expect(room.owner.editCooldownUntil).toBe(1_000);
+    expect(room.owner.editCooldownDuration).toBe(1_000);
+    expect(room.owner.forbiddenDistance).toBe(2);
     expect(room.owner.predictionMarks.size).toBe(0);
     expect(room.owner.predictionLimit).toBe(3);
     expect(room.owner.predictionHits).toBe(0);

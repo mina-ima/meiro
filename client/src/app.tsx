@@ -10,7 +10,6 @@ import { logClientInit, logClientError, logPhaseChange } from './logging/telemet
 import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
-import { OWNER_FORBIDDEN_DISTANCE } from './config/spec';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
 
@@ -138,7 +137,7 @@ export function App() {
   }, [playerState.predictionHits, role]);
 
   const ownerCooldownMs = useCountdown(ownerState.editCooldownUntil, 100);
-  const forbiddenDistance = OWNER_FORBIDDEN_DISTANCE;
+  const forbiddenDistance = ownerState.forbiddenDistance;
   const hasAuthoritativeState = serverSnapshot !== null;
   const isRoleAssigned = role === 'owner' || role === 'player';
   const readyForGameplay = hasAuthoritativeState && isRoleAssigned;
@@ -241,6 +240,8 @@ export function App() {
             predictionHits: ownerState.predictionHits,
             predictionMarks: ownerState.predictionMarks,
             traps: ownerState.traps,
+            forbiddenDistance: ownerState.forbiddenDistance,
+            editCooldownDuration: ownerState.editCooldownDuration,
           }}
           player={{
             position: playerState.position,
