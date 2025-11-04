@@ -90,6 +90,7 @@ describe('ポイント配置とスコアリング', () => {
         targetScore: number;
         targetScoreLocked: boolean;
         pointShortageCompensated: boolean;
+        pointCompensationAward: number;
       };
       alarm: (alarmTime: number) => Promise<void>;
     };
@@ -128,6 +129,7 @@ describe('ポイント配置とスコアリング', () => {
     expect(internal.roomState.targetScore).toBe(expectedTarget);
     const expectedBonus = Math.min(40 - 10, Math.max(0, expectedTarget - 1));
     expect(internal.roomState.player.score).toBe(expectedBonus);
+    expect(internal.roomState.pointCompensationAward).toBe(expectedBonus);
     expect(expectedBonus).toBeLessThan(expectedTarget);
 
     room.dispose();
@@ -245,6 +247,7 @@ describe('ポイント配置とスコアリング', () => {
         targetScore: number;
         targetScoreLocked: boolean;
         pointShortageCompensated: boolean;
+        pointCompensationAward: number;
         owner: { editCooldownUntil: number };
         player: { score: number };
       };
@@ -290,6 +293,7 @@ describe('ポイント配置とスコアリング', () => {
     expect(internal.roomState.targetScore).toBe(expectedTarget);
     const expectedBonus = Math.min(40 - total, Math.max(0, expectedTarget - 1));
     expect(internal.roomState.player.score).toBe(expectedBonus);
+    expect(internal.roomState.pointCompensationAward).toBe(expectedBonus);
 
     room.dispose();
   });
@@ -321,6 +325,7 @@ describe('ポイント配置とスコアリング', () => {
           };
           score: number;
         };
+        pointCompensationAward: number;
       };
     };
 
@@ -430,6 +435,81 @@ describe('ポイント配置とスコアリング', () => {
 
     internal.roomState.player.score = 10;
     internal.evaluateScoreCompletion(NOW + 45_000);
+    expect(internal.roomState.phase).toBe('result');
+
+    type CapturedEvent = {
+      type?: string;
+      event?: string;
+      payload?: {
+        reason?: string;
+        score?: number;
+        target?: number;
+      };
+    };
+
+    const events = captured.map((value) => value as CapturedEvent);
+    const resultEvents = events.filter((event) => event.type === 'EV' && event.event === 'RESULT');
+    expect(resultEvents).toHaveLength(1);
+    expect(resultEvents[0]?.payload).toMatchObject({
+      reason: 'TARGET_REACHED',
+      score: 10,
+      target: 10,
+    });
+
+    room.dispose();
+  });
+
+  it('ゴールボーナスで規定到達するとRESULTイベントが送出される', async () => {
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        phaseStartedAt: number;
+        targetScore: number;
+        targetScoreLocked: boolean;
+        goalCell?: { x: number; y: number };
+        player: {
+          goalBonusAwarded: boolean;
+          score: number;
+          physics: {
+            position: { x: number; y: number };
+            velocity: { x: number; y: number };
+            angle: number;
+          };
+        };
+      };
+      broadcast: (message: unknown) => void;
+    };
+
+    const captured: unknown[] = [];
+    internal.broadcast = (message: unknown) => {
+      captured.push(message);
+    };
+
+    internal.roomState.phase = 'explore';
+    internal.roomState.phaseStartedAt = NOW;
+    internal.roomState.targetScoreLocked = true;
+    internal.roomState.targetScore = 10;
+    internal.roomState.goalCell = { x: 1, y: 1 };
+    internal.roomState.player.score = 8;
+    internal.roomState.player.goalBonusAwarded = false;
+    internal.roomState.player.physics.position = { x: 1.5, y: 1.5 };
+    internal.roomState.player.physics.velocity = { x: 0, y: 0 };
+    internal.roomState.player.physics.angle = 0;
+
+    vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);
+
+    expect(internal.roomState.player.goalBonusAwarded).toBe(true);
+    expect(internal.roomState.player.score).toBe(10);
     expect(internal.roomState.phase).toBe('result');
 
     type CapturedEvent = {

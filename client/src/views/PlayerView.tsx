@@ -97,6 +97,7 @@ export interface PlayerViewProps {
   timeRemaining: number;
   pauseReason?: PauseReason;
   pauseSecondsRemaining?: number;
+  compensationBonus?: number;
 }
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
@@ -114,10 +115,16 @@ export function PlayerView({
   timeRemaining,
   pauseReason,
   pauseSecondsRemaining,
+  compensationBonus,
 }: PlayerViewProps) {
   const clips = useMemo(() => PREVIEW_CLIPS, []);
   const [clipIndex, setClipIndex] = useState(0);
   const [secondsUntilNextClip, setSecondsUntilNextClip] = useState(PREVIEW_INTERVAL_MS / 1000);
+  const initialCompensation = Number.isFinite(compensationBonus)
+    ? Math.max(0, Math.floor(compensationBonus ?? 0))
+    : 0;
+  const safeTargetPoints = Math.max(0, targetPoints);
+  const reachedTarget = phase === 'result' && points >= safeTargetPoints;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const playerPosition = useSessionStore((state) =>
@@ -296,11 +303,35 @@ export function PlayerView({
         ) : null}
       </div>
       <HUD timeRemaining={timeRemaining} score={points} targetScore={targetPoints}>
+        {phase === 'explore' && initialCompensation > 0 ? (
+          <p aria-live="polite">初期ポイント補填 +{initialCompensation}</p>
+        ) : null}
         <p>予測地点ヒット: {predictionHits}</p>
         {pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined ? (
           <p aria-live="polite">通信再開待ち: 残り {pauseSecondsRemaining} 秒</p>
         ) : null}
       </HUD>
+      {reachedTarget ? (
+        <div
+          role="status"
+          aria-live="assertive"
+          style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            borderRadius: '0.75rem',
+            background: 'rgba(21, 94, 117, 0.2)',
+            color: '#f8fafc',
+            border: '1px solid rgba(59, 130, 246, 0.35)',
+            boxShadow: '0 16px 32px rgba(15, 23, 42, 0.6)',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>規定ポイント達成！</p>
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.95rem' }}>最終スコア: {points}</p>
+          <p style={{ margin: '0.25rem 0 0', fontSize: '0.95rem' }}>
+            規定ポイント: {safeTargetPoints}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -261,8 +261,10 @@
   - DoD: `server/tests/owner-resources.test.ts` で初期化値を検証し、`server/tests/owner-path-block.test.ts` で経路維持と禁止距離の拒否判定を保証。`client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx` でHUD表示を確認。
 - [x] 罠：40%速度、limit/5、同時2  
   - DoD: `server/tests/trap-effects.test.ts` で速度低下と同時設置数上限を検証し、`server/tests/trap-apply.test.ts` で持続時間の延長を検証
-- [ ] ポイント：下限不足→初期ポイント補填（上限=規定−1）  
-- [ ] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**  
+- [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）  
+  - DoD: `server/tests/points-scoring.test.ts` / `client/tests/PlayerViewCompensationNotice.test.tsx`
+- [x] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**  
+  - DoD: `server/tests/points-scoring.test.ts` でゴールボーナス到達時のRESULTを検証し、`client/tests/PlayerViewTargetCompletion.test.tsx` で達成通知表示を確認。
 - [ ] 切断→即ポーズ→60秒勝敗  
 - [ ] 30fps/20Hz/遅延100ms以下
 - [x] 切断→即ポーズ→60秒勝敗  
