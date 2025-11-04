@@ -177,6 +177,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 7.4 罠
 
 * 通路中心のみ。踏むと**速度40%**、**残り制限時間の1/5**持続（連続踏みで延長）。同時2個まで。
+* 検証: `server/tests/trap-effects.test.ts`（速度低下・同時設置数）、`server/tests/trap-apply.test.ts`（持続時間延長）
 
 ### 7.5 壁資源と編集
 

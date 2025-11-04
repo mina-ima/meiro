@@ -259,7 +259,8 @@
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で境界4マス目の減光を検証
 - [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持  
   - DoD: `server/tests/owner-resources.test.ts` で初期化値を検証し、`server/tests/owner-path-block.test.ts` で経路維持と禁止距離の拒否判定を保証。`client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx` でHUD表示を確認。
-- [ ] 罠：40%速度、limit/5、同時2  
+- [x] 罠：40%速度、limit/5、同時2  
+  - DoD: `server/tests/trap-effects.test.ts` で速度低下と同時設置数上限を検証し、`server/tests/trap-apply.test.ts` で持続時間の延長を検証
 - [ ] ポイント：下限不足→初期ポイント補填（上限=規定−1）  
 - [ ] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**  
 - [ ] 切断→即ポーズ→60秒勝敗  
