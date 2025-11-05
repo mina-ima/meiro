@@ -37,7 +37,7 @@ Vercel と Cloudflare を組み合わせた併用構成を再現できる手順�
 ### Vercel プロジェクトの構成
 
 1. Vercel の新規プロジェクトでこのリポジトリをインポートし、ルートディレクトリを `client` に設定します。
-2. Build Command を `pnpm --filter @meiro/client build`、Output Directory を `dist` に設定します。必要に応じて Install Command は `pnpm install --frozen-lockfile` を指定します。
+2. Build Command を `pnpm --filter @meiro/client build`、Output Directory を `client/dist` に設定します。必要に応じて Install Command は `pnpm install --frozen-lockfile` を指定します。初回ビルドで生成された `client/dist/index.html` などのアセットは `docs/deployment-log.md` に記録しておくと、構成の再現性を保てます。
 3. Vercel の環境変数に `VITE_WS_URL` を Production/Preview 両方で設定し、Cloudflare Workers の本番 WebSocket URL を常に参照できるようにします。Preview は `wss://preview...` など、環境ごとのエンドポイントに合わせて値を変えてください。
 
 ### 動作確認

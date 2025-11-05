@@ -18,6 +18,20 @@ describe('Deployment documentation', () => {
     ).toBeInTheDocument();
   });
 
+  it('documents Vercel build configuration and initial build output', () => {
+    const { getByText } = render(<pre>{readmeContent}</pre>);
+
+    expect(
+      getByText(/Output Directory を `client\/dist` に設定/, { exact: false }),
+    ).toBeInTheDocument();
+
+    const { getAllByText: getLogAllByText } = render(<pre>{deploymentLogContent}</pre>);
+
+    expect(
+      getLogAllByText(/client\/dist\/index\.html/, { exact: false }).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('records the production WebSocket endpoint and connection log', () => {
     render(<pre>{deploymentLogContent}</pre>);
 
