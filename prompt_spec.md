@@ -198,7 +198,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ### 7.7 切断
 
-* いずれか切断→**即ポーズ**。**60秒**復帰なければ**不在側の敗北**（双方不在はノーゲーム）。
+* いずれか切断→**即ポーズ**。**60秒**復帰なければ**不在側の敗北**（双方不在はノーゲーム）。（`server/tests/disconnect-timeout.test.ts` / `server/tests/heartbeat-timeout.test.ts` でポーズ維持とハートビート由来の自動切断を検証）
 
 ---
 

@@ -176,7 +176,16 @@ describe('切断時のポーズ', () => {
     internal.roomState.phase = 'explore';
     playerSocket.dispatchClose();
 
-    vi.advanceTimersByTime(DISCONNECT_TIMEOUT_MS + SERVER_TICK_INTERVAL_MS);
+    let elapsed = 0;
+    while (elapsed < DISCONNECT_TIMEOUT_MS) {
+      const step = Math.min(5_000, DISCONNECT_TIMEOUT_MS - elapsed);
+      vi.advanceTimersByTime(step);
+      elapsed += step;
+      if (elapsed < DISCONNECT_TIMEOUT_MS) {
+        ownerSocket.dispatchMessage(JSON.stringify({ type: 'PING', ts: Date.now() }));
+      }
+    }
+    vi.advanceTimersByTime(SERVER_TICK_INTERVAL_MS);
 
     expect(internal.roomState.paused).toBe(false);
     expect(internal.roomState.pauseReason).toBeUndefined();

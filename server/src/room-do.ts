@@ -1137,6 +1137,16 @@ export class RoomDurableObject {
       }
 
       this.heartbeatTimeoutSockets.add(socket);
+      this.socketSessions.delete(socket);
+      this.clients.delete(socket);
+      const connection = this.connections.get(socket);
+      if (connection) {
+        connection.dispose();
+      }
+      this.connections.delete(socket);
+      removeSession(this.roomState, session.id, now);
+      this.handleSessionDisconnected(session, now);
+      this.metrics.logSessionLeave(session.role);
       try {
         socket.close(4001, 'HEARTBEAT_TIMEOUT');
       } catch (error) {
