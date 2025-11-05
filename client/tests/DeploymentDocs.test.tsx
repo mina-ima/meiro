@@ -68,4 +68,14 @@ describe('Deployment documentation', () => {
       }),
     ).toBeInTheDocument();
   });
+
+  it('recommends linking a new Vercel project with GitHub for automated deploys', () => {
+    render(<pre>{readmeContent}</pre>);
+
+    expect(
+      screen.getByText(/GitHub.*連携.*Vercel.*新規プロジェクト.*自動デプロイ/, {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+  });
 });
