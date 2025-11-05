@@ -258,6 +258,206 @@ describe('オーナー編集の経路維持検証', () => {
     room.dispose();
   });
 
+  it('到達路外の壁追加はキャッシュでBFSを省略する', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    infoSpy.mockImplementation((...args: unknown[]) => {
+      if (args.length >= 2 && args[0] === '[metrics]' && typeof args[1] === 'object') {
+        events.push(args[1] as Record<string, unknown>);
+      }
+    });
+
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        mazeSize: number;
+        goalCell?: { x: number; y: number };
+        solidCells: Set<string>;
+        owner: { wallStock: number; editCooldownUntil: number };
+        player: { physics: { position: { x: number; y: number } } };
+      };
+    };
+
+    const corridor = [
+      '0,0',
+      '1,0',
+      '2,0',
+      '3,0',
+      '4,0',
+      '5,0',
+      '4,4',
+      '4,5',
+      '5,4',
+      '5,5',
+    ];
+    const walkable = new Set(corridor);
+    const solids = new Set<string>();
+    for (let y = 0; y < 6; y += 1) {
+      for (let x = 0; x < 6; x += 1) {
+        const key = `${x},${y}`;
+        if (walkable.has(key)) {
+          continue;
+        }
+        solids.add(key);
+      }
+    }
+
+    internal.roomState.phase = 'prep';
+    internal.roomState.mazeSize = 6;
+    internal.roomState.goalCell = { x: 5, y: 0 };
+    internal.roomState.solidCells = solids;
+    internal.roomState.owner.wallStock = 10;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    internal.roomState.player.physics.position = { x: 0.5, y: 0.5 };
+
+    ownerSocket.sent.length = 0;
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 5, y: 5 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    const firstPathMetric = events
+      .filter((event) => event.type === 'owner.path_check')
+      .at(-1);
+    expect(firstPathMetric).toMatchObject({ checked: true, blocked: false });
+    expect(internal.roomState.solidCells.has('5,5')).toBe(true);
+
+    events.length = 0;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+
+    ownerSocket.sent.length = 0;
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 4, y: 5 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    const secondMetric = events.find((event) => event.type === 'owner.path_check');
+    expect(secondMetric).toMatchObject({ checked: false, blocked: false, durationMs: 0 });
+    const error = ownerSocket.sent
+      .map((raw) => JSON.parse(raw))
+      .find((message) => message.type === 'ERR');
+    expect(error).toBeUndefined();
+    expect(internal.roomState.solidCells.has('4,5')).toBe(true);
+
+    room.dispose();
+  });
+
+  it('到達路を塞ぐ同一セルの連打はキャッシュでBFSを省略して拒否する', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    infoSpy.mockImplementation((...args: unknown[]) => {
+      if (args.length >= 2 && args[0] === '[metrics]' && typeof args[1] === 'object') {
+        events.push(args[1] as Record<string, unknown>);
+      }
+    });
+
+    const room = new RoomDurableObject(
+      new FakeDurableObjectState() as unknown as DurableObjectState,
+    );
+
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
+    await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+
+    const internal = room as unknown as {
+      roomState: {
+        phase: string;
+        mazeSize: number;
+        goalCell?: { x: number; y: number };
+        solidCells: Set<string>;
+        owner: { wallStock: number; editCooldownUntil: number };
+        player: { physics: { position: { x: number; y: number } } };
+      };
+    };
+
+    const openCorridor = new Set(['0,0', '1,0', '2,0', '3,0', '4,0', '5,0']);
+    const solids = new Set<string>();
+    for (let y = 0; y < 6; y += 1) {
+      for (let x = 0; x < 6; x += 1) {
+        const key = `${x},${y}`;
+        if (openCorridor.has(key)) {
+          continue;
+        }
+        solids.add(key);
+      }
+    }
+
+    internal.roomState.phase = 'prep';
+    internal.roomState.mazeSize = 6;
+    internal.roomState.goalCell = { x: 5, y: 0 };
+    internal.roomState.solidCells = solids;
+    internal.roomState.owner.wallStock = 10;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+    internal.roomState.player.physics.position = { x: 0.5, y: 0.5 };
+
+    ownerSocket.sent.length = 0;
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 3, y: 0 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    let error = ownerSocket.sent
+      .map((raw) => JSON.parse(raw))
+      .find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'NO_PATH' });
+    const firstMetric = events
+      .filter((event) => event.type === 'owner.path_check')
+      .at(-1);
+    expect(firstMetric).toMatchObject({ checked: true, blocked: true });
+
+    events.length = 0;
+    internal.roomState.owner.editCooldownUntil = Date.now();
+
+    ownerSocket.sent.length = 0;
+    ownerSocket.dispatchMessage(
+      JSON.stringify({
+        type: 'O_EDIT',
+        edit: {
+          action: 'ADD_WALL',
+          cell: { x: 3, y: 0 },
+          direction: 'north',
+        },
+      }),
+    );
+
+    error = ownerSocket.sent
+      .map((raw) => JSON.parse(raw))
+      .find((message) => message.type === 'ERR');
+    expect(error).toMatchObject({ code: 'NO_PATH' });
+    const secondMetric = events.find((event) => event.type === 'owner.path_check');
+    expect(secondMetric).toMatchObject({ checked: false, blocked: true, durationMs: 0 });
+
+    room.dispose();
+  });
+
   it('経路維持BFSの計測結果がメトリクスに記録される', async () => {
     const events: Array<Record<string, unknown>> = [];
     infoSpy.mockImplementation((...args: unknown[]) => {

@@ -394,7 +394,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ## 19. リスク/落とし穴
 
-* **経路BFSの頻発**：編集連打時の負荷。→ CD1.0s＋**近傍差分BFS**で局所チェック最適化。
+* **経路BFSの頻発**：編集連打時の負荷。→ CD1.0s＋**近傍差分BFS**（`RoomDurableObject` が経路キャッシュ/ブロックキャッシュを保持し、`server/tests/owner-path-block.test.ts` で `owner.path_check.checked=false` を確認）で局所チェック最適化。
 * **視界レイキャストの負荷**：FOV90°×レイ数。→ 最大90本/距離4マスで打ち切り（`client/tests/Raycaster.test.ts`）。
 * **切断処理**：ブラウザ閉じ/スリープ多発。→ ハートビート＋**サーバ側60秒タイマー**（`server/tests/disconnect-timeout.test.ts` / `server/tests/heartbeat-timeout.test.ts`）。
 

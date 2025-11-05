@@ -38,6 +38,7 @@ describe('DebugHUD 仕様表示', () => {
         exploreDurationMs: 300_000,
         phaseEndsAt: 300_000,
         targetScore: 100,
+        pointCompensationAward: 0,
         paused: false,
         sessions: [],
         player: {

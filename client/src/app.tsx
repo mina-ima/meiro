@@ -38,6 +38,7 @@ export function App() {
   const roomId = useSessionStore((state) => state.roomId);
   const score = useSessionStore((state) => state.score);
   const targetScore = useSessionStore((state) => state.targetScore);
+  const pointCompensationAward = useSessionStore((state) => state.pointCompensationAward);
   const ownerState = useSessionStore((state) => state.owner);
   const playerState = useSessionStore((state) => state.player);
   const phase = useSessionStore((state) => state.phase);
@@ -190,6 +191,7 @@ export function App() {
       timeRemaining={timeRemaining}
       pauseReason={pauseInfo?.reason}
       pauseSecondsRemaining={pauseInfo?.secondsRemaining}
+      compensationBonus={pointCompensationAward}
     />
   );
 

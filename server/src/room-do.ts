@@ -41,6 +41,17 @@ type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
 
+interface PathCheckCacheSeed {
+  mazeSize: number;
+  startKey: string;
+  goalKey: string;
+  visited: Set<string>;
+}
+
+interface PathCheckCache extends PathCheckCacheSeed {
+  revision: number;
+}
+
 const PREDICTION_WALL_RATE = 0.7;
 const PREDICTION_BONUS_BATCH_SIZE = 10;
 const PREDICTION_BONUS_WALLS = Math.round(PREDICTION_BONUS_BATCH_SIZE * PREDICTION_WALL_RATE);
@@ -78,6 +89,9 @@ export class RoomDurableObject {
   private readonly stateComposer = new StateComposer();
   private readonly metrics: RoomMetrics;
   private roomState: RoomState;
+  private solidRevision = 0;
+  private pathCheckCache: PathCheckCache | null = null;
+  private readonly pathBlockCache = new Map<string, number>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private lastTickAt: number;
   private readonly heartbeatTimeoutSockets = new Set<WebSocket>();
@@ -102,6 +116,8 @@ export class RoomDurableObject {
       if (!resetForRematch(this.roomState, now)) {
         return Response.json({ error: 'REMATCH_UNAVAILABLE' }, { status: 409 });
       }
+
+      this.resetPathCachesAfterMazeChange();
 
       for (const [socket, session] of this.socketSessions.entries()) {
         const updated = this.roomState.sessions.get(session.id);
@@ -320,6 +336,7 @@ export class RoomDurableObject {
     this.connections.clear();
     this.socketSessions.clear();
     resetLobby(this.roomState, now);
+    this.resetPathCachesAfterMazeChange();
   }
 
   private createSessionId(): string {
@@ -513,12 +530,13 @@ export class RoomDurableObject {
           this.sendError(socket, 'DENY_EDIT', 'Wall already exists at the specified cell.');
           return false;
         }
-        if (this.wouldBlockPlayerPath(targetCell)) {
+        const placement = this.checkWallPlacement(targetCell);
+        if (placement.blocked) {
           this.metrics.logOwnerEditRejected('NO_PATH');
           this.sendError(socket, 'NO_PATH', 'Edit would block the player from reaching the goal.');
           return false;
         }
-        this.roomState.solidCells.add(key);
+        this.applyWallAddition(key, placement.cacheSeed ?? null);
         owner.wallStock -= 1;
         owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
         return true;
@@ -548,7 +566,7 @@ export class RoomDurableObject {
           return false;
         }
 
-        this.roomState.solidCells.delete(key);
+        this.applyWallRemoval(key);
         owner.wallRemoveLeft = 0;
         owner.wallStock += 1;
         owner.editCooldownUntil = now + OWNER_EDIT_COOLDOWN_MS;
@@ -669,18 +687,20 @@ export class RoomDurableObject {
     }
   }
 
-  private wouldBlockPlayerPath(cell: { x: number; y: number }): boolean {
-    const startedAt = Date.now();
+  private checkWallPlacement(cell: { x: number; y: number }): {
+    blocked: boolean;
+    cacheSeed?: PathCheckCacheSeed;
+  } {
     const goal = this.roomState.goalCell;
     if (!goal) {
       this.metrics.logOwnerPathCheck(0, false, false);
-      return false;
+      return { blocked: false };
     }
 
     const mazeSize = this.roomState.mazeSize;
     if (!isWithinMazeBounds(cell.x, cell.y, mazeSize)) {
       this.metrics.logOwnerPathCheck(0, false, false);
-      return false;
+      return { blocked: false };
     }
 
     const start = {
@@ -690,17 +710,115 @@ export class RoomDurableObject {
 
     if (!isWithinMazeBounds(start.x, start.y, mazeSize)) {
       this.metrics.logOwnerPathCheck(0, false, false);
-      return false;
+      return { blocked: false };
+    }
+
+    const startKey = solidKey(start.x, start.y);
+    const goalKey = solidKey(goal.x, goal.y);
+    const cellKey = solidKey(cell.x, cell.y);
+
+    const blockKey = this.makeBlockCacheKey(mazeSize, startKey, goalKey, cellKey);
+    const cachedBlockRevision = this.pathBlockCache.get(blockKey);
+    if (cachedBlockRevision === this.solidRevision) {
+      this.metrics.logOwnerPathCheck(0, true, false);
+      return { blocked: true };
+    }
+
+    const cache = this.getPathCheckCache(mazeSize, startKey, goalKey);
+    if (cache && !cache.visited.has(cellKey)) {
+      this.metrics.logOwnerPathCheck(0, false, false);
+      return {
+        blocked: false,
+        cacheSeed: {
+          mazeSize,
+          startKey,
+          goalKey,
+          visited: cache.visited,
+        },
+      };
     }
 
     const blockedCells = new Set(this.roomState.solidCells);
-    blockedCells.add(solidKey(cell.x, cell.y));
+    blockedCells.add(cellKey);
 
-    const pathAvailable = hasAccessiblePath(mazeSize, blockedCells, start, goal);
+    const startedAt = Date.now();
+    const result = evaluateAccessiblePath(mazeSize, blockedCells, start, goal);
     const durationMs = Math.max(0, Date.now() - startedAt);
-    this.metrics.logOwnerPathCheck(durationMs, !pathAvailable, true);
+    this.metrics.logOwnerPathCheck(durationMs, !result.reachable, true);
 
-    return !pathAvailable;
+    if (!result.reachable) {
+      this.pathBlockCache.set(blockKey, this.solidRevision);
+      return { blocked: true };
+    }
+
+    return {
+      blocked: false,
+      cacheSeed: {
+        mazeSize,
+        startKey,
+        goalKey,
+        visited: result.visited,
+      },
+    };
+  }
+
+  private getPathCheckCache(
+    mazeSize: number,
+    startKey: string,
+    goalKey: string,
+  ): PathCheckCache | null {
+    const cache = this.pathCheckCache;
+    if (!cache) {
+      return null;
+    }
+    if (cache.revision !== this.solidRevision) {
+      return null;
+    }
+    if (cache.mazeSize !== mazeSize) {
+      return null;
+    }
+    if (cache.startKey !== startKey || cache.goalKey !== goalKey) {
+      return null;
+    }
+    return cache;
+  }
+
+  private makeBlockCacheKey(
+    mazeSize: number,
+    startKey: string,
+    goalKey: string,
+    cellKey: string,
+  ): string {
+    return `${mazeSize}|${startKey}|${goalKey}|${cellKey}`;
+  }
+
+  private applyWallAddition(key: string, cacheSeed: PathCheckCacheSeed | null): void {
+    this.roomState.solidCells.add(key);
+    this.incrementSolidRevision();
+    if (cacheSeed) {
+      this.pathCheckCache = {
+        ...cacheSeed,
+        revision: this.solidRevision,
+      };
+    } else {
+      this.pathCheckCache = null;
+    }
+  }
+
+  private applyWallRemoval(key: string): void {
+    this.roomState.solidCells.delete(key);
+    this.incrementSolidRevision();
+    this.pathCheckCache = null;
+  }
+
+  private resetPathCachesAfterMazeChange(): void {
+    this.incrementSolidRevision();
+    this.pathCheckCache = null;
+  }
+
+  private incrementSolidRevision(): void {
+    this.solidRevision += 1;
+    this.pathBlockCache.clear();
   }
 
   private handleOwnerMark(message: OwnerMarkMessage, socket: WebSocket, now: number): boolean {
@@ -1042,14 +1160,17 @@ export class RoomDurableObject {
     if (!this.roomState.pointShortageCompensated) {
       const minimum = POINT_TOTAL_MINIMUMS[this.roomState.mazeSize];
       const shortage = Math.max(0, minimum - this.roomState.pointTotalValue);
+      let awarded = 0;
       if (shortage > 0) {
         const required = this.roomState.targetScore;
         const bonusCapacity = Math.max(0, required - 1 - this.roomState.player.score);
         const bonus = Math.min(shortage, bonusCapacity);
         if (bonus > 0) {
           this.roomState.player.score += bonus;
+          awarded = bonus;
         }
       }
+      this.roomState.pointCompensationAward = awarded;
       this.roomState.pointShortageCompensated = true;
     }
 
@@ -1478,26 +1599,29 @@ function isWithinMazeBounds(x: number, y: number, mazeSize: number): boolean {
   return x >= 0 && y >= 0 && x < mazeSize && y < mazeSize;
 }
 
-function hasAccessiblePath(
+interface PathAvailabilityResult {
+  reachable: boolean;
+  visited: Set<string>;
+}
+
+function evaluateAccessiblePath(
   mazeSize: number,
   solidCells: Set<string>,
   start: { x: number; y: number },
   goal: { x: number; y: number },
-): boolean {
+): PathAvailabilityResult {
   if (!isWithinMazeBounds(goal.x, goal.y, mazeSize)) {
-    return false;
+    return { reachable: false, visited: new Set() };
   }
   if (!isWithinMazeBounds(start.x, start.y, mazeSize)) {
-    return false;
+    return { reachable: false, visited: new Set() };
   }
 
   const startKey = solidKey(start.x, start.y);
-  if (solidCells.has(startKey)) {
-    return false;
-  }
   const goalKey = solidKey(goal.x, goal.y);
-  if (solidCells.has(goalKey)) {
-    return false;
+
+  if (solidCells.has(startKey) || solidCells.has(goalKey)) {
+    return { reachable: false, visited: new Set() };
   }
 
   const visited = new Set<string>([startKey]);
@@ -1515,7 +1639,7 @@ function hasAccessiblePath(
       break;
     }
     if (current.x === goal.x && current.y === goal.y) {
-      return true;
+      return { reachable: true, visited };
     }
 
     for (const { dx, dy } of neighbors) {
@@ -1533,7 +1657,7 @@ function hasAccessiblePath(
     }
   }
 
-  return false;
+  return { reachable: false, visited };
 }
 
 function isTrapPlacementCellValid(

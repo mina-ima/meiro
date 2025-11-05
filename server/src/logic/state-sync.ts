@@ -45,6 +45,7 @@ interface Snapshot {
   exploreDurationMs: number;
   sessions: SnapshotSession[];
   targetScore: number;
+  pointCompensationAward: number;
   paused: boolean;
   pauseReason?: RoomState['pauseReason'] | null;
   pauseExpiresAt?: number | null;
@@ -128,6 +129,7 @@ function createSnapshot(room: RoomState): Snapshot {
     prepDurationMs: room.prepDurationMs,
     exploreDurationMs: room.exploreDurationMs,
     targetScore: room.targetScore,
+    pointCompensationAward: room.pointCompensationAward,
     paused: room.paused,
     pauseReason: room.pauseReason,
     pauseExpiresAt: room.pauseExpiresAt,
@@ -197,6 +199,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
 
   if (previous.targetScore !== next.targetScore) {
     changes.targetScore = next.targetScore;
+  }
+
+  if (previous.pointCompensationAward !== next.pointCompensationAward) {
+    changes.pointCompensationAward = next.pointCompensationAward;
   }
 
   if (previous.paused !== next.paused) {

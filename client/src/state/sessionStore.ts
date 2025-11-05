@@ -56,6 +56,7 @@ export interface ServerSnapshot {
   prepDurationMs: number;
   exploreDurationMs: number;
   targetScore: number;
+  pointCompensationAward: number;
   paused: boolean;
   pauseReason?: PauseReason;
   pauseExpiresAt?: number;
@@ -92,6 +93,7 @@ export interface NetworkSnapshot {
   prepDurationMs: number;
   exploreDurationMs: number;
   targetScore: number;
+  pointCompensationAward: number;
   paused: boolean;
   pauseReason?: PauseReason | null;
   pauseExpiresAt?: number | null;
@@ -170,6 +172,7 @@ export interface SessionState {
   mazeSize: 20 | 40;
   score: number;
   targetScore: number;
+  pointCompensationAward: number;
   owner: OwnerClientState;
   player: PlayerClientState;
   serverSnapshot: ServerSnapshot | null;
@@ -301,6 +304,7 @@ function normalizeSnapshot(snapshot: NetworkSnapshot): ServerSnapshot {
     prepDurationMs: snapshot.prepDurationMs,
     exploreDurationMs: snapshot.exploreDurationMs,
     targetScore: snapshot.targetScore,
+    pointCompensationAward: snapshot.pointCompensationAward,
     paused: snapshot.paused,
     pauseReason: normalizePauseReasonValue(snapshot.pauseReason),
     pauseExpiresAt: normalizeOptionalNumber(snapshot.pauseExpiresAt),
@@ -513,6 +517,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   mazeSize: 40,
   score: 0,
   targetScore: 0,
+  pointCompensationAward: 0,
   owner: createInitialOwnerClientState(),
   player: createInitialPlayerClientState(),
   serverSnapshot: null,
@@ -544,6 +549,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         pausePhase: nextSnapshot.pausePhase,
         score: nextSnapshot.player.score,
         targetScore: nextSnapshot.targetScore,
+        pointCompensationAward: nextSnapshot.pointCompensationAward,
         owner: {
           wallStock: nextSnapshot.owner.wallStock,
           wallRemoveLeft: nextSnapshot.owner.wallRemoveLeft,
@@ -577,6 +583,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       mazeSize: 40,
       score: 0,
       targetScore: 0,
+      pointCompensationAward: 0,
       owner: createInitialOwnerClientState(),
       player: createInitialPlayerClientState(),
       serverSnapshot: null,

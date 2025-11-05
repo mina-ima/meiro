@@ -82,6 +82,7 @@ export interface RoomState {
   targetScore: number;
   targetScoreLocked: boolean;
   pointShortageCompensated: boolean;
+  pointCompensationAward: number;
   goalCell?: { x: number; y: number };
   paused: boolean;
   pauseReason?: PauseReason;
@@ -149,6 +150,7 @@ export function createInitialRoomState(
     targetScore: 0,
     targetScoreLocked: false,
     pointShortageCompensated: false,
+    pointCompensationAward: 0,
     paused: false,
   };
 
@@ -219,6 +221,7 @@ export function resetOwnerState(state: RoomState, now: number): void {
   state.targetScore = 0;
   state.targetScoreLocked = false;
   state.pointShortageCompensated = false;
+  state.pointCompensationAward = 0;
   state.paused = false;
   state.pauseReason = undefined;
   state.pauseExpiresAt = undefined;

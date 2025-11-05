@@ -8,7 +8,7 @@ function defaultEmit(event: MetricsEvent): void {
   console.info('[metrics]', event);
 }
 
-const STATE_LATENCY_ALERT_THRESHOLD_MS = 200;
+const STATE_LATENCY_ALERT_THRESHOLD_MS = 100;
 
 export class RoomMetrics {
   constructor(

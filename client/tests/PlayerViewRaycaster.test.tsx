@@ -260,6 +260,7 @@ function initializeSessionState(overrides: SessionStateOverrides = {}) {
       prepDurationMs: 60_000,
       exploreDurationMs: 300_000,
       targetScore: 10,
+      pointCompensationAward: 0,
       paused: false,
       pauseReason: undefined,
       pauseExpiresAt: undefined,

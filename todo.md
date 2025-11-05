@@ -275,7 +275,8 @@
 ---
 
 ## 21. 既知のリスクと対応
-- [ ] 経路BFSの負荷 → 編集CD1.0s + 近傍差分BFS
+- [x] 経路BFSの負荷 → 編集CD1.0s + 近傍差分BFS
+  - DoD: `server/tests/owner-path-block.test.ts` でキャッシュヒット時に `owner.path_check.checked=false` となる成功/失敗ケースを検証
 - [x] レイキャスト負荷 → レイ数制限 / 距離4打ち切り  
   - DoD: `client/tests/Raycaster.test.ts` で最大90本・距離4マスへのクリップを検証
 - [x] 切断多発 → ハートビート + 60秒タイマー  
