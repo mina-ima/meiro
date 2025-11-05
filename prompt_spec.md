@@ -396,7 +396,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * **経路BFSの頻発**：編集連打時の負荷。→ CD1.0s＋**近傍差分BFS**で局所チェック最適化。
 * **視界レイキャストの負荷**：FOV90°×レイ数。→ 最大90本/距離4マスで打ち切り（`client/tests/Raycaster.test.ts`）。
-* **切断処理**：ブラウザ閉じ/スリープ多発。→ ハートビート＋**サーバ側60秒タイマー**。
+* **切断処理**：ブラウザ閉じ/スリープ多発。→ ハートビート＋**サーバ側60秒タイマー**（`server/tests/disconnect-timeout.test.ts` / `server/tests/heartbeat-timeout.test.ts`）。
 
 ---
 
@@ -429,7 +429,7 @@ wrangler dev --local
 * [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）
 * [x] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**（`server/tests/points-scoring.test.ts`）
 * [ ] 切断→即ポーズ→60秒勝敗
-* [ ] 30fps/20Hz/遅延100ms以下（20Hz積分・補間の初期実装済み、レイテンシ評価未）
+* [x] 30fps/20Hz/遅延100ms以下（`client/tests/FrameLoop.test.tsx` / `server/tests/outbound-rate-limit.test.ts` / `client/tests/NetClientLatency.test.ts` / `server/tests/metrics-alerts.test.ts`）
 
 ---
 

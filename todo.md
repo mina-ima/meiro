@@ -265,8 +265,10 @@
   - DoD: `server/tests/points-scoring.test.ts` / `client/tests/PlayerViewCompensationNotice.test.tsx`
 - [x] 規定=ceil(0.65×合計)、ゴール+規定1/5、**規定到達で終了**  
   - DoD: `server/tests/points-scoring.test.ts` でゴールボーナス到達時のRESULTを検証し、`client/tests/PlayerViewTargetCompletion.test.tsx` で達成通知表示を確認。
-- [ ] 切断→即ポーズ→60秒勝敗  
-- [ ] 30fps/20Hz/遅延100ms以下
+- [x] 切断→即ポーズ→60秒勝敗  
+  - DoD: `server/tests/disconnect-timeout.test.ts` / `server/tests/heartbeat-timeout.test.ts` でポーズ開始と60秒判定遷移を検証
+- [x] 30fps/20Hz/遅延100ms以下
+  - DoD: `client/tests/FrameLoop.test.tsx` で30fps上限を確認し、`server/tests/outbound-rate-limit.test.ts` で20Hz送信を検証。`client/tests/NetClientLatency.test.ts` / `server/tests/metrics-alerts.test.ts` で遅延アラート閾値100msを確認。
 - [x] 切断→即ポーズ→60秒勝敗  
   - DoD: `client/tests/GamePauseDisplay.test.tsx` でポーズオーバーレイと残り秒数表示を検証
 
