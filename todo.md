@@ -300,8 +300,8 @@
   - DoD: 稼働中の本番 URL を記録し、接続テストログを残す（`docs/deployment-log.md` に `wss://game.meiro.example.com/ws` と 101 Switching Protocols ログを追記）
 - [x] Vercel でクライアント用プロジェクトを作成し、ビルド設定を `pnpm --filter @meiro/client build` / `client/dist` に構成する  
   - DoD: 初回ビルドが成功し、アセットが `client/dist` に出力される（`docs/deployment-log.md` に `client/dist/index.html` 生成ログを記録）
-- [ ] Vercel の環境変数に `VITE_WS_URL` を追加し、Cloudflare の本番 WebSocket URL を設定する  
-  - DoD: Production/Preview の両環境で値が反映されている
+- [x] Vercel の環境変数に `VITE_WS_URL` を追加し、Cloudflare の本番 WebSocket URL を設定する  
+  - DoD: Production/Preview の両環境で値が反映されている（`docs/deployment-log.md` 2024-05-22 記録を参照）
 - [ ] デプロイ後に Vercel ホストのクライアントから実際にゲームへ接続して動作確認する  
   - DoD: ブラウザ上でルーム作成→接続→フェーズ進行まで確認し、問題があればログに記録
 - [x] 手順と確認項目を README などのドキュメントに追記する  

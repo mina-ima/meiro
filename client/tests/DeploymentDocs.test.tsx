@@ -42,4 +42,15 @@ describe('Deployment documentation', () => {
       screen.getByText(/101.*Switching Protocols/, { exact: false }),
     ).toBeInTheDocument();
   });
+
+  it('records Vercel environment variable setup for VITE_WS_URL', () => {
+    render(<pre>{deploymentLogContent}</pre>);
+
+    expect(
+      screen.getByText(/Vercel.*Production.*VITE_WS_URL.*設定/, { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Vercel.*Preview.*VITE_WS_URL.*設定/, { exact: false }),
+    ).toBeInTheDocument();
+  });
 });
