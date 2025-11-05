@@ -5,6 +5,7 @@ const TOAST_DURATION_MS = 3500;
 const ERROR_MESSAGES: Record<string, string> = {
   ROOM_FULL: 'ルームが満員です。別のルームIDを使用してください。',
   INVALID_NAME: 'ニックネームが不正です。使用可能な文字で入力してください。',
+  INVALID_ROOM: 'ルームコードが不正です。6文字の英数字で入力してください。',
   NETWORK_ERROR: 'ネットワークエラーが発生しました。接続を確認してください。',
 };
 

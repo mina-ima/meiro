@@ -162,6 +162,7 @@ export interface PlayerClientState {
 export interface SessionState {
   roomId: string | null;
   role: PlayerRole | null;
+  nick: string | null;
   phase: ServerSnapshot['phase'];
   phaseEndsAt?: number;
   paused: boolean;
@@ -177,7 +178,8 @@ export interface SessionState {
   player: PlayerClientState;
   serverSnapshot: ServerSnapshot | null;
   serverSeq: number;
-  setRoom: (roomId: string, role: PlayerRole) => void;
+  setRoom: (roomId: string, role: PlayerRole, nick?: string) => void;
+  setNick: (nick: string | null) => void;
   setScore: (score: number, targetScore: number) => void;
   applyServerState: (payload: ServerStatePayload) => void;
   reset: () => void;
@@ -507,6 +509,7 @@ function buildNextSnapshot(
 export const useSessionStore = create<SessionState>((set) => ({
   roomId: null,
   role: null,
+  nick: null,
   phase: 'lobby',
   phaseEndsAt: undefined,
   paused: false,
@@ -522,7 +525,13 @@ export const useSessionStore = create<SessionState>((set) => ({
   player: createInitialPlayerClientState(),
   serverSnapshot: null,
   serverSeq: 0,
-  setRoom: (roomId, role) => set({ roomId, role }),
+  setRoom: (roomId, role, nick) =>
+    set((state) => ({
+      roomId,
+      role,
+      nick: nick ?? state.nick,
+    })),
+  setNick: (nick) => set({ nick }),
   setScore: (score, targetScore) => set({ score, targetScore }),
   applyServerState: (payload) =>
     set((state) => {
@@ -573,6 +582,7 @@ export const useSessionStore = create<SessionState>((set) => ({
     set(() => ({
       roomId: null,
       role: null,
+      nick: null,
       phase: 'lobby',
       phaseEndsAt: undefined,
       paused: false,

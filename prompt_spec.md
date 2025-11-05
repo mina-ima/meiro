@@ -238,6 +238,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 代表コード（`ERR.code`）：
 
   * `INVALID_NAME`（文字種/長さNG）
+  * `INVALID_ROOM`（ルームコード不正：Base32風6桁〈O/I/0/1除外〉ではない）
   * `ROOM_NOT_FOUND` / `ROOM_FULL` / `ROOM_EXPIRED`
   * `DENY_EDIT`（禁止エリア/資源不足/重ね不可）
   * `TRAP_INVALID_CELL`（罠を通路中心に置いていない）
@@ -257,6 +258,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **検証順序**（重要）：Phase→対象範囲→資源→重なり→**経路BFS**→CD→確定→ブロードキャスト。
 * すべて**サーバで確定**、クライアントは楽観描画せず**権威更新を待つ**。
 * 初回STATEを受信するまでは `App` が「接続待機中」ビューのみを表示し、Owner/PlayerビューやHUDはレンダリングしない。
+* ロビー画面ではニックネーム入力（2〜10文字、英数・ハイフン・アンダースコア、入力時に大文字へ正規化）とルームコード入力（Base32風6桁でO/I/0/1を除外）を提供し、`POST /rooms`（HTTPエンドポイントは `VITE_HTTP_ORIGIN` または `VITE_WS_URL` 由来の https 化）で新規ルームIDを発行してオーナーとして接続する。既存ルーム参加は役割（owner/player）ラジオを選択し、ニックネーム・コードが有効な場合のみ `setRoom` を通じて WebSocket 接続を開始する。検証エラーは `INVALID_NAME` / `INVALID_ROOM`、通信失敗は `NETWORK_ERROR` トーストで通知する。
 
 ---
 

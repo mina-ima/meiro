@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, ChangeEvent, FormEvent } from 'react';
 import { NetClient } from './net/NetClient';
 import {
   useSessionStore,
@@ -12,6 +12,7 @@ import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
+const HTTP_ENDPOINT = resolveHttpEndpoint(import.meta.env.VITE_HTTP_ORIGIN, WS_ENDPOINT);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -36,6 +37,7 @@ function isNetworkStatePayload(value: unknown): value is NetworkStatePayload {
 export function App() {
   const role = useSessionStore((state) => state.role);
   const roomId = useSessionStore((state) => state.roomId);
+  const nick = useSessionStore((state) => state.nick);
   const score = useSessionStore((state) => state.score);
   const targetScore = useSessionStore((state) => state.targetScore);
   const pointCompensationAward = useSessionStore((state) => state.pointCompensationAward);
@@ -51,6 +53,9 @@ export function App() {
   const mazeSize = useSessionStore((state) => state.mazeSize);
   const serverSnapshot = useSessionStore((state) => state.serverSnapshot);
   const applyServerState = useSessionStore((state) => state.applyServerState);
+  const setRoom = useSessionStore((state) => state.setRoom);
+  const setNickState = useSessionStore((state) => state.setNick);
+  const resetSession = useSessionStore((state) => state.reset);
   const timeRemaining = useTimeRemaining(phaseEndsAt);
   const previousPhase = useRef(phase);
 
@@ -67,6 +72,16 @@ export function App() {
       previousPhase.current = phase;
     }
   }, [phase, phaseEndsAt]);
+
+  const beginSession = useCallback(
+    (room: string, nextRole: PlayerRole, nickname: string) => {
+      const normalizedNick = resolveConnectionNick(nickname);
+      resetSession();
+      setNickState(normalizedNick);
+      setRoom(room, nextRole, normalizedNick);
+    },
+    [resetSession, setNickState, setRoom],
+  );
 
   const handleServerMessage = useCallback(
     (data: unknown) => {
@@ -95,10 +110,12 @@ export function App() {
       return null;
     }
 
+    const nickname = resolveConnectionNick(nick);
+
     return new NetClient(
       {
         endpoint: WS_ENDPOINT,
-        nick: 'debugger',
+        nick: nickname,
         role,
         room: roomId,
       },
@@ -109,7 +126,7 @@ export function App() {
         },
       },
     );
-  }, [roomId, role, handleServerMessage]);
+  }, [roomId, role, handleServerMessage, nick]);
 
   useEffect(() => {
     if (!client) {
@@ -162,39 +179,46 @@ export function App() {
         }
       : null;
 
-  const mainView = !readyForGameplay ? (
-    <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} />
-  ) : role === 'owner' ? (
-    <OwnerView
-      client={client}
-      wallCount={ownerState.wallStock}
-      trapCharges={ownerState.trapCharges}
-      wallRemoveLeft={ownerState.wallRemoveLeft}
-      editCooldownMs={ownerCooldownMs}
-      forbiddenDistance={forbiddenDistance}
-      activePredictions={ownerState.activePredictionCount}
-      predictionLimit={ownerState.predictionLimit}
-      timeRemaining={timeRemaining}
-      predictionMarks={ownerState.predictionMarks}
-      traps={ownerState.traps}
-      playerPosition={playerState.position}
-      mazeSize={mazeSize}
-      pauseReason={pauseInfo?.reason}
-      pauseSecondsRemaining={pauseInfo?.secondsRemaining}
-    />
-  ) : (
-    <PlayerView
-      points={score}
-      targetPoints={targetScore}
-      predictionHits={playerState.predictionHits}
-      phase={phase}
-      timeRemaining={timeRemaining}
-      pauseReason={pauseInfo?.reason}
-      pauseSecondsRemaining={pauseInfo?.secondsRemaining}
-      compensationBonus={pointCompensationAward}
-    />
-  );
-
+  const mainView =
+    role == null ? (
+      <LobbyView
+        httpEndpoint={HTTP_ENDPOINT}
+        defaultNick={nick ?? ''}
+        onNicknamePersist={setNickState}
+        onBeginSession={beginSession}
+      />
+    ) : !readyForGameplay ? (
+      <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} />
+    ) : role === 'owner' ? (
+      <OwnerView
+        client={client}
+        wallCount={ownerState.wallStock}
+        trapCharges={ownerState.trapCharges}
+        wallRemoveLeft={ownerState.wallRemoveLeft}
+        editCooldownMs={ownerCooldownMs}
+        forbiddenDistance={forbiddenDistance}
+        activePredictions={ownerState.activePredictionCount}
+        predictionLimit={ownerState.predictionLimit}
+        timeRemaining={timeRemaining}
+        predictionMarks={ownerState.predictionMarks}
+        traps={ownerState.traps}
+        playerPosition={playerState.position}
+        mazeSize={mazeSize}
+        pauseReason={pauseInfo?.reason}
+        pauseSecondsRemaining={pauseInfo?.secondsRemaining}
+      />
+    ) : (
+      <PlayerView
+        points={score}
+        targetPoints={targetScore}
+        predictionHits={playerState.predictionHits}
+        phase={phase}
+        timeRemaining={timeRemaining}
+        pauseReason={pauseInfo?.reason}
+        pauseSecondsRemaining={pauseInfo?.secondsRemaining}
+        compensationBonus={pointCompensationAward}
+      />
+    );
   const pauseOverlay = pauseInfo ? (
     <div
       role="alert"
@@ -255,6 +279,64 @@ export function App() {
       <ToastHost />
     </>
   );
+}
+
+function sanitizeNicknameInput(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '')
+    .slice(0, 10);
+}
+
+function normalizeNickname(value: string): string {
+  return sanitizeNicknameInput(value);
+}
+
+function isValidNickname(nick: string): boolean {
+  return /^[A-Z0-9_-]{2,10}$/.test(nick);
+}
+
+function normalizeRoomCode(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-HJ-NP-Z2-9]/g, '')
+    .slice(0, 6);
+}
+
+function isValidRoomCode(code: string): boolean {
+  return /^[A-HJ-NP-Z2-9]{6}$/.test(code);
+}
+
+function resolveHttpEndpoint(envValue: unknown, wsEndpoint: string): string | null {
+  if (typeof envValue === 'string') {
+    const trimmed = envValue.trim();
+    if (trimmed.length > 0) {
+      return trimTrailingSlash(trimmed);
+    }
+  }
+  return deriveHttpOriginFromWs(wsEndpoint);
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function deriveHttpOriginFromWs(wsUrl: string): string | null {
+  try {
+    const url = new URL(wsUrl);
+    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+    url.pathname = '';
+    url.search = '';
+    url.hash = '';
+    return trimTrailingSlash(url.toString());
+  } catch {
+    return null;
+  }
+}
+
+function resolveConnectionNick(nick?: string | null): string {
+  const normalized = normalizeNickname(nick ?? '');
+  return isValidNickname(normalized) ? normalized : 'debugger';
 }
 
 function useTimeRemaining(targetMs?: number): number {
@@ -319,6 +401,246 @@ function shouldScheduleCountdown(targetMs?: number): boolean {
     return false;
   }
   return targetMs > Date.now();
+}
+
+interface LobbyViewProps {
+  httpEndpoint: string | null;
+  defaultNick: string;
+  onNicknamePersist: (nick: string | null) => void;
+  onBeginSession: (roomId: string, role: PlayerRole, nickname: string) => void;
+}
+
+function LobbyView({
+  httpEndpoint,
+  defaultNick,
+  onNicknamePersist,
+  onBeginSession,
+}: LobbyViewProps) {
+  const [nickInput, setNickInput] = useState(sanitizeNicknameInput(defaultNick));
+  const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [selectedRole, setSelectedRole] = useState<PlayerRole>('player');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    setNickInput(sanitizeNicknameInput(defaultNick));
+  }, [defaultNick]);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
+
+  const handleNicknameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizeNicknameInput(event.target.value);
+    setNickInput(sanitized);
+    onNicknamePersist(sanitized.length > 0 ? sanitized : null);
+  };
+
+  const handleRoomCodeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const sanitized = normalizeRoomCode(event.target.value);
+    setRoomCodeInput(sanitized);
+  };
+
+  const handleRoleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value === 'owner' ? 'owner' : 'player';
+    setSelectedRole(value);
+  };
+
+  const handleCreateRoom = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedNick = normalizeNickname(nickInput);
+    if (!isValidNickname(normalizedNick)) {
+      enqueueErrorToast('INVALID_NAME');
+      return;
+    }
+    if (!httpEndpoint) {
+      enqueueErrorToast('NETWORK_ERROR');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const response = await fetch(`${httpEndpoint}/rooms`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('create-room-failed');
+      }
+      const result = (await response.json()) as { roomId?: string };
+      const roomId = normalizeRoomCode(result.roomId ?? '');
+      if (!isValidRoomCode(roomId)) {
+        throw new Error('invalid-room-id');
+      }
+      enqueueInfoToast(`ルームID ${roomId} を作成しました。`);
+      onBeginSession(roomId, 'owner', normalizedNick);
+    } catch {
+      enqueueErrorToast('NETWORK_ERROR');
+    } finally {
+      if (isMountedRef.current) {
+        setIsCreating(false);
+      }
+    }
+  };
+
+  const handleJoinRoom = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedNick = normalizeNickname(nickInput);
+    const normalizedRoom = normalizeRoomCode(roomCodeInput);
+
+    if (!isValidNickname(normalizedNick)) {
+      enqueueErrorToast('INVALID_NAME');
+      return;
+    }
+    if (!isValidRoomCode(normalizedRoom)) {
+      enqueueErrorToast('INVALID_ROOM');
+      return;
+    }
+
+    setIsJoining(true);
+    onBeginSession(normalizedRoom, selectedRole, normalizedNick);
+    if (isMountedRef.current) {
+      setIsJoining(false);
+    }
+  };
+
+  return (
+    <section
+      aria-label="ロビー設定"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.5rem',
+        maxWidth: '360px',
+        margin: '0 auto',
+      }}
+    >
+      <header>
+        <h2 style={{ marginBottom: '0.5rem' }}>ルームへ参加</h2>
+        <p style={{ margin: 0, color: '#64748b' }}>
+          ニックネームを入力し、新しいルームを作成するか既存ルームのコードで参加してください。
+        </p>
+      </header>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <label htmlFor="nickname-input" style={{ fontWeight: 600 }}>
+          ニックネーム
+        </label>
+        <input
+          id="nickname-input"
+          type="text"
+          value={nickInput}
+          onChange={handleNicknameChange}
+          maxLength={10}
+          aria-describedby="nickname-hint"
+          style={{
+            padding: '0.5rem',
+            borderRadius: '0.375rem',
+            border: '1px solid #cbd5f5',
+          }}
+        />
+        <small id="nickname-hint" style={{ color: '#94a3b8' }}>
+          2〜10文字、英数字・ハイフン・アンダースコアのみ
+        </small>
+        <form onSubmit={handleCreateRoom}>
+          <button
+            type="submit"
+            disabled={isCreating}
+            style={{
+              marginTop: '0.75rem',
+              width: '100%',
+              padding: '0.5rem',
+              borderRadius: '0.375rem',
+              border: 'none',
+              backgroundColor: isCreating ? '#94a3b8' : '#2563eb',
+              color: '#f8fafc',
+              fontWeight: 600,
+              cursor: isCreating ? 'not-allowed' : 'pointer',
+            }}
+          >
+            新しいルームを作成
+          </button>
+        </form>
+      </div>
+
+      <form
+        onSubmit={handleJoinRoom}
+        style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+        aria-label="既存ルームへの参加"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <label htmlFor="room-code-input" style={{ fontWeight: 600 }}>
+            ルームコード
+          </label>
+          <input
+            id="room-code-input"
+            type="text"
+            value={roomCodeInput}
+            onChange={handleRoomCodeChange}
+            maxLength={6}
+            placeholder="例: ABC2D3"
+            style={{
+              padding: '0.5rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5f5',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+            }}
+          />
+        </div>
+
+        <fieldset
+          style={{
+            border: '1px solid #e2e8f0',
+            borderRadius: '0.375rem',
+            padding: '0.75rem',
+            display: 'flex',
+            gap: '1rem',
+          }}
+        >
+          <legend style={{ padding: '0 0.25rem', fontWeight: 600 }}>参加する役割</legend>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <input
+              type="radio"
+              name="lobby-role"
+              value="player"
+              checked={selectedRole === 'player'}
+              onChange={handleRoleChange}
+            />
+            プレイヤー
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <input
+              type="radio"
+              name="lobby-role"
+              value="owner"
+              checked={selectedRole === 'owner'}
+              onChange={handleRoleChange}
+            />
+            オーナー
+          </label>
+        </fieldset>
+
+        <button
+          type="submit"
+          disabled={isJoining}
+          style={{
+            width: '100%',
+            padding: '0.5rem',
+            borderRadius: '0.375rem',
+            border: 'none',
+            backgroundColor: isJoining ? '#94a3b8' : '#0f766e',
+            color: '#f8fafc',
+            fontWeight: 600,
+            cursor: isJoining ? 'not-allowed' : 'pointer',
+          }}
+        >
+          ルームに参加
+        </button>
+      </form>
+    </section>
+  );
 }
 
 interface WaitingViewProps {
