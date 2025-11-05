@@ -38,4 +38,31 @@ describe('OwnerView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'プレイヤーにセンタリング' }));
     expect(screen.getByTestId('player-marker')).toBeInTheDocument();
   });
+
+  it('迷路サイズに応じた壁リソース上限をHUDで表示する', () => {
+    render(
+      <OwnerView
+        client={null}
+        wallCount={12}
+        trapCharges={1}
+        wallRemoveLeft={1}
+        editCooldownMs={1_000}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={120}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+      />,
+    );
+
+    expect(screen.getByText('規定ポイント: 48')).toBeInTheDocument();
+    expect(screen.getByText('ゴールボーナス: 10')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: '達成率' })).toHaveAttribute(
+      'aria-valuenow',
+      '25',
+    );
+  });
 });

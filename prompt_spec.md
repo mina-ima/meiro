@@ -215,7 +215,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 8.2 オーナー
 
 * 俯瞰全体マップ、**ズーム/パン**（最小=全体, 最大=9マスを画面内）。v1実装では SVG ベースの簡易マップを `client/src/views/OwnerView.tsx` で提供。
-* HUD：時間、プレイヤー位置、**壁残数**、**壁削除残(0/1)**、**罠権利/同時設置数**、**クールダウン**, **禁止エリア**, **規定ポイント/現ポイント**。（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）
+* HUD：時間、プレイヤー位置、**壁残数**、**壁削除残(0/1)**、**罠権利/同時設置数**、**クールダウン**, **禁止エリア**, **規定ポイント/現ポイント**。迷路サイズごとに壁資源上限(20→48, 40→140)をHUDの進捗へ反映する。（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）
 * 編集は**確認ポップ→同じ場所を再クリックで確定**。**右クリック/Escでキャンセル**。**1.0秒CD**。
 
 ### 8.3 サウンド

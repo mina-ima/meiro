@@ -289,7 +289,7 @@
   - DoD: `.env.example` に必要なシークレットを列挙し、`README` に説明を追記。`packages/common/tests/production-env.test.ts` で検証。
 - [x] ログレベル/PII含有の有無を確認
   - DoD: `packages/common/tests/logging-safety.test.ts` で `console.log` 利用禁止とニックネームのログ混入を検証
-- [ ] 回帰テストパス（ユニット/結合/負荷/受入）
+- [x] 回帰テストパス（ユニット/結合/負荷/受入）
 - [x] ロールバック手順/過去リリースの保持  
   - DoD: `README` にロールバック手順と保持方針を明記し、`packages/common/tests/release-process.test.ts` で検証
 
