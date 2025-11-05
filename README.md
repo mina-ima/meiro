@@ -12,6 +12,19 @@ MEIRO v1 プロジェクトは `pnpm` を利用したモノレポ構成です。
 pnpm install
 ```
 
+## 環境変数
+
+本番環境およびプレビューデプロイでは、以下の環境変数/シークレットを事前に設定してください。
+
+- `VITE_WS_URL`：クライアントが接続する WebSocket エンドポイント。ローカルでは `ws://localhost:8787` を想定します。
+- `CF_ACCOUNT_ID`：Cloudflare アカウント ID。Workers/Pages 双方で共通です。
+- `CF_WORKERS_API_TOKEN`：Cloudflare Workers へのデプロイに利用する API トークン。GitHub Secrets で `CF_WORKERS_API_TOKEN` として登録します。
+- `CF_PAGES_API_TOKEN`：Cloudflare Pages のビルド・デプロイを許可する API トークン。GitHub Secrets で `CF_PAGES_API_TOKEN` として登録します。
+- `CF_PAGES_PROJECT`：Cloudflare Pages プロジェクト名。Preview デプロイで `projectName` として参照されます。
+- `SENTRY_DSN`：任意。指定時のみクライアントで `@sentry/browser` が初期化されます。
+
+ローカル開発では `.env.example` を複製して値を入力し、CI では上記トークンを GitHub Secrets として設定してください。
+
 ## よく使うコマンド
 
 - `pnpm --filter @meiro/client dev`：クライアントの開発サーバを起動
