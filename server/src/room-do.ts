@@ -190,7 +190,7 @@ export class RoomDurableObject {
       webSocket.accept();
       this.registerSocket(webSocket, joinResult.session);
       if (maybeStartCountdown(this.roomState, now)) {
-        console.log('room %s countdown started', this.roomId);
+        console.info('room %s countdown started', this.roomId);
         await this.schedulePhaseAlarm();
         this.publishState({ forceFull: true });
       }
@@ -357,7 +357,7 @@ export class RoomDurableObject {
       const duration = previousPhaseStartedAt ? now - previousPhaseStartedAt : 0;
       this.handlePhaseTransition(previousPhase, currentPhase, now, duration);
     }
-    console.log('room %s phase -> %s', this.roomId, this.roomState.phase);
+    console.info('room %s phase -> %s', this.roomId, this.roomState.phase);
     await this.schedulePhaseAlarm();
     this.publishState({ forceFull: true });
   }
