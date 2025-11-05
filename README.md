@@ -25,6 +25,27 @@ pnpm install
 
 ローカル開発では `.env.example` を複製して値を入力し、CI では上記トークンを GitHub Secrets として設定してください。
 
+## Vercel + Cloudflare 併用デプロイ手順
+
+Vercel と Cloudflare を組み合わせた併用構成を再現できる手順は以下の通りです。
+
+### Cloudflare Workers の本番公開
+
+1. `pnpm --filter @meiro/server deploy -- --env prod` で Cloudflare Workers を本番デプロイします。`wrangler.toml` の `env.prod` 設定を利用し、Durable Object のマイグレーションも自動で適用されます。
+2. デプロイ完了後に表示される `wss://` で始まる Cloudflare Workers の本番 WebSocket エンドポイント URL を確認し、チームのログ（例: `docs/deployment-log.md` など）に記録します。クライアントはこの URL に常時接続するため、履歴を残しておくことで切り戻し時にも参照できます。
+
+### Vercel プロジェクトの構成
+
+1. Vercel の新規プロジェクトでこのリポジトリをインポートし、ルートディレクトリを `client` に設定します。
+2. Build Command を `pnpm --filter @meiro/client build`、Output Directory を `dist` に設定します。必要に応じて Install Command は `pnpm install --frozen-lockfile` を指定します。
+3. Vercel の環境変数に `VITE_WS_URL` を Production/Preview 両方で設定し、Cloudflare Workers の本番 WebSocket URL を常に参照できるようにします。Preview は `wss://preview...` など、環境ごとのエンドポイントに合わせて値を変えてください。
+
+### 動作確認
+
+1. Vercel のデプロイ完了後、Preview または Production の URL にアクセスします。
+2. ブラウザからルーム作成 → コード共有 → 接続 → フェーズ遷移まで実施し、Cloudflare Workers への通信が成功することを確認します。
+3. 取得したブラウザコンソール/ネットワークログをスクリーンショットまたはログとして残し、Cloudflare Workers 側のログとも突き合わせておきます。
+
 ## よく使うコマンド
 
 - `pnpm --filter @meiro/client dev`：クライアントの開発サーバを起動

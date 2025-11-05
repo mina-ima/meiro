@@ -24,10 +24,11 @@
 ```
 [Browser: React+Phaser]  <--WS-->  [CF Workers Router]  --> [Durable Object: RoomInstance]
          |                                    |
-   CF Pages(静的)                       KV(短期メタ)/R2(将来)
+   CF Pages / Vercel(静的)             KV(短期メタ)/R2(将来)
 ```
 
 * **1ルーム=1 DO**。強整合でルーム状態を一元管理。
+* 静的ホスティングは Cloudflare Pages または Vercel を想定。どちらの場合も WebSocket は Cloudflare Workers を利用する。
 
 ### 3.2 クライアント構成（React + Phaser）
 
@@ -318,6 +319,18 @@ type PointItem = {x:number,y:number,value:1|3|5};
   schema/ (ws.ts, state.ts)
   utils/ (rng.ts, id.ts, time.ts)
 ```
+
+---
+
+## 15. デプロイ/運用
+
+* **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイし、`wss://<worker>.workers.dev` などの WebSocket エンドポイントを確定する。接続確認ログを残す。
+* **クライアント（Vercel 静的ホスト）**：
+  * Vercel プロジェクトを作成し、リポジトリの `client` ディレクトリをルートに設定。
+  * Build Command=`pnpm --filter @meiro/client build`、Output Directory=`client/dist`。
+  * 環境変数 `VITE_WS_URL` に Cloudflare Workers の本番 WebSocket URL を設定（Production/Preview 両方）。
+* **動作検証**：デプロイ完了後、Vercel 上のクライアントからルーム作成→接続→フェーズ遷移までを実機確認し、問題時はログ収集。
+* **ドキュメント**：README などの手順書に Vercel + Cloudflare 併用構成を記載し、再現手順が明文化されていること（`README.md` の「Vercel + Cloudflare 併用デプロイ手順」節で手順/確認項目を列挙）。
 
 * **依存**：React, Phaser, zod(スキーマ), colyseus/protobufなし(JSONでOK), vite, workers-types。
 * **シリアライズ**：JSON（要コンパクト化：短key/数値配列）。

@@ -295,5 +295,19 @@
 
 ---
 
+## 23. Vercel デプロイ対応
+- [ ] Cloudflare Workers の本番デプロイを行い、WebSocket エンドポイント `wss://...` を確定する  
+  - DoD: 稼働中の本番 URL を記録し、接続テストログを残す
+- [ ] Vercel でクライアント用プロジェクトを作成し、ビルド設定を `pnpm --filter @meiro/client build` / `client/dist` に構成する  
+  - DoD: 初回ビルドが成功し、アセットが `client/dist` に出力される
+- [ ] Vercel の環境変数に `VITE_WS_URL` を追加し、Cloudflare の本番 WebSocket URL を設定する  
+  - DoD: Production/Preview の両環境で値が反映されている
+- [ ] デプロイ後に Vercel ホストのクライアントから実際にゲームへ接続して動作確認する  
+  - DoD: ブラウザ上でルーム作成→接続→フェーズ進行まで確認し、問題があればログに記録
+- [x] 手順と確認項目を README などのドキュメントに追記する  
+  - DoD: Vercel + Cloudflare 併用構成を再現できる説明が残る（`README.md` セクション「Vercel + Cloudflare 併用デプロイ手順」に記載）
+
+---
+
 ### 実行順（推奨短縮版）
 1) DO雛形 + 20Hz STATE配信 → 2) 迷路 + BFS検証 → 3) 移動/視界 → 4) 編集/資源/禁止 → 5) ポイント/勝敗 → 6) 切断/再接続 → 7) UI/HUD/サウンド → 8) 計測/最適化 → 9) 総合テスト/リリース
