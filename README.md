@@ -32,7 +32,7 @@ Vercel と Cloudflare を組み合わせた併用構成を再現できる手順�
 ### Cloudflare Workers の本番公開
 
 1. `pnpm --filter @meiro/server deploy -- --env prod` で Cloudflare Workers を本番デプロイします。`wrangler.toml` の `env.prod` 設定を利用し、Durable Object のマイグレーションも自動で適用されます。
-2. デプロイ完了後に表示される `wss://` で始まる Cloudflare Workers の本番 WebSocket エンドポイント URL を確認し、チームのログ（例: `docs/deployment-log.md` など）に記録します。クライアントはこの URL に常時接続するため、履歴を残しておくことで切り戻し時にも参照できます。
+2. デプロイ完了後に表示される `wss://` で始まる Cloudflare Workers の本番 WebSocket エンドポイント URL を確認し、チームのログ（例: `docs/deployment-log.md`）に記録します。クライアントはこの URL に常時接続するため、履歴を残しておくことで切り戻し時にも参照できます。初回本番公開時のログは `docs/deployment-log.md` に記載済みです。
 
 ### Vercel プロジェクトの構成
 

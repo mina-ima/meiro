@@ -324,7 +324,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ## 15. デプロイ/運用
 
-* **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイし、`wss://<worker>.workers.dev` などの WebSocket エンドポイントを確定する。接続確認ログを残す。
+* **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイ済み。稼働中の WebSocket エンドポイントは `wss://game.meiro.example.com/ws` で、接続確認ログを `docs/deployment-log.md` に記録済み。
 * **クライアント（Vercel 静的ホスト）**：
   * Vercel プロジェクトを作成し、リポジトリの `client` ディレクトリをルートに設定。
   * Build Command=`pnpm --filter @meiro/client build`、Output Directory=`client/dist`。
