@@ -330,7 +330,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
   * Build Command=`pnpm --filter @meiro/client build`、Output Directory=`client/dist`。
   * 初回ビルドの出力（例: `client/dist/index.html`）と設定内容は `docs/deployment-log.md` に記録し、再現手順を残している。
   * 環境変数 `VITE_WS_URL` に Cloudflare Workers の本番 WebSocket URL を設定（Production/Preview 両方。設定内容は `docs/deployment-log.md` 2024-05-22 記録で追跡）。
-* **動作検証**：デプロイ完了後、Vercel 上のクライアントからルーム作成→接続→フェーズ遷移までを実機確認し、問題時はログ収集。
+* **動作検証**：デプロイ完了後、Vercel 上のクライアントからルーム作成→接続→フェーズ遷移までを実機確認し、問題時はログ収集（実施ログは `docs/deployment-log.md` 2024-05-23 記録）。
 * **ドキュメント**：README などの手順書に Vercel + Cloudflare 併用構成を記載し、再現手順が明文化されていること（`README.md` の「Vercel + Cloudflare 併用デプロイ手順」節で手順/確認項目を列挙）。
 
 * **依存**：React, Phaser, zod(スキーマ), colyseus/protobufなし(JSONでOK), vite, workers-types。

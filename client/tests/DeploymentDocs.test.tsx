@@ -53,4 +53,19 @@ describe('Deployment documentation', () => {
       screen.getByText(/Vercel.*Preview.*VITE_WS_URL.*設定/, { exact: false }),
     ).toBeInTheDocument();
   });
+
+  it('records end-to-end verification from the Vercel-hosted client', () => {
+    render(<pre>{deploymentLogContent}</pre>);
+
+    expect(
+      screen.getByText(/Vercel.*ホスト.*クライアント.*ルーム作成.*接続確認/, {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/準備フェーズ.*探索フェーズ.*終了判定まで進行/, {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+  });
 });

@@ -25,3 +25,8 @@
 - Vercel ダッシュボードで Production 用環境変数 `VITE_WS_URL` に `wss://game.meiro.example.com/ws` を設定。
 - Vercel ダッシュボードで Preview 用環境変数 `VITE_WS_URL` に `wss://preview.meiro.example.com/ws` を設定。
 - `vercel env ls` で Production/Preview 双方に `VITE_WS_URL` が表示されることを確認。
+
+## 2024-05-23 Vercel ホストクライアントでのエンドツーエンド確認
+
+- Vercel ホストのクライアントからルーム作成→接続確認→フェーズ進行までをブラウザで実施し、Cloudflare Workers との疎通を記録。
+- 準備フェーズ→探索フェーズ→終了判定まで進行し、プレイヤー/オーナー双方のUIとポイント加算が期待通りに動作することを確認。

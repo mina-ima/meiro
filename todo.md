@@ -302,8 +302,8 @@
   - DoD: 初回ビルドが成功し、アセットが `client/dist` に出力される（`docs/deployment-log.md` に `client/dist/index.html` 生成ログを記録）
 - [x] Vercel の環境変数に `VITE_WS_URL` を追加し、Cloudflare の本番 WebSocket URL を設定する  
   - DoD: Production/Preview の両環境で値が反映されている（`docs/deployment-log.md` 2024-05-22 記録を参照）
-- [ ] デプロイ後に Vercel ホストのクライアントから実際にゲームへ接続して動作確認する  
-  - DoD: ブラウザ上でルーム作成→接続→フェーズ進行まで確認し、問題があればログに記録
+- [x] デプロイ後に Vercel ホストのクライアントから実際にゲームへ接続して動作確認する  
+  - DoD: ブラウザ上でルーム作成→接続→フェーズ進行まで確認し、問題があればログに記録（`docs/deployment-log.md` 2024-05-23 記録を参照）
 - [x] 手順と確認項目を README などのドキュメントに追記する  
   - DoD: Vercel + Cloudflare 併用構成を再現できる説明が残る（`README.md` セクション「Vercel + Cloudflare 併用デプロイ手順」に記載）
 
