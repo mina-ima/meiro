@@ -11,8 +11,18 @@ import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
 
-const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
-const HTTP_ENDPOINT = resolveHttpEndpoint(import.meta.env.VITE_HTTP_ORIGIN, WS_ENDPOINT);
+const DEFAULT_WS_ENDPOINT = import.meta.env.PROD
+  ? 'wss://meiro-server.minamidenshi.workers.dev/ws'
+  : 'ws://localhost:8787';
+const DEFAULT_HTTP_ENDPOINT = import.meta.env.PROD
+  ? 'https://meiro-server.minamidenshi.workers.dev'
+  : null;
+
+const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? DEFAULT_WS_ENDPOINT;
+const HTTP_ENDPOINT = resolveHttpEndpoint(
+  import.meta.env.VITE_HTTP_ORIGIN ?? DEFAULT_HTTP_ENDPOINT,
+  WS_ENDPOINT,
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
