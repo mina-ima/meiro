@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { RoomIdGenerator, isValidRoomId } from '../src/logic/room-id';
+import {
+  RoomIdGenerator,
+  isValidRoomId,
+  getDefaultRoomIdGenerator,
+  resetDefaultRoomIdGenerator,
+} from '../src/logic/room-id';
 
 describe('RoomIdGenerator', () => {
   it('生成されたIDが6桁で制限文字のみを含むこと', () => {
@@ -19,5 +24,12 @@ describe('RoomIdGenerator', () => {
       expect(issued.has(id)).toBe(false);
       issued.add(id);
     }
+  });
+
+  it('遅延初期化されたデフォルトジェネレーターを使い回す', () => {
+    resetDefaultRoomIdGenerator();
+    const first = getDefaultRoomIdGenerator();
+    const second = getDefaultRoomIdGenerator();
+    expect(first).toBe(second);
   });
 });

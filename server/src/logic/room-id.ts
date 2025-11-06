@@ -52,7 +52,18 @@ function createSeed(): number {
   return Math.floor(Math.random() * Math.pow(BASE, CODE_LENGTH));
 }
 
-export const defaultRoomIdGenerator = new RoomIdGenerator();
+let sharedGenerator: RoomIdGenerator | null = null;
+
+export function getDefaultRoomIdGenerator(): RoomIdGenerator {
+  if (sharedGenerator === null) {
+    sharedGenerator = new RoomIdGenerator();
+  }
+  return sharedGenerator;
+}
+
+export function resetDefaultRoomIdGenerator(): void {
+  sharedGenerator = null;
+}
 
 export function isValidRoomId(id: string): boolean {
   if (id.length !== CODE_LENGTH) {

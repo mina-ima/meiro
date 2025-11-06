@@ -1,7 +1,7 @@
 import type { Env } from './index';
 import { RoleSchema } from './schema/ws';
 import { validateNickname, validateRoomId } from './logic/validate';
-import { defaultRoomIdGenerator } from './logic/room-id';
+import { getDefaultRoomIdGenerator } from './logic/room-id';
 import { getRoomStub } from './logic/room-binding';
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -16,7 +16,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (url.pathname === '/rooms' && request.method === 'POST') {
-    const roomId = defaultRoomIdGenerator.generate();
+    const roomId = getDefaultRoomIdGenerator().generate();
     return Response.json(
       { roomId },
       {
