@@ -15,10 +15,10 @@ describe('GitHub Actions プレビューデプロイ', () => {
 
     expect(content).toContain('name: Deploy Preview');
     expect(content).toMatch(/on:\s*\n\s*pull_request:/);
-    expect(content).toContain('pnpm install --frozen-lockfile');
-    expect(content).toContain('pnpm lint');
-    expect(content).toContain('pnpm typecheck');
-    expect(content).toContain('pnpm test');
+    expect(content).toContain('npm ci');
+    expect(content).toContain('npm run lint --workspaces --if-present');
+    expect(content).toContain('npm run typecheck --workspaces --if-present');
+    expect(content).toContain('npm test');
     expect(content).toMatch(/deploy --env preview/);
     expect(content).toContain('cloudflare/pages-action@v1');
   });

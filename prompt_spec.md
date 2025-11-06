@@ -258,7 +258,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **検証順序**（重要）：Phase→対象範囲→資源→重なり→**経路BFS**→CD→確定→ブロードキャスト。
 * すべて**サーバで確定**、クライアントは楽観描画せず**権威更新を待つ**。
 * 初回STATEを受信するまでは `App` が「接続待機中」ビューのみを表示し、Owner/PlayerビューやHUDはレンダリングしない。
-* ロビー画面ではニックネーム入力（2〜10文字、英数・ハイフン・アンダースコア、入力時に大文字へ正規化）とルームコード入力（Base32風6桁でO/I/0/1を除外）を提供し、`POST /rooms`（HTTPエンドポイントは `VITE_HTTP_ORIGIN` または `VITE_WS_URL` 由来の https 化）で新規ルームIDを発行してオーナーとして接続する。既存ルーム参加は役割（owner/player）ラジオを選択し、ニックネーム・コードが有効な場合のみ `setRoom` を通じて WebSocket 接続を開始する。検証エラーは `INVALID_NAME` / `INVALID_ROOM`、通信失敗は `NETWORK_ERROR` トーストで通知する。
+* ロビー画面ではニックネーム入力（2〜10文字、英数・ハイフン・アンダースコア、入力時に大文字へ正規化）とルームコード入力（Base32風6桁でO/I/0/1を除外）を提供し、`POST /rooms`（HTTPエンドポイントは `VITE_HTTP_ORIGIN` または `VITE_WS_URL` 由来の https 化）で新規ルームIDを発行してオーナーとして接続する。既存ルーム参加は役割（owner/player）ラジオを選択し、ニックネーム・コードが有効な場合のみ `setRoom` を通じて WebSocket 接続を開始する。HTTP エンドポイントを解決できない場合はロビーに警告を表示し、ルーム作成ボタンを無効化して環境変数設定を促す。検証エラーは `INVALID_NAME` / `INVALID_ROOM`、通信失敗は `NETWORK_ERROR` トーストで通知する。
 
 ---
 
@@ -329,7 +329,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイ済み。稼働中の WebSocket エンドポイントは `wss://game.meiro.example.com/ws` で、接続確認ログを `docs/deployment-log.md` に記録済み。
 * **クライアント（Vercel 静的ホスト）**：
   * Vercel プロジェクトを作成し、リポジトリの `client` ディレクトリをルートに設定。
-  * Build Command=`pnpm --filter @meiro/client build`、Output Directory=`client/dist`。
+  * Build Command=`npm run build --workspace @meiro/client`、Output Directory=`client/dist`。
   * 初回ビルドの出力（例: `client/dist/index.html`）と設定内容は `docs/deployment-log.md` に記録し、再現手順を残している。
   * 環境変数 `VITE_WS_URL` に Cloudflare Workers の本番 WebSocket URL を設定（Production/Preview 両方。設定内容は `docs/deployment-log.md` 2024-05-22 記録で追跡）。
   * GitHub 連携で Vercel の新規プロジェクトを作成し、main/Pull Request ごとに自動デプロイが反映される運用を推奨（手動 `vercel deploy` は不要）。
@@ -342,8 +342,8 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 配布ライセンスは MIT。`LICENSE` と `NOTICE` をルートに配置し、著作権表記を明示。
 * ブランチ戦略は `main` を安定ブランチとし、`feature/*`・`fix/*` からPR経由で取り込む。
 * CI は `.github/workflows/ci.yml` でフォーマットチェック・Lint・Typecheck・Test を自動実行。
-* PR作成時は `.github/workflows/deploy-preview.yml` で Cloudflare Workers/Pages のプレビューデプロイを実施。`pnpm lint` → `pnpm typecheck` → `pnpm test` → `pnpm --filter @meiro/client build` を経て、`cloudflare/wrangler-action@3` で `wrangler deploy --env preview` を実行し、続けて `cloudflare/pages-action@v1` で `client/dist` を Pages プロジェクトへアップロード。必要なシークレットは `CF_ACCOUNT_ID`/`CF_WORKERS_API_TOKEN`/`CF_PAGES_API_TOKEN`/`CF_PAGES_PROJECT` を想定。
-* リリース作業は `CHANGELOG.md` を更新し、`pnpm format && pnpm lint && pnpm typecheck && pnpm test` を通したうえで `git tag -a vX.Y.Z` を発行し push するフローを README「リリースフロー」に明記する。併せてロールバック手順と過去リリース保持方針も README に記載し、`packages/common/tests/release-process.test.ts` で両方を検証。
+* PR作成時は `.github/workflows/deploy-preview.yml` で Cloudflare Workers/Pages のプレビューデプロイを実施。`npm run lint` → `npm run typecheck` → `npm test` → `npm run build --workspace @meiro/client` を経て、`cloudflare/wrangler-action@3` で `wrangler deploy --env preview` を実行し、続けて `cloudflare/pages-action@v1` で `client/dist` を Pages プロジェクトへアップロード。必要なシークレットは `CF_ACCOUNT_ID`/`CF_WORKERS_API_TOKEN`/`CF_PAGES_API_TOKEN`/`CF_PAGES_PROJECT` を想定。
+* リリース作業は `CHANGELOG.md` を更新し、`npm run format && npm run lint && npm run typecheck && npm test` を通したうえで `git tag -a vX.Y.Z` を発行し push するフローを README「リリースフロー」に明記する。併せてロールバック手順と過去リリース保持方針も README に記載し、`packages/common/tests/release-process.test.ts` で両方を検証。
 
 ---
 
@@ -422,10 +422,10 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ```bash
 # client
-cd client && pnpm i && pnpm dev    # http://localhost:5173
+npm run dev --workspace @meiro/client    # http://localhost:5173
 # server (wrangler)
-cd server && pnpm i
-wrangler dev --local
+npm install --workspace @meiro/server
+npm run dev --workspace @meiro/server -- --local
 ```
 
 * .env（例）

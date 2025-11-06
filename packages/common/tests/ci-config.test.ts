@@ -10,9 +10,9 @@ describe('CIパイプライン', () => {
     expect(existsSync(workflowPath)).toBe(true);
 
     const yaml = readFileSync(workflowPath, 'utf8');
-    expect(yaml).toContain('pnpm -r exec prettier --check "**/*.{ts,tsx,js,jsx,md,json}"');
-    expect(yaml).toContain('pnpm lint');
-    expect(yaml).toContain('pnpm typecheck');
-    expect(yaml).toContain('pnpm test');
+    expect(yaml).toContain('npm exec prettier -- --check "**/*.{ts,tsx,js,jsx,md,json}"');
+    expect(yaml).toContain('npm run lint --workspaces --if-present');
+    expect(yaml).toContain('npm run typecheck --workspaces --if-present');
+    expect(yaml).toContain('npm test');
   });
 });

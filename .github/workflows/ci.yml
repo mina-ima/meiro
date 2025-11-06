@@ -16,28 +16,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Format check
-        run: pnpm -r exec prettier --check "**/*.{ts,tsx,js,jsx,md,json}"
+        run: npm exec prettier -- --check "**/*.{ts,tsx,js,jsx,md,json}"
 
       - name: Lint
-        run: pnpm lint
+        run: npm run lint --workspaces --if-present
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: npm run typecheck --workspaces --if-present
 
       - name: Test
-        run: pnpm test -- --runInBand
+        run: npm test

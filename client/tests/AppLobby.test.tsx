@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from '../src/app';
+import { App, LobbyView } from '../src/app';
 import { useSessionStore } from '../src/state/sessionStore';
 
 class StubWebSocket {
@@ -144,5 +144,22 @@ describe('App lobby interactions', () => {
     expect(socket?.url).toMatch(/room=ABC2D3/);
     expect(socket?.url).toMatch(/role=player/);
     expect(socket?.url).toMatch(/nick=MIKU/);
+  });
+
+  it('disables room creation when HTTP endpoint is unavailable', async () => {
+    render(
+      <LobbyView
+        httpEndpoint={null}
+        defaultNick=""
+        onNicknamePersist={() => {}}
+        onBeginSession={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/サーバーの HTTP エンドポイントが設定されていません/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新しいルームを作成' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'ルームに参加' })).toBeEnabled();
   });
 });

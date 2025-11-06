@@ -410,7 +410,7 @@ interface LobbyViewProps {
   onBeginSession: (roomId: string, role: PlayerRole, nickname: string) => void;
 }
 
-function LobbyView({
+export function LobbyView({
   httpEndpoint,
   defaultNick,
   onNicknamePersist,
@@ -450,6 +450,7 @@ function LobbyView({
     setSelectedRole(value);
   };
 
+  const httpUnavailable = httpEndpoint == null;
   const handleCreateRoom = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedNick = normalizeNickname(nickInput);
@@ -523,6 +524,22 @@ function LobbyView({
         </p>
       </header>
 
+      {httpUnavailable ? (
+        <div
+          role="alert"
+          style={{
+            borderRadius: '0.375rem',
+            backgroundColor: '#fee2e2',
+            color: '#b91c1c',
+            padding: '0.75rem',
+            fontSize: '0.9rem',
+          }}
+        >
+          サーバーの HTTP エンドポイントが設定されていません。環境変数 VITE_WS_URL または
+          VITE_HTTP_ORIGIN を確認してください。
+        </div>
+      ) : null}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         <label htmlFor="nickname-input" style={{ fontWeight: 600 }}>
           ニックネーム
@@ -546,17 +563,17 @@ function LobbyView({
         <form onSubmit={handleCreateRoom}>
           <button
             type="submit"
-            disabled={isCreating}
+            disabled={httpUnavailable || isCreating}
             style={{
               marginTop: '0.75rem',
               width: '100%',
               padding: '0.5rem',
               borderRadius: '0.375rem',
               border: 'none',
-              backgroundColor: isCreating ? '#94a3b8' : '#2563eb',
+              backgroundColor: httpUnavailable || isCreating ? '#94a3b8' : '#2563eb',
               color: '#f8fafc',
               fontWeight: 600,
-              cursor: isCreating ? 'not-allowed' : 'pointer',
+              cursor: httpUnavailable || isCreating ? 'not-allowed' : 'pointer',
             }}
           >
             新しいルームを作成

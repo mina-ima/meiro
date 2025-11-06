@@ -6,7 +6,7 @@
 やること:
 1) まず失敗するテストを書く（Vitest + RTL）。
 2) テストに合格するコードを実装する。
-3) 実行: pnpm format && pnpm lint && pnpm typecheck && pnpm test
+3) 実行: npm run format && npm run lint && npm run typecheck && npm test
 4) すべて合格したら: git commit -m "<分かりやすい日本語のメッセージ>"
 5) prompt_spec.md と todo.md を更新する。
 6) いったん停止して、続行可否を確認する。

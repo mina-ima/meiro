@@ -18,13 +18,13 @@
 ---
 
 ## 1. 環境・依存関係
-- [x] Node.js LTS / pnpm を統一（バージョンピン）  
+- [x] Node.js LTS / npm を統一（バージョンピン）  
   - DoD: `.tool-versions` or `.nvmrc` / `.npmrc`
 - [x] パッケージ導入  
   - client: React, Phaser, Zustand, Zod, Vite
   - server: Cloudflare Workers, Durable Objects, wrangler, Zod
   - 共通: eslint, prettier, vitest, tsconfig
-  - DoD: `pnpm i` で両プロジェクトがビルド・起動
+  - DoD: `npm install` でワークスペース全体がビルド・起動
 - [x] .env / Secrets 設定  
   - DoD: `VITE_WS_URL`, `CF_*`, `SENTRY_DSN(任意)` の雛形 `.env.example`
 
@@ -148,7 +148,7 @@
 - [x] フレームレート制御（30fps上限）
 - [x] サウンド（SEのみ、初期音量70%）
 - [x] ロビーUI：ニックネーム入力とルーム作成/参加フォーム
-  - DoD: `client/tests/AppLobby.test.tsx` で新規ルーム作成と既存ルーム参加のフローを検証
+  - DoD: `client/tests/AppLobby.test.tsx` で新規ルーム作成・既存ルーム参加のフローと、HTTPエンドポイント未設定時の警告表示/ボタン無効化を検証
 
 ### 13.2 プレイヤーUI
 - [x] 準備中プレビュー（5秒クリップ連続再生）
@@ -300,7 +300,7 @@
 ## 23. Vercel デプロイ対応
 - [x] Cloudflare Workers の本番デプロイを行い、WebSocket エンドポイント `wss://...` を確定する  
   - DoD: 稼働中の本番 URL を記録し、接続テストログを残す（`docs/deployment-log.md` に `wss://game.meiro.example.com/ws` と 101 Switching Protocols ログを追記）
-- [x] Vercel でクライアント用プロジェクトを作成し、ビルド設定を `pnpm --filter @meiro/client build` / `client/dist` に構成する  
+- [x] Vercel でクライアント用プロジェクトを作成し、ビルド設定を `npm run build --workspace @meiro/client` / `client/dist` に構成する  
   - DoD: 初回ビルドが成功し、アセットが `client/dist` に出力される（`docs/deployment-log.md` に `client/dist/index.html` 生成ログを記録）
   - 補足: GitHub 連携で Vercel の新規プロジェクトを作成し、自動デプロイ運用を行う
 - [x] Vercel の環境変数に `VITE_WS_URL` を追加し、Cloudflare の本番 WebSocket URL を設定する  
