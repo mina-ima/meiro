@@ -11,7 +11,7 @@ bindings = [
 
 [[migrations]]
 tag = "001-init-room-object"
-new_classes = ["RoomDurableObject"]
+new_sqlite_classes = ["RoomDurableObject"]
 
 [env.local]
 name = "meiro-server-local"
