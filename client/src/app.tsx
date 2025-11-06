@@ -198,7 +198,7 @@ export function App() {
         onBeginSession={beginSession}
       />
     ) : !readyForGameplay ? (
-      <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} />
+      <WaitingView role={role} hasAuthoritativeState={hasAuthoritativeState} roomId={roomId} />
     ) : role === 'owner' ? (
       <OwnerView
         client={client}
@@ -672,10 +672,11 @@ export function LobbyView({
 
 interface WaitingViewProps {
   role: PlayerRole | null;
+  roomId: string | null;
   hasAuthoritativeState: boolean;
 }
 
-function WaitingView({ role, hasAuthoritativeState }: WaitingViewProps) {
+function WaitingView({ role, roomId, hasAuthoritativeState }: WaitingViewProps) {
   const roleLabel = role === 'owner' ? 'オーナー' : role === 'player' ? 'プレイヤー' : '未割り当て';
   const detailMessage =
     role == null
@@ -689,6 +690,11 @@ function WaitingView({ role, hasAuthoritativeState }: WaitingViewProps) {
       <h2>接続待機中</h2>
       <p>サーバーからのSTATE更新を待機しています。</p>
       <p>{detailMessage}</p>
+      {roomId ? (
+        <p>
+          現在のルームID: <strong>{roomId}</strong>
+        </p>
+      ) : null}
     </section>
   );
 }
