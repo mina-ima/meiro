@@ -6,10 +6,23 @@ import { getRoomStub } from './logic/room-binding';
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  const corsHeaders = createCorsHeaders(request);
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
+  }
 
   if (url.pathname === '/rooms' && request.method === 'POST') {
     const roomId = defaultRoomIdGenerator.generate();
-    return Response.json({ roomId });
+    return Response.json(
+      { roomId },
+      {
+        headers: corsHeaders,
+      },
+    );
   }
 
   const rematchMatch = url.pathname.match(/^\/rooms\/(\w{6})\/rematch$/i);
@@ -24,7 +37,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (url.pathname !== '/ws' || request.method !== 'GET') {
-    return new Response('not found', { status: 404 });
+    return new Response('not found', { status: 404, headers: corsHeaders });
   }
 
   const role = RoleSchema.parse(url.searchParams.get('role'));
@@ -53,4 +66,38 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     status: 101,
     webSocket: client,
   });
+}
+
+function createCorsHeaders(request: Request): Headers {
+  const origin = request.headers.get('Origin');
+  const headers = new Headers({
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'content-type',
+  });
+
+  const allowedOrigin = resolveAllowedOrigin(origin);
+  headers.set('Access-Control-Allow-Origin', allowedOrigin);
+
+  if (allowedOrigin !== '*') {
+    headers.set('Vary', 'Origin');
+  }
+
+  return headers;
+}
+
+function resolveAllowedOrigin(origin: string | null): string {
+  if (!origin) {
+    return '*';
+  }
+
+  try {
+    const { protocol } = new URL(origin);
+    if (protocol === 'http:' || protocol === 'https:') {
+      return origin;
+    }
+  } catch {
+    // fall through
+  }
+
+  return '*';
 }
