@@ -40,6 +40,7 @@ interface WebSocketRequest extends Request {
 type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
+type OwnerStartMessage = Extract<ClientMessage, { type: 'O_START' }>;
 
 interface PathCheckCacheSeed {
   mazeSize: number;
@@ -144,11 +145,6 @@ export class RoomDurableObject {
         }
       }
 
-      if (maybeStartCountdown(this.roomState, now)) {
-        await this.schedulePhaseAlarm();
-        this.publishState({ forceFull: true });
-      }
-
       this.publishState({ forceFull: true });
       return Response.json({ ok: true });
     }
@@ -189,11 +185,6 @@ export class RoomDurableObject {
 
       webSocket.accept();
       this.registerSocket(webSocket, joinResult.session);
-      if (maybeStartCountdown(this.roomState, now)) {
-        console.info('room %s countdown started', this.roomId);
-        await this.schedulePhaseAlarm();
-        this.publishState({ forceFull: true });
-      }
       return Response.json({ ok: true, sessionId: joinResult.session.id });
     }
 
@@ -233,9 +224,26 @@ export class RoomDurableObject {
         this.heartbeatTimeoutSockets.delete(socket);
 
         const message = processClientMessage(this.roomState, currentSession, raw);
+        const broadcastEvents = () => {
+          const events = createServerEvents(currentSession, message);
+          if (events.length === 0) {
+            return;
+          }
+          for (const eventMessage of events) {
+            this.broadcast(eventMessage);
+          }
+        };
 
         if (message.type === 'PING') {
           socket.send(JSON.stringify({ type: 'PONG', ts: message.ts }));
+          return;
+        }
+
+        if (message.type === 'O_START') {
+          const started = this.handleOwnerStart(message, socket, now);
+          if (started) {
+            broadcastEvents();
+          }
           return;
         }
 
@@ -254,13 +262,7 @@ export class RoomDurableObject {
         }
 
         this.roomState.updatedAt = now;
-
-        const events = createServerEvents(currentSession, message);
-        if (events.length > 0) {
-          for (const eventMessage of events) {
-            this.broadcast(eventMessage);
-          }
-        }
+        broadcastEvents();
 
         switch (message.type) {
           case 'P_INPUT':
@@ -858,6 +860,33 @@ export class RoomDurableObject {
     }
 
     owner.predictionMarks.delete(key);
+    return true;
+  }
+
+  private handleOwnerStart(_message: OwnerStartMessage, socket: WebSocket, now: number): boolean {
+    if (this.roomState.phase !== 'lobby') {
+      this.sendError(socket, 'START_UNAVAILABLE', 'Countdown can only start from the lobby.');
+      return false;
+    }
+
+    if (!this.hasOwnerSession() || !this.hasPlayerSession()) {
+      this.sendError(
+        socket,
+        'START_WAITING_FOR_PLAYER',
+        'Owner and player must both join before starting.',
+      );
+      return false;
+    }
+
+    const started = maybeStartCountdown(this.roomState, now);
+    if (!started) {
+      this.sendError(socket, 'START_UNAVAILABLE', 'Countdown is already running.');
+      return false;
+    }
+
+    console.info('room %s countdown started by owner', this.roomId);
+    void this.schedulePhaseAlarm();
+    this.publishState({ forceFull: true });
     return true;
   }
 

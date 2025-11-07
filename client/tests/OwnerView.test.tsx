@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { OwnerView } from '../src/views/OwnerView';
 import { MAX_ACTIVE_TRAPS } from '../src/config/spec';
+import type { NetClient } from '../src/net/NetClient';
 
 describe('OwnerView', () => {
   it('HUDに壁残数・罠権利・クールダウン・禁止エリア・予測地点数を表示する', () => {
@@ -20,6 +21,8 @@ describe('OwnerView', () => {
         traps={[{ x: 2, y: 8 }]}
         playerPosition={{ x: 3.5, y: 4.5 }}
         mazeSize={20}
+        phase="explore"
+        sessions={[]}
       />,
     );
 
@@ -55,6 +58,8 @@ describe('OwnerView', () => {
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
+        phase="explore"
+        sessions={[]}
       />,
     );
 
@@ -64,5 +69,63 @@ describe('OwnerView', () => {
       'aria-valuenow',
       '25',
     );
+  });
+
+  it('ロビーでプレイヤー未参加なら参加状況を表示し開始ボタンを無効化する', () => {
+    render(
+      <OwnerView
+        client={null}
+        wallCount={0}
+        trapCharges={0}
+        wallRemoveLeft={1}
+        editCooldownMs={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={0}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        phase="lobby"
+        sessions={[{ id: 'owner', role: 'owner', nick: 'OWNER' }]}
+      />,
+    );
+
+    expect(screen.getByText('プレイヤー: 未接続')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'ゲーム開始' });
+    expect(button).toBeDisabled();
+  });
+
+  it('プレイヤー参加後はゲーム開始ボタンからO_STARTメッセージを送信する', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    render(
+      <OwnerView
+        client={client}
+        wallCount={0}
+        trapCharges={0}
+        wallRemoveLeft={1}
+        editCooldownMs={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={0}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        phase="lobby"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'ゲーム開始' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(send).toHaveBeenCalledWith({ type: 'O_START' });
   });
 });

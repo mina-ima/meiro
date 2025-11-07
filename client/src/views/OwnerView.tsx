@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { NetClient } from '../net/NetClient';
 import { HUD } from './HUD';
 import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS, WALL_STOCK_BY_MAZE_SIZE } from '../config/spec';
-import type { PauseReason } from '../state/sessionStore';
+import type { PauseReason, ServerSessionEntry, SessionPhase } from '../state/sessionStore';
 
 interface Vector2 {
   x: number;
@@ -25,6 +25,8 @@ export interface OwnerViewProps {
   mazeSize: 20 | 40;
   pauseReason?: PauseReason;
   pauseSecondsRemaining?: number;
+  phase: SessionPhase;
+  sessions: ServerSessionEntry[];
 }
 
 export function OwnerView({
@@ -43,12 +45,27 @@ export function OwnerView({
   mazeSize,
   pauseReason,
   pauseSecondsRemaining,
+  phase,
+  sessions,
 }: OwnerViewProps) {
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
   const cooldownText = formatCooldown(editCooldownMs);
   const clampedPredictions = Math.max(0, Math.min(activePredictions, predictionLimit));
   const activeTrapCount = Math.min(traps.length, MAX_ACTIVE_TRAPS);
   const wallCapacity = WALL_STOCK_BY_MAZE_SIZE[mazeSize];
+  const ownerSession = useMemo(
+    () => sessions.find((session) => session.role === 'owner'),
+    [sessions],
+  );
+  const playerSession = useMemo(
+    () => sessions.find((session) => session.role === 'player'),
+    [sessions],
+  );
+  const ownerStatus = ownerSession ? `入室済 (${ownerSession.nick})` : '未接続';
+  const playerStatus = playerSession ? `入室済 (${playerSession.nick})` : '未接続';
+  const inLobby = phase === 'lobby';
+  const canStartGame = Boolean(inLobby && ownerSession && playerSession);
+  const phaseLabel = PHASE_LABELS[phase];
 
   const [zoomIndex, setZoomIndex] = useState(3);
   const zoom = OWNER_ZOOM_LEVELS[zoomIndex];
@@ -90,10 +107,61 @@ export function OwnerView({
     setOffset(clampOffset(next, mazeSize, zoom));
   }, [mazeSize, zoom, playerPosition.x, playerPosition.y]);
 
+  const handleStartGame = useCallback(() => {
+    if (!client || !canStartGame) {
+      return;
+    }
+    client.send({ type: 'O_START' });
+  }, [client, canStartGame]);
+
   return (
     <div>
       <h2>オーナービュー</h2>
       <p>接続状態: {status}</p>
+      <section
+        aria-label="参加状況"
+        style={{
+          margin: '0 0 1rem',
+          padding: '0.75rem',
+          border: '1px solid #e2e8f0',
+          borderRadius: '0.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
+          maxWidth: '420px',
+        }}
+      >
+        <p style={{ margin: 0 }}>オーナー: {ownerStatus}</p>
+        <p style={{ margin: 0 }}>プレイヤー: {playerStatus}</p>
+        {inLobby ? (
+          <>
+            <button
+              type="button"
+              onClick={handleStartGame}
+              disabled={!canStartGame || !client}
+              aria-live="polite"
+              style={{
+                padding: '0.5rem',
+                borderRadius: '0.375rem',
+                border: '1px solid transparent',
+                backgroundColor: !canStartGame || !client ? '#94a3b8' : '#0f766e',
+                color: '#f8fafc',
+                fontWeight: 600,
+                cursor: !canStartGame || !client ? 'not-allowed' : 'pointer',
+              }}
+            >
+              ゲーム開始
+            </button>
+            <small style={{ color: '#475569' }} aria-live="polite">
+              {playerSession
+                ? '両者が揃いました。ボタンを押すとカウントダウンが始まります。'
+                : 'プレイヤーが入室すると開始できます。'}
+            </small>
+          </>
+        ) : (
+          <p style={{ margin: 0 }}>現在フェーズ: {phaseLabel}</p>
+        )}
+      </section>
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <OwnerMap
           mazeSize={mazeSize}
@@ -347,3 +415,11 @@ function formatCooldown(ms: number): string {
 
   return `${seconds}秒`;
 }
+
+const PHASE_LABELS: Record<SessionPhase, string> = {
+  lobby: 'ロビー',
+  countdown: 'カウントダウン',
+  prep: '準備',
+  explore: '探索',
+  result: '結果',
+};

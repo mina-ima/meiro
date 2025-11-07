@@ -216,6 +216,8 @@ export function App() {
         mazeSize={mazeSize}
         pauseReason={pauseInfo?.reason}
         pauseSecondsRemaining={pauseInfo?.secondsRemaining}
+        phase={phase}
+        sessions={serverSnapshot?.sessions ?? []}
       />
     ) : (
       <PlayerView

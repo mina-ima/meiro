@@ -105,6 +105,7 @@ describe('ハートビート監視による切断検知', () => {
 
     await join(room, ownerSocket, { role: 'owner', nick: 'Owner' });
     await join(room, playerSocket, { role: 'player', nick: 'Runner' });
+    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START' }));
 
     const internal = room as unknown as {
       roomState: {

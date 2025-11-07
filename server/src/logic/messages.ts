@@ -32,6 +32,12 @@ export function processClientMessage(
       }
       return message;
     }
+    case 'O_START': {
+      if (session.role !== 'owner') {
+        throw new MessageValidationError('owner action from non-owner session');
+      }
+      return message;
+    }
     case 'PING':
       return message;
     default:
@@ -103,6 +109,16 @@ export function createServerEvents(
           payload: {
             sessionId: session.id,
             targetId: message.targetId,
+          },
+        },
+      ];
+    case 'O_START':
+      return [
+        {
+          type: 'EV',
+          event: 'OWNER_START',
+          payload: {
+            sessionId: session.id,
           },
         },
       ];

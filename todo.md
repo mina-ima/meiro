@@ -70,7 +70,7 @@
 - [x] メッセージ定義（Zod）
   - [x] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`
   - [x] プレイヤー: `P_INPUT(yaw, fwd, ts)`
-  - [x] オーナー: `O_EDIT(ADD_WALL|DEL_WALL|PLACE_TRAP)`, `O_MRK`, `O_CONFIRM`, `O_CANCEL`
+  - [x] オーナー: `O_EDIT(ADD_WALL|DEL_WALL|PLACE_TRAP)`, `O_MRK`, `O_CONFIRM`, `O_CANCEL`, `O_START`
   - DoD: 型安全なシリアライズ/バリデーション
 - [x] 送受信頻度
   - DoD: サーバ送信20Hz上限、1メッセージ≤2KB（p95）
@@ -160,6 +160,8 @@
 - [x] 編集操作：確認ポップ→再クリックで確定、右クリック/Escでキャンセル
 - [x] 表示：プレイヤー位置、壁残数、削除権(0/1)、罠権、CD、禁止エリア、規定/現ポイント
   - DoD: client/tests/OwnerView.test.tsx でズーム/センタリング操作を検証
+- [x] 参加状況と手動開始：ロビー中はオーナー/プレイヤーの入室状態を表示し、プレイヤー参加後にのみ「ゲーム開始」ボタンを有効化して `O_START` を送信
+  - DoD: client/tests/OwnerView.test.tsx で参加表示とボタン送信を検証、server/tests/manual-start.test.ts で手動開始のサーバ挙動を検証
 
 ---
 

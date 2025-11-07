@@ -77,6 +77,11 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     .passthrough(),
   z
     .object({
+      type: z.literal('O_START'),
+    })
+    .passthrough(),
+  z
+    .object({
       type: z.literal('PING'),
       ts: z.number(),
     })
