@@ -329,15 +329,15 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ## 15. デプロイ/運用
 
-* **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイ済み。稼働中の WebSocket エンドポイントは `wss://game.meiro.example.com/ws` で、接続確認ログを `docs/deployment-log.md` に記録済み。
-* **クライアント（Vercel 静的ホスト）**：
-  * Vercel プロジェクトを作成し、リポジトリの `client` ディレクトリをルートに設定。
+* **サーバ**：Cloudflare Workers + Durable Objects を本番環境にデプロイ済み。稼働中の WebSocket エンドポイントは `wss://meiro-server.minamidenshi.workers.dev/ws` で、接続確認ログを `docs/deployment-log.md` に記録済み。
+* **クライアント（Cloudflare Pages 静的ホスト）**：
+  * Cloudflare Pages プロジェクトを作成し、リポジトリの `client` ディレクトリをビルド対象に設定。
   * Build Command=`npm run build --workspace @meiro/client`、Output Directory=`client/dist`。
   * 初回ビルドの出力（例: `client/dist/index.html`）と設定内容は `docs/deployment-log.md` に記録し、再現手順を残している。
-  * 環境変数 `VITE_WS_URL` に Cloudflare Workers の本番 WebSocket URL を設定（Production/Preview 両方。設定内容は `docs/deployment-log.md` 2024-05-22 記録で追跡）。
-  * GitHub 連携で Vercel の新規プロジェクトを作成し、main/Pull Request ごとに自動デプロイが反映される運用を推奨（手動 `vercel deploy` は不要）。
-* **動作検証**：デプロイ完了後、Vercel 上のクライアントからルーム作成→接続→フェーズ遷移までを実機確認し、問題時はログ収集（実施ログは `docs/deployment-log.md` 2024-05-23 記録）。
-* **ドキュメント**：README などの手順書に Vercel + Cloudflare 併用構成を記載し、再現手順が明文化されていること（`README.md` の「Vercel + Cloudflare 併用デプロイ手順」節で手順/確認項目を列挙）。
+  * 環境変数 `VITE_WS_URL` に Cloudflare Workers の WebSocket オリジン `wss://meiro-server.minamidenshi.workers.dev` を設定（Production/Preview 両方。設定内容は `docs/deployment-log.md` 2024-05-22 記録で追跡）。
+  * GitHub 連携で Cloudflare Pages を構成し、main/Pull Request ごとに自動ビルド/デプロイが走る運用を推奨。
+* **動作検証**：デプロイ完了後、Cloudflare Pages 上のクライアントからルーム作成→接続→フェーズ遷移までを確認し、問題時はログ収集（実施ログは `docs/deployment-log.md` 2024-05-23 記録）。
+* **ドキュメント**：README などの手順書に Cloudflare Pages + Cloudflare Workers の併用構成を記載し、再現手順が明文化されていること（`README.md` の「Cloudflare Pages + Cloudflare Workers 併用デプロイ手順」節で手順/確認項目を列挙）。
 
 * **依存**：React, Phaser, zod(スキーマ), colyseus/protobufなし(JSONでOK), vite, workers-types。
 * **シリアライズ**：JSON（要コンパクト化：短key/数値配列）。
@@ -433,7 +433,7 @@ npm run dev --workspace @meiro/server -- --local
 
 * .env（例）
 
-  * `VITE_WS_URL=ws://127.0.0.1:8787/ws`
+* `VITE_WS_URL=ws://127.0.0.1:8787`
   * `NODE_ENV=development`
 * `wrangler.toml` はベース設定に加えて `env.local` / `env.dev` / `env.preview` / `env.prod` を持ち、環境ごとの `name` / ルーティング or `workers_dev` / `WS_ORIGIN` / `ENVIRONMENT` を定義（`server/tests/wrangler-config.test.ts`）
 

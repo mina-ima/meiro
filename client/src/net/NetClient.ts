@@ -48,10 +48,14 @@ export class NetClient {
     this.disposed = false;
     this.stopPingLoop();
     const { endpoint, room, role, nick } = this.opts;
-    const url = new URL(endpoint);
-    url.searchParams.set('room', room);
-    url.searchParams.set('role', role);
-    url.searchParams.set('nick', nick);
+    let url: URL;
+    try {
+      url = buildWebSocketUrl(endpoint, room, role, nick);
+    } catch (error) {
+      console.error('Failed to construct WebSocket URL', error);
+      this.events.onError?.(new Event('error'));
+      return;
+    }
 
     this.socket = new WebSocket(url);
 
@@ -194,4 +198,35 @@ function extractUpdatedAtClient(message: { type: 'STATE'; payload: unknown }): n
   }
 
   return null;
+}
+
+function buildWebSocketUrl(endpoint: string, room: string, role: PlayerRole, nick: string): URL {
+  const origin = normalizeWebSocketOrigin(endpoint);
+  const url = new URL('/ws', origin);
+  url.searchParams.set('room', room);
+  url.searchParams.set('role', role);
+  url.searchParams.set('nick', nick);
+  return url;
+}
+
+function normalizeWebSocketOrigin(endpoint: string): URL {
+  if (typeof endpoint !== 'string' || endpoint.trim().length === 0) {
+    throw new Error('WebSocket endpoint is not defined');
+  }
+
+  const url = new URL(endpoint.trim());
+  if (url.protocol === 'https:') {
+    url.protocol = 'wss:';
+  } else if (url.protocol === 'http:') {
+    url.protocol = 'ws:';
+  }
+
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    throw new Error(`Unsupported WebSocket protocol: ${url.protocol}`);
+  }
+
+  url.pathname = '/';
+  url.search = '';
+  url.hash = '';
+  return url;
 }

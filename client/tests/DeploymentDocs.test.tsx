@@ -4,25 +4,30 @@ import readmeContent from '../../README.md?raw';
 import deploymentLogContent from '../../docs/deployment-log.md?raw';
 
 describe('Deployment documentation', () => {
-  it('guides how to deploy with Vercel + Cloudflare', () => {
+  it('guides how to deploy with Cloudflare Pages + Workers', () => {
     render(<pre>{readmeContent}</pre>);
 
     expect(
-      screen.getByText(/Vercel.*Cloudflare.*併用構成を再現できる手順/, { exact: false }),
+      screen.getByText(/Cloudflare Pages.*Cloudflare Workers.*併用構成/, { exact: false }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Cloudflare Workers.*本番 WebSocket.*URL.*記録/, { exact: false }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Vercel.*環境変数.*VITE_WS_URL.*設定/, { exact: false }),
+      screen.getByText(
+        /Cloudflare Pages.*環境変数.*VITE_WS_URL.*wss:\/\/meiro-server\.minamidenshi\.workers\.dev/,
+        { exact: false },
+      ),
     ).toBeInTheDocument();
   });
 
-  it('documents Vercel build configuration and initial build output', () => {
+  it('documents Cloudflare Pages build configuration and build output', () => {
     const { getByText } = render(<pre>{readmeContent}</pre>);
 
     expect(
-      getByText(/Output Directory を `client\/dist` に設定/, { exact: false }),
+      getByText(/Cloudflare Pages.*Build Command.*npm run build --workspace @meiro\/client/, {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      getByText(/Output Directory.*client\/dist/, { exact: false }),
     ).toBeInTheDocument();
 
     const { getAllByText: getLogAllByText } = render(<pre>{deploymentLogContent}</pre>);
@@ -36,29 +41,34 @@ describe('Deployment documentation', () => {
     render(<pre>{deploymentLogContent}</pre>);
 
     expect(
-      screen.getByText(/wss:\/\/game\.meiro\.example\.com\/ws/, { exact: false }),
+      screen.getByText(/wss:\/\/meiro-server\.minamidenshi\.workers\.dev\/ws/, {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/101.*Switching Protocols/, { exact: false }),
     ).toBeInTheDocument();
   });
 
-  it('records Vercel environment variable setup for VITE_WS_URL', () => {
+  it('records Cloudflare Pages environment variable setup for VITE_WS_URL', () => {
     render(<pre>{deploymentLogContent}</pre>);
 
     expect(
-      screen.getByText(/Vercel.*Production.*VITE_WS_URL.*設定/, { exact: false }),
+      screen.getByText(
+        /Cloudflare Pages.*Production.*VITE_WS_URL.*wss:\/\/meiro-server\.minamidenshi\.workers\.dev/,
+        { exact: false },
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Vercel.*Preview.*VITE_WS_URL.*設定/, { exact: false }),
+      screen.getByText(/Cloudflare Pages.*Preview.*VITE_WS_URL/, { exact: false }),
     ).toBeInTheDocument();
   });
 
-  it('records end-to-end verification from the Vercel-hosted client', () => {
+  it('records end-to-end verification from the Cloudflare Pages-hosted client', () => {
     render(<pre>{deploymentLogContent}</pre>);
 
     expect(
-      screen.getByText(/Vercel.*ホスト.*クライアント.*ルーム作成.*接続確認/, {
+      screen.getByText(/Cloudflare Pages.*ホスト.*クライアント.*ルーム作成.*接続確認/, {
         exact: false,
       }),
     ).toBeInTheDocument();
@@ -69,11 +79,11 @@ describe('Deployment documentation', () => {
     ).toBeInTheDocument();
   });
 
-  it('recommends linking a new Vercel project with GitHub for automated deploys', () => {
+  it('recommends linking Cloudflare Pages with GitHub for automated deploys', () => {
     render(<pre>{readmeContent}</pre>);
 
     expect(
-      screen.getByText(/GitHub.*連携.*Vercel.*新規プロジェクト.*自動デプロイ/, {
+      screen.getByText(/GitHub.*連携.*Cloudflare Pages.*自動デプロイ/, {
         exact: false,
       }),
     ).toBeInTheDocument();

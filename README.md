@@ -16,7 +16,7 @@ npm install
 
 本番環境およびプレビューデプロイでは、以下の環境変数/シークレットを事前に設定してください。
 
-- `VITE_WS_URL`：クライアントが接続する WebSocket エンドポイント。ローカルでは `ws://localhost:8787` を想定します。
+- `VITE_WS_URL`：クライアントが接続する WebSocket エンドポイント。ローカルでは `ws://localhost:8787`、本番では Cloudflare Workers 上の `wss://meiro-server.minamidenshi.workers.dev` を必ず指定します。Cloudflare Pages の環境変数にこの `wss://` URL を設定し、誤って Pages 側の `https://` を指さないようにしてください。
 - `CF_ACCOUNT_ID`：Cloudflare アカウント ID。Workers/Pages 双方で共通です。
 - `CF_WORKERS_API_TOKEN`：Cloudflare Workers へのデプロイに利用する API トークン。GitHub Secrets で `CF_WORKERS_API_TOKEN` として登録します。
 - `CF_PAGES_API_TOKEN`：Cloudflare Pages のビルド・デプロイを許可する API トークン。GitHub Secrets で `CF_PAGES_API_TOKEN` として登録します。
@@ -25,26 +25,27 @@ npm install
 
 ローカル開発では `.env.example` を複製して値を入力し、CI では上記トークンを GitHub Secrets として設定してください。
 
-## Vercel + Cloudflare 併用デプロイ手順
+## Cloudflare Pages + Cloudflare Workers 併用デプロイ手順
 
-Vercel と Cloudflare を組み合わせた併用構成を再現できる手順は以下の通りです。
+Cloudflare Pages と Cloudflare Workers の併用構成を再現する手順です。
 
 ### Cloudflare Workers の本番公開
 
 1. `npm run deploy --workspace @meiro/server -- --env prod` で Cloudflare Workers を本番デプロイします。`wrangler.toml` の `env.prod` 設定を利用し、Durable Object のマイグレーションも自動で適用されます。
-2. デプロイ完了後に表示される `wss://` で始まる Cloudflare Workers の本番 WebSocket エンドポイント URL を確認し、チームのログ（例: `docs/deployment-log.md`）に記録します。クライアントはこの URL に常時接続するため、履歴を残しておくことで切り戻し時にも参照できます。初回本番公開時のログは `docs/deployment-log.md` に記載済みです。
+2. デプロイ完了後に表示される Cloudflare Workers の本番 WebSocket エンドポイント（`wss://meiro-server.minamidenshi.workers.dev/ws`）を確認し、チームのログ（例: `docs/deployment-log.md`）に記録します。クライアントは常にこの Workers へ接続するため、履歴を残しておくことで切り戻し時にも参照できます。初回本番公開時のログは `docs/deployment-log.md` に記載済みです。
 
-### Vercel プロジェクトの構成
+### Cloudflare Pages プロジェクトの構成
 
-GitHub 連携で Vercel の新規プロジェクトを作成しておくと、main ブランチへの push や Pull Request ごとに自動デプロイされ、手動の `vercel deploy` は不要になります。
+GitHub 連携で Cloudflare Pages のプロジェクトを作成しておくと、main ブランチへの push や Pull Request ごとに自動でビルド/デプロイされます。
 
-1. Vercel の新規プロジェクトでこのリポジトリをインポートし、ルートディレクトリを `client` に設定します。
-2. Build Command を `npm run build --workspace @meiro/client`、Output Directory を `client/dist` に設定します。必要に応じて Install Command は `npm install --frozen-lockfile` を指定します。初回ビルドで生成された `client/dist/index.html` などのアセットは `docs/deployment-log.md` に記録しておくと、構成の再現性を保てます。
-3. Vercel の環境変数に `VITE_WS_URL` を Production/Preview 両方で設定し、Cloudflare Workers の本番 WebSocket URL を常に参照できるようにします。Preview は `wss://preview...` など、環境ごとのエンドポイントに合わせて値を変えてください。
+1. Cloudflare Pages の新規プロジェクトでこのリポジトリをインポートし、ビルド対象ディレクトリを `client` に設定します。
+2. Build Command を `npm run build --workspace @meiro/client`、Output Directory を `client/dist` に設定します。必要に応じて Install Command は `npm install --frozen-lockfile` を指定します。初回ビルドで生成された `client/dist/index.html` などのアセットは `docs/deployment-log.md` に記録し、構成の再現性を保ってください。
+3. Cloudflare Pages の環境変数として `VITE_WS_URL=wss://meiro-server.minamidenshi.workers.dev` を Production/Preview の両方に設定します。Pages の URL（`https://meiro-d85.pages.dev` など）を指定すると WebSocket が接続できないため、必ず Workers の `wss://` を参照させます。Preview 用に別の Workers エンドポイントを用意している場合は、同様に `wss://` で始まる URL を入力してください。
+4. Cloudflare Pages と GitHub を連携させることで main/PR ごとに自動デプロイされるため、手動の `wrangler pages deploy` は不要です。
 
 ### 動作確認
 
-1. Vercel のデプロイ完了後、Preview または Production の URL にアクセスします。
+1. Cloudflare Pages のデプロイ完了後、Preview または Production の URL にアクセスします。
 2. ブラウザからルーム作成 → コード共有 → 接続 → フェーズ遷移まで実施し、Cloudflare Workers への通信が成功することを確認します。
 3. 取得したブラウザコンソール/ネットワークログをスクリーンショットまたはログとして残し、Cloudflare Workers 側のログとも突き合わせておきます。
 

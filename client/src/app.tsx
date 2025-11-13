@@ -12,7 +12,7 @@ import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
 
 const DEFAULT_WS_ENDPOINT = import.meta.env.PROD
-  ? 'wss://meiro-server.minamidenshi.workers.dev/ws'
+  ? 'wss://meiro-server.minamidenshi.workers.dev'
   : 'ws://localhost:8787';
 const DEFAULT_HTTP_ENDPOINT = import.meta.env.PROD
   ? 'https://meiro-server.minamidenshi.workers.dev'
