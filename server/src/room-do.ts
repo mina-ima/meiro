@@ -31,6 +31,7 @@ interface SessionPayload {
 interface PublishStateOptions {
   forceFull?: boolean;
   immediate?: WebSocket | WebSocket[] | Set<WebSocket>;
+  exclude?: WebSocket | WebSocket[] | Set<WebSocket>;
 }
 
 interface WebSocketRequest extends Request {
@@ -325,7 +326,14 @@ export class RoomDurableObject {
 
     const now = Date.now();
     this.resumeFromPause(now);
-    this.publishState({ forceFull: true, immediate: socket });
+    if (session.role === 'owner') {
+      this.sendInitialStateTo(socket);
+      if (this.connections.size > 1) {
+        this.publishState({ forceFull: true, exclude: socket });
+      }
+    } else {
+      this.publishState({ forceFull: true, immediate: socket });
+    }
   }
 
   private expireLobby(now: number): void {
@@ -413,8 +421,12 @@ export class RoomDurableObject {
     const meta = updatedAt != null ? { updatedAt } : undefined;
 
     const immediateSockets = options.immediate ? toSocketSet(options.immediate) : null;
+    const excludedSockets = options.exclude ? toSocketSet(options.exclude) : null;
 
     for (const [socket, connection] of this.connections.entries()) {
+      if (excludedSockets?.has(socket)) {
+        continue;
+      }
       const useImmediate = immediateSockets?.has(socket) ?? false;
 
       try {
@@ -1399,6 +1411,33 @@ export class RoomDurableObject {
     }
 
     socket.send(JSON.stringify(payload));
+  }
+
+  private sendInitialStateTo(socket: WebSocket): void {
+    const connection = this.connections.get(socket);
+    if (!connection) {
+      return;
+    }
+
+    const message = this.stateComposer.compose(this.roomState, { forceFull: true });
+    if (!message) {
+      return;
+    }
+
+    const updatedAt = extractUpdatedAt(message);
+    const meta = updatedAt != null ? { updatedAt } : undefined;
+
+    try {
+      connection.sendImmediate(message, meta);
+    } catch (error) {
+      if (error instanceof MessageSizeExceededError) {
+        this.metrics.logSocketError('message-too-large');
+        console.error('room %s state message too large', this.roomId);
+      } else {
+        this.metrics.logSocketError('send-failed');
+        console.error('room %s failed to send initial state', this.roomId, error);
+      }
+    }
   }
 }
 

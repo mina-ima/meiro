@@ -258,4 +258,38 @@ describe('RoomDurableObject state broadcast', () => {
       payload: expect.objectContaining({ full: true }),
     });
   });
+
+  it('既存プレイヤーがいる状態でオーナーが接続した場合でもプレイヤーへ全量STATEを配信し、オーナーには1度だけ即時送信する', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+    const playerSocket = new MockSocket();
+    const ownerSocket = new MockSocket();
+
+    await joinRoom(room, playerSocket, {
+      roomId: 'ROOM-1',
+      role: 'player',
+      nick: 'Player',
+    });
+
+    const response = await joinRoom(room, ownerSocket, {
+      roomId: 'ROOM-1',
+      role: 'owner',
+      nick: 'Owner',
+    });
+
+    expect(response.ok).toBe(true);
+
+    const connections = (room as unknown as {
+      connections: Map<MockSocket, { sentImmediate: unknown[]; enqueued: unknown[] }>;
+    }).connections;
+
+    const ownerConnection = connections.get(ownerSocket);
+    const playerConnection = connections.get(playerSocket);
+
+    expect(ownerConnection?.sentImmediate).toHaveLength(1);
+    expect(ownerConnection?.enqueued).toHaveLength(0);
+    expect(playerConnection?.enqueued.at(-1)).toMatchObject({
+      type: 'STATE',
+      payload: expect.objectContaining({ full: true }),
+    });
+  });
 });
