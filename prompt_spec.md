@@ -150,6 +150,10 @@ type PointItem = {x:number,y:number,value:1|3|5};
 { "t":"O_START" }                                                      // 両者揃ったらオーナーが送信しカウントダウン開始
 ```
 
+* **接続直後デバッグ**: WebSocket 接続が成立した瞬間に DO から `DEBUG_CONNECTED` を1度だけ送信し、`roomId`/`role`/`sessionId` を通知する。ブラウザの WS Messages に最低1件表示させ、`wrangler tail` でも `WS fetch /ws` → `DO connected` → `send DEBUG_CONNECTED` → `send STATE` のログを必ず残す。
+* **初期STATE保証**: どちらの役割でも初回接続時は `STATE(full:true)` を即時送信する。存在しない場合は `createInitialRoomState` で生成し、`state-broadcast` テストで担保する。
+* **致命的エラー**: WebSocket ハンドラで未捕捉の例外が発生した場合は `console.error("WS handler error", err)` を記録し、`{ type:"ERROR", code:"INTERNAL_ERROR" }` を送ってから `socket.close(1011, "internal error")` で終了する。
+
 ### 6.3 差分/頻度
 
 * **スナップショット**：Phase遷移/編集確定（`O_CONFIRM`）時は全量、小刻み更新は**位置/スコア等の差分**。

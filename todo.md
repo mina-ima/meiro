@@ -38,7 +38,7 @@
   - [x] `src/state/*`（Zustand）
   - DoD: Vite開発サーバ起動・空画面表示
 - [x] server/ 初期構成
-  - [x] `router.ts`（WSアップグレード）
+  - [x] `router.ts`（HTTP API） + `ws-handler.ts`（WSアップグレード）
   - [x] `room-do.ts`（DO本体・20Hz Tick）
   - [x] `logic/maze.ts`, `rules.ts`, `validate.ts`, `bfs.ts`
   - [x] `schema/ws.ts`, `state.ts`
@@ -180,6 +180,8 @@
   - DoD: `server/src/logic/metrics.ts` 経由でルームメトリクスをログ
 - [x] アラート: WS失敗率/再接続率/STATE遅延>200ms
   - DoD: テレメトリーで `client.ws.alert` / `client.ws.reconnect.alert` / `state.latency.alert` を発火し、閾値超過を検知
+- [x] DOハンドシェイク可観測性: 接続直後の `DEBUG_CONNECTED` / `STATE` / 致命的エラー通知
+  - DoD: `server/tests/state-broadcast.test.ts` で `DEBUG_CONNECTED` / 初回 `STATE` を検証し、`RoomDurableObject` が `DO connected` / `send DEBUG_CONNECTED` / `send STATE` / `send ERROR` を `console.log` へ出力し、ルーターが `WS fetch /ws` を必ず記録する
 
 ---
 
