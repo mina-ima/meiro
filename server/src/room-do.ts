@@ -199,7 +199,7 @@ export class RoomDurableObject {
       () => Date.now(),
       (error) => {
         this.metrics.logSocketError('send-failed');
-        console.error('failed to send message', error);
+        console.error('room %s failed to send message', this.roomId, error);
       },
       (info) => {
         this.metrics.logStateMessage(info.bytes, info.immediate, info.queueDepth);
@@ -209,15 +209,22 @@ export class RoomDurableObject {
       },
     );
     this.connections.set(socket, connection);
-    this.socketSessions.set(socket, session);
-    session.lastSeenAt = Date.now();
-    this.metrics.logSessionJoin(session.role);
+    const normalizedSession = this.ensureSessionRecord(session);
+    this.socketSessions.set(socket, normalizedSession);
+    normalizedSession.lastSeenAt = Date.now();
+    this.metrics.logSessionJoin(normalizedSession.role);
+    console.info(
+      'room %s socket connected role=%s session=%s clients=%d',
+      this.roomId,
+      normalizedSession.role,
+      normalizedSession.id,
+      this.clients.size,
+    );
 
     socket.addEventListener('message', (event) => {
-      const raw = deserialize(event.data);
-      const currentSession = this.roomState.sessions.get(session.id) ?? session;
-
       try {
+        const raw = deserialize(event.data);
+        const currentSession = this.ensureSessionRecord(session);
         const now = Date.now();
         currentSession.lastSeenAt = now;
         this.socketSessions.set(socket, currentSession);
@@ -225,6 +232,13 @@ export class RoomDurableObject {
         this.heartbeatTimeoutSockets.delete(socket);
 
         const message = processClientMessage(this.roomState, currentSession, raw);
+        console.info(
+          'room %s message type=%s from role=%s session=%s',
+          this.roomId,
+          message.type,
+          currentSession.role,
+          currentSession.id,
+        );
         const broadcastEvents = () => {
           const events = createServerEvents(currentSession, message);
           if (events.length === 0) {
@@ -282,6 +296,12 @@ export class RoomDurableObject {
         }
       } catch (error) {
         if (error instanceof MessageValidationError) {
+          console.warn(
+            'room %s invalid message from session=%s: %s',
+            this.roomId,
+            session.id,
+            error.message,
+          );
           socket.send(
             JSON.stringify({
               type: 'ERR',
@@ -292,18 +312,18 @@ export class RoomDurableObject {
           return;
         }
 
-        console.error('room %s unexpected error handling message', this.roomId, error);
-        socket.send(
-          JSON.stringify({
-            type: 'ERR',
-            code: 'INTERNAL_ERROR',
-            message: 'Internal error',
-          }),
-        );
+        this.handleSocketInternalError(socket, error, 'message');
       }
     });
 
     socket.addEventListener('close', () => {
+      const closedSession = this.socketSessions.get(socket) ?? session;
+      console.info(
+        'room %s socket closed role=%s session=%s',
+        this.roomId,
+        closedSession.role,
+        closedSession.id,
+      );
       this.heartbeatTimeoutSockets.delete(socket);
       this.clients.delete(socket);
       const record = this.socketSessions.get(socket);
@@ -422,6 +442,18 @@ export class RoomDurableObject {
 
     const immediateSockets = options.immediate ? toSocketSet(options.immediate) : null;
     const excludedSockets = options.exclude ? toSocketSet(options.exclude) : null;
+    if (message.type === 'STATE') {
+      const seq = extractSequence(message);
+      console.info(
+        'room %s broadcasting STATE seq=%s full=%s recipients=%d immediate=%d exclude=%d',
+        this.roomId,
+        seq ?? 'n/a',
+        (message.payload as { full?: boolean }).full === true,
+        Math.max(this.connections.size - (excludedSockets?.size ?? 0), 0),
+        immediateSockets?.size ?? 0,
+        excludedSockets?.size ?? 0,
+      );
+    }
 
     for (const [socket, connection] of this.connections.entries()) {
       if (excludedSockets?.has(socket)) {
@@ -1428,6 +1460,14 @@ export class RoomDurableObject {
     const meta = updatedAt != null ? { updatedAt } : undefined;
 
     try {
+      if (message.type === 'STATE') {
+        const seq = extractSequence(message);
+        console.info(
+          'room %s sending initial STATE seq=%s to owner socket',
+          this.roomId,
+          seq ?? 'n/a',
+        );
+      }
       connection.sendImmediate(message, meta);
     } catch (error) {
       if (error instanceof MessageSizeExceededError) {
@@ -1437,6 +1477,30 @@ export class RoomDurableObject {
         this.metrics.logSocketError('send-failed');
         console.error('room %s failed to send initial state', this.roomId, error);
       }
+    }
+  }
+
+  private ensureSessionRecord(session: PlayerSession): PlayerSession {
+    const existing = this.roomState.sessions.get(session.id);
+    if (existing) {
+      return existing;
+    }
+    this.roomState.sessions.set(session.id, session);
+    return session;
+  }
+
+  private handleSocketInternalError(socket: WebSocket, error: unknown, context: string): void {
+    console.error('room %s unexpected %s error', this.roomId, context, error);
+    this.sendError(socket, 'INTERNAL_ERROR', 'Internal error');
+    try {
+      socket.close(1011, 'internal error');
+    } catch (closeError) {
+      console.error(
+        'room %s failed to close socket after %s error',
+        this.roomId,
+        context,
+        closeError,
+      );
     }
   }
 }
@@ -1649,6 +1713,14 @@ function extractUpdatedAt(message: ServerMessage): number | null {
   }
 
   return payload.changes?.updatedAt ?? null;
+}
+
+function extractSequence(message: ServerMessage): number | null {
+  if (message.type !== 'STATE') {
+    return null;
+  }
+  const payload = message.payload as { seq?: number } | undefined;
+  return typeof payload?.seq === 'number' ? payload.seq : null;
 }
 
 function pointKey(cell: { x: number; y: number }): string {
