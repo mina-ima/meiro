@@ -16,7 +16,7 @@ npm install
 
 本番環境およびプレビューデプロイでは、以下の環境変数/シークレットを事前に設定してください。
 
-- `VITE_WS_URL`：クライアントが接続する WebSocket エンドポイント。ローカルでは `ws://localhost:8787`、本番では Cloudflare Workers 上の `wss://meiro-server.minamidenshi.workers.dev` を必ず指定します。Cloudflare Pages の環境変数にこの `wss://` URL を設定し、誤って Pages 側の `https://` を指さないようにしてください。
+- `VITE_WS_URL`：クライアントが接続する WebSocket エンドポイント。ローカルでは `.env` に `ws://localhost:8787` を、Cloudflare Pages では `wss://meiro-server.minamidenshi.workers.dev` を必ず設定します。未設定の場合はビルド済みクライアントの初期化時に即エラーになります。Pages の環境変数にもこの `wss://` URL を設定し、誤って Pages 側の `https://` を指さないようにしてください。
 - `CF_ACCOUNT_ID`：Cloudflare アカウント ID。Workers/Pages 双方で共通です。
 - `CF_WORKERS_API_TOKEN`：Cloudflare Workers へのデプロイに利用する API トークン。GitHub Secrets で `CF_WORKERS_API_TOKEN` として登録します。
 - `CF_PAGES_API_TOKEN`：Cloudflare Pages のビルド・デプロイを許可する API トークン。GitHub Secrets で `CF_PAGES_API_TOKEN` として登録します。

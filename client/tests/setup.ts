@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+if (!import.meta.env.VITE_WS_URL) {
+  vi.stubEnv('VITE_WS_URL', 'ws://localhost:8787');
+}
+
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   value: vi.fn(function getContext(this: HTMLCanvasElement) {
     const gradientStub = {

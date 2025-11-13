@@ -289,7 +289,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
   * `timeLimitSec`: 300..600（default 300）
 * ビルド時環境：
 
-  * `VITE_WS_URL`, `CF_ACCOUNT_ID`, `CF_WORKERS_API_TOKEN`, `CF_PAGES_API_TOKEN`, `CF_PAGES_PROJECT`, `SENTRY_DSN`（任意）など
+  * `VITE_WS_URL`, `CF_ACCOUNT_ID`, `CF_WORKERS_API_TOKEN`, `CF_PAGES_API_TOKEN`, `CF_PAGES_PROJECT`, `SENTRY_DSN`（任意）など。`VITE_WS_URL` はクライアント初期化時の必須値で、未設定だとアプリのロードが即座に失敗する。
 
 ---
 

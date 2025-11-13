@@ -1,5 +1,6 @@
 import { logConnectionEvent, logRttSample, logLatencyWarning } from '../logging/telemetry';
 import { LATENCY_WARNING_THRESHOLD_MS } from '../config/spec';
+import { getRequiredWsBase } from '../config/env';
 
 const RECONNECT_DELAY_MS = 2000;
 const PING_INTERVAL_MS = 5000;
@@ -7,7 +8,6 @@ const PING_INTERVAL_MS = 5000;
 export type PlayerRole = 'owner' | 'player';
 
 export interface ConnectionOptions {
-  endpoint: string;
   room: string;
   role: PlayerRole;
   nick: string;
@@ -47,10 +47,10 @@ export class NetClient {
 
     this.disposed = false;
     this.stopPingLoop();
-    const { endpoint, room, role, nick } = this.opts;
+    const { room, role, nick } = this.opts;
     let url: URL;
     try {
-      url = buildWebSocketUrl(endpoint, room, role, nick);
+      url = buildWebSocketUrl(getRequiredWsBase(), room, role, nick);
     } catch (error) {
       console.error('Failed to construct WebSocket URL', error);
       this.events.onError?.(new Event('error'));
@@ -200,8 +200,8 @@ function extractUpdatedAtClient(message: { type: 'STATE'; payload: unknown }): n
   return null;
 }
 
-function buildWebSocketUrl(endpoint: string, room: string, role: PlayerRole, nick: string): URL {
-  const origin = normalizeWebSocketOrigin(endpoint);
+function buildWebSocketUrl(base: string, room: string, role: PlayerRole, nick: string): URL {
+  const origin = normalizeWebSocketOrigin(base);
   const url = new URL('/ws', origin);
   url.searchParams.set('room', room);
   url.searchParams.set('role', role);
@@ -209,12 +209,13 @@ function buildWebSocketUrl(endpoint: string, room: string, role: PlayerRole, nic
   return url;
 }
 
-function normalizeWebSocketOrigin(endpoint: string): URL {
-  if (typeof endpoint !== 'string' || endpoint.trim().length === 0) {
+function normalizeWebSocketOrigin(base: string): URL {
+  const trimmed = base.trim();
+  if (!trimmed) {
     throw new Error('WebSocket endpoint is not defined');
   }
 
-  const url = new URL(endpoint.trim());
+  const url = new URL(trimmed);
   if (url.protocol === 'https:') {
     url.protocol = 'wss:';
   } else if (url.protocol === 'http:') {

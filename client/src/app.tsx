@@ -10,18 +10,16 @@ import { logClientInit, logClientError, logPhaseChange } from './logging/telemet
 import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
+import { getRequiredWsBase } from './config/env';
 
-const DEFAULT_WS_ENDPOINT = import.meta.env.PROD
-  ? 'wss://meiro-server.minamidenshi.workers.dev'
-  : 'ws://localhost:8787';
+const WS_BASE = getRequiredWsBase();
 const DEFAULT_HTTP_ENDPOINT = import.meta.env.PROD
   ? 'https://meiro-server.minamidenshi.workers.dev'
   : null;
 
-const WS_ENDPOINT = import.meta.env.VITE_WS_URL ?? DEFAULT_WS_ENDPOINT;
 const HTTP_ENDPOINT = resolveHttpEndpoint(
   import.meta.env.VITE_HTTP_ORIGIN ?? DEFAULT_HTTP_ENDPOINT,
-  WS_ENDPOINT,
+  `${WS_BASE}/ws`,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -124,7 +122,6 @@ export function App() {
 
     return new NetClient(
       {
-        endpoint: WS_ENDPOINT,
         nick: nickname,
         role,
         room: roomId,

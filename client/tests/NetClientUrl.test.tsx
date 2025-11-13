@@ -1,9 +1,10 @@
 import { render, cleanup, waitFor } from '@testing-library/react';
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { useEffect } from 'react';
 import { NetClient } from '../src/net/NetClient';
 
 const ORIGINAL_WEBSOCKET = globalThis.WebSocket;
+const ORIGINAL_WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8787';
 
 class CaptureWebSocket {
   public static readonly CONNECTING = 0;
@@ -37,21 +38,16 @@ class CaptureWebSocket {
   }
 }
 
-interface TestHarnessProps {
-  endpoint: string;
-}
-
-function NetClientHarness({ endpoint }: TestHarnessProps) {
+function NetClientHarness() {
   useEffect(() => {
     const client = new NetClient({
-      endpoint,
       room: 'ROOM42',
       role: 'owner',
       nick: 'Architect',
     });
     client.connect();
     return () => client.dispose();
-  }, [endpoint]);
+  }, []);
 
   return null;
 }
@@ -66,6 +62,10 @@ describe('NetClient URL composition', () => {
   afterEach(() => {
     cleanup();
     CaptureWebSocket.reset();
+    vi.unstubAllEnvs();
+    if (ORIGINAL_WS_URL) {
+      vi.stubEnv('VITE_WS_URL', ORIGINAL_WS_URL);
+    }
     if (ORIGINAL_WEBSOCKET) {
       globalThis.WebSocket = ORIGINAL_WEBSOCKET;
     } else {
@@ -74,7 +74,8 @@ describe('NetClient URL composition', () => {
   });
 
   it('appends /ws when the endpoint provides only the origin', async () => {
-    render(<NetClientHarness endpoint="wss://example.com" />);
+    vi.stubEnv('VITE_WS_URL', 'wss://example.com');
+    render(<NetClientHarness />);
 
     await waitFor(() => {
       expect(CaptureWebSocket.latest()?.url).toBe(
@@ -83,8 +84,9 @@ describe('NetClient URL composition', () => {
     });
   });
 
-  it('preserves explicit paths while normalizing query parameters', async () => {
-    render(<NetClientHarness endpoint="wss://example.com/game/ws" />);
+  it('normalizes paths and ensures consistent query ordering', async () => {
+    vi.stubEnv('VITE_WS_URL', 'https://example.com/game/ws/');
+    render(<NetClientHarness />);
 
     await waitFor(() => {
       expect(CaptureWebSocket.latest()?.url).toBe(

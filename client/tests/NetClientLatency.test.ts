@@ -103,7 +103,6 @@ describe('NetClientの遅延アラート', () => {
 
   it('100msを超える遅延を受信すると警告を発火する', () => {
     const client = new NetClient({
-      endpoint: 'wss://example/ws',
       room: 'ROOM',
       role: 'player',
       nick: 'Runner',
@@ -131,7 +130,6 @@ describe('NetClientの遅延アラート', () => {
 
   it('100ms以下の遅延では警告しない', () => {
     const client = new NetClient({
-      endpoint: 'wss://example/ws',
       room: 'ROOM',
       role: 'player',
       nick: 'Runner',
