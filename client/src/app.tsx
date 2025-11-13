@@ -10,16 +10,16 @@ import { logClientInit, logClientError, logPhaseChange } from './logging/telemet
 import { OwnerView, PlayerView } from './views';
 import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
-import { getRequiredWsBase } from './config/env';
+import { getOptionalWsBase } from './config/env';
 
-const WS_BASE = getRequiredWsBase();
+const WS_BASE = getOptionalWsBase();
 const DEFAULT_HTTP_ENDPOINT = import.meta.env.PROD
   ? 'https://meiro-server.minamidenshi.workers.dev'
   : null;
 
 const HTTP_ENDPOINT = resolveHttpEndpoint(
   import.meta.env.VITE_HTTP_ORIGIN ?? DEFAULT_HTTP_ENDPOINT,
-  `${WS_BASE}/ws`,
+  WS_BASE ? `${WS_BASE}/ws` : null,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -114,7 +114,7 @@ export function App() {
   );
 
   const client = useMemo(() => {
-    if (!roomId || !role) {
+    if (!roomId || !role || !WS_BASE) {
       return null;
     }
 
@@ -122,6 +122,7 @@ export function App() {
 
     return new NetClient(
       {
+        base: WS_BASE,
         nick: nickname,
         role,
         room: roomId,
@@ -316,12 +317,15 @@ function isValidRoomCode(code: string): boolean {
   return /^[A-HJ-NP-Z2-9]{6}$/.test(code);
 }
 
-function resolveHttpEndpoint(envValue: unknown, wsEndpoint: string): string | null {
+function resolveHttpEndpoint(envValue: unknown, wsEndpoint: string | null): string | null {
   if (typeof envValue === 'string') {
     const trimmed = envValue.trim();
     if (trimmed.length > 0) {
       return trimTrailingSlash(trimmed);
     }
+  }
+  if (!wsEndpoint) {
+    return null;
   }
   return deriveHttpOriginFromWs(wsEndpoint);
 }
@@ -459,7 +463,9 @@ export function LobbyView({
     setSelectedRole(value);
   };
 
+  const wsUnavailable = WS_BASE == null;
   const httpUnavailable = httpEndpoint == null;
+  const infraUnavailable = wsUnavailable || httpUnavailable;
   const handleCreateRoom = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedNick = normalizeNickname(nickInput);
@@ -467,7 +473,7 @@ export function LobbyView({
       enqueueErrorToast('INVALID_NAME');
       return;
     }
-    if (!httpEndpoint) {
+    if (!httpEndpoint || wsUnavailable) {
       enqueueErrorToast('NETWORK_ERROR');
       return;
     }
@@ -507,6 +513,10 @@ export function LobbyView({
       enqueueErrorToast('INVALID_ROOM');
       return;
     }
+    if (wsUnavailable) {
+      enqueueErrorToast('NETWORK_ERROR');
+      return;
+    }
 
     setIsJoining(true);
     onBeginSession(normalizedRoom, selectedRole, normalizedNick);
@@ -533,7 +543,7 @@ export function LobbyView({
         </p>
       </header>
 
-      {httpUnavailable ? (
+      {infraUnavailable ? (
         <div
           role="alert"
           style={{
@@ -544,8 +554,8 @@ export function LobbyView({
             fontSize: '0.9rem',
           }}
         >
-          サーバーの HTTP エンドポイントが設定されていません。環境変数 VITE_WS_URL または
-          VITE_HTTP_ORIGIN を確認してください。
+          サーバーのエンドポイントが設定されていません。環境変数 VITE_WS_URL または VITE_HTTP_ORIGIN
+          を確認してください。
         </div>
       ) : null}
 
@@ -572,17 +582,17 @@ export function LobbyView({
         <form onSubmit={handleCreateRoom}>
           <button
             type="submit"
-            disabled={httpUnavailable || isCreating}
+            disabled={infraUnavailable || isCreating}
             style={{
               marginTop: '0.75rem',
               width: '100%',
               padding: '0.5rem',
               borderRadius: '0.375rem',
               border: 'none',
-              backgroundColor: httpUnavailable || isCreating ? '#94a3b8' : '#2563eb',
+              backgroundColor: infraUnavailable || isCreating ? '#94a3b8' : '#2563eb',
               color: '#f8fafc',
               fontWeight: 600,
-              cursor: httpUnavailable || isCreating ? 'not-allowed' : 'pointer',
+              cursor: infraUnavailable || isCreating ? 'not-allowed' : 'pointer',
             }}
           >
             新しいルームを作成
@@ -650,16 +660,16 @@ export function LobbyView({
 
         <button
           type="submit"
-          disabled={isJoining}
+          disabled={isJoining || wsUnavailable}
           style={{
             width: '100%',
             padding: '0.5rem',
             borderRadius: '0.375rem',
             border: 'none',
-            backgroundColor: isJoining ? '#94a3b8' : '#0f766e',
+            backgroundColor: isJoining || wsUnavailable ? '#94a3b8' : '#0f766e',
             color: '#f8fafc',
             fontWeight: 600,
-            cursor: isJoining ? 'not-allowed' : 'pointer',
+            cursor: isJoining || wsUnavailable ? 'not-allowed' : 'pointer',
           }}
         >
           ルームに参加

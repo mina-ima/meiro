@@ -1,6 +1,5 @@
 import { logConnectionEvent, logRttSample, logLatencyWarning } from '../logging/telemetry';
 import { LATENCY_WARNING_THRESHOLD_MS } from '../config/spec';
-import { getRequiredWsBase } from '../config/env';
 
 const RECONNECT_DELAY_MS = 2000;
 const PING_INTERVAL_MS = 5000;
@@ -8,6 +7,7 @@ const PING_INTERVAL_MS = 5000;
 export type PlayerRole = 'owner' | 'player';
 
 export interface ConnectionOptions {
+  base: string;
   room: string;
   role: PlayerRole;
   nick: string;
@@ -47,10 +47,10 @@ export class NetClient {
 
     this.disposed = false;
     this.stopPingLoop();
-    const { room, role, nick } = this.opts;
+    const { base, room, role, nick } = this.opts;
     let url: URL;
     try {
-      url = buildWebSocketUrl(getRequiredWsBase(), room, role, nick);
+      url = buildWebSocketUrl(base, room, role, nick);
     } catch (error) {
       console.error('Failed to construct WebSocket URL', error);
       this.events.onError?.(new Event('error'));

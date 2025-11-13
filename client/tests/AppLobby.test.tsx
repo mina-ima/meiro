@@ -157,7 +157,7 @@ describe('App lobby interactions', () => {
     );
 
     expect(
-      screen.getByText(/サーバーの HTTP エンドポイントが設定されていません/),
+      screen.getByText(/サーバーのエンドポイントが設定されていません/, { exact: false }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新しいルームを作成' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'ルームに参加' })).toBeEnabled();
