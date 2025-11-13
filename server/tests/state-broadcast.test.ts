@@ -142,6 +142,58 @@ describe('RoomDurableObject state broadcast', () => {
     expect(message?.payload.full).toBe(true);
   });
 
+  it('接続直後にDEBUG_CONNECTEDメッセージを送信する', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+    const socket = new MockSocket();
+
+    const response = await joinRoom(room, socket, {
+      roomId: 'ROOM-1',
+      role: 'owner',
+      nick: 'Owner',
+    });
+
+    expect(response.ok).toBe(true);
+
+    const parsed = socket.sent.map((raw) => JSON.parse(raw));
+    const debugMessage = parsed.find((message) => message.type === 'DEBUG_CONNECTED');
+    expect(debugMessage).toMatchObject({
+      type: 'DEBUG_CONNECTED',
+      role: 'owner',
+      roomId: 'ROOM-1',
+    });
+  });
+
+  it('プレイヤー参加時も初期STATEを即時送信する', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await joinRoom(room, ownerSocket, {
+      roomId: 'ROOM-1',
+      role: 'owner',
+      nick: 'Owner',
+    });
+
+    const response = await joinRoom(room, playerSocket, {
+      roomId: 'ROOM-1',
+      role: 'player',
+      nick: 'Runner',
+    });
+
+    expect(response.ok).toBe(true);
+
+    const connections = (room as unknown as {
+      connections: Map<MockSocket, { sentImmediate: unknown[] }>;
+    }).connections;
+    const playerConnection = connections.get(playerSocket);
+    expect(playerConnection).toBeDefined();
+
+    const hasStateSnapshot = playerConnection?.sentImmediate.some(
+      (message) => (message as { type?: string }).type === 'STATE',
+    );
+    expect(hasStateSnapshot).toBe(true);
+  });
+
   it('状態更新時に差分STATEメッセージをブロードキャストする', async () => {
     const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
     const socket = new MockSocket();

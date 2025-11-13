@@ -184,8 +184,13 @@ export class RoomDurableObject {
         return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
       }
 
-      webSocket.accept();
-      this.registerSocket(webSocket, joinResult.session);
+      try {
+        webSocket.accept();
+        this.registerSocket(webSocket, joinResult.session);
+      } catch (error) {
+        this.handleSocketInternalError(webSocket, error, 'register');
+        return Response.json({ error: 'INTERNAL_ERROR' }, { status: 500 });
+      }
       return Response.json({ ok: true, sessionId: joinResult.session.id });
     }
 
@@ -220,6 +225,12 @@ export class RoomDurableObject {
       normalizedSession.id,
       this.clients.size,
     );
+    console.log('WS connected', {
+      roomId: this.roomId,
+      role: normalizedSession.role,
+      sessionId: normalizedSession.id,
+    });
+    this.sendDebugConnected(socket, normalizedSession);
 
     socket.addEventListener('message', (event) => {
       try {
@@ -444,15 +455,27 @@ export class RoomDurableObject {
     const excludedSockets = options.exclude ? toSocketSet(options.exclude) : null;
     if (message.type === 'STATE') {
       const seq = extractSequence(message);
+      const isFull = (message.payload as { full?: boolean }).full === true;
+      const recipientCount = Math.max(this.connections.size - (excludedSockets?.size ?? 0), 0);
+      const immediateCount = immediateSockets?.size ?? 0;
+      const excludedCount = excludedSockets?.size ?? 0;
       console.info(
         'room %s broadcasting STATE seq=%s full=%s recipients=%d immediate=%d exclude=%d',
         this.roomId,
         seq ?? 'n/a',
-        (message.payload as { full?: boolean }).full === true,
-        Math.max(this.connections.size - (excludedSockets?.size ?? 0), 0),
-        immediateSockets?.size ?? 0,
-        excludedSockets?.size ?? 0,
+        isFull,
+        recipientCount,
+        immediateCount,
+        excludedCount,
       );
+      console.log('WS send STATE', {
+        roomId: this.roomId,
+        seq: seq ?? null,
+        full: isFull,
+        recipients: recipientCount,
+        immediate: immediateCount,
+        excluded: excludedCount,
+      });
     }
 
     for (const [socket, connection] of this.connections.entries()) {
@@ -1421,6 +1444,27 @@ export class RoomDurableObject {
     this.metrics.logRoomDisposed();
   }
 
+  private sendDebugConnected(socket: WebSocket, session: PlayerSession): void {
+    const payload = {
+      type: 'DEBUG_CONNECTED' as const,
+      roomId: this.roomId,
+      role: session.role,
+      sessionId: session.id,
+    };
+
+    try {
+      socket.send(JSON.stringify(payload));
+      console.log('WS send DEBUG_CONNECTED', {
+        roomId: this.roomId,
+        role: session.role,
+        sessionId: session.id,
+      });
+    } catch (error) {
+      console.error('room %s failed to send DEBUG_CONNECTED message', this.roomId, error);
+      throw error;
+    }
+  }
+
   private sendError(
     socket: WebSocket,
     code: string,
@@ -1445,12 +1489,34 @@ export class RoomDurableObject {
     socket.send(JSON.stringify(payload));
   }
 
+  private sendFatalError(socket: WebSocket, code: string, message: string): void {
+    const payload = {
+      type: 'ERROR' as const,
+      code,
+      message,
+    };
+
+    try {
+      socket.send(JSON.stringify(payload));
+      console.log('WS send ERROR', { roomId: this.roomId, code });
+    } catch (error) {
+      console.error('room %s failed to send fatal error message', this.roomId, error);
+    }
+
+    try {
+      socket.close(1011, 'internal error');
+    } catch (closeError) {
+      console.error('room %s failed to close socket after fatal error', this.roomId, closeError);
+    }
+  }
+
   private sendInitialStateTo(socket: WebSocket): void {
     const connection = this.connections.get(socket);
     if (!connection) {
       return;
     }
 
+    const recipientSession = this.socketSessions.get(socket);
     const message = this.stateComposer.compose(this.roomState, { forceFull: true });
     if (!message) {
       return;
@@ -1467,6 +1533,12 @@ export class RoomDurableObject {
           this.roomId,
           seq ?? 'n/a',
         );
+        console.log('WS send STATE', {
+          roomId: this.roomId,
+          seq: seq ?? null,
+          reason: 'initial-owner',
+          role: recipientSession?.role,
+        });
       }
       connection.sendImmediate(message, meta);
     } catch (error) {
@@ -1491,17 +1563,8 @@ export class RoomDurableObject {
 
   private handleSocketInternalError(socket: WebSocket, error: unknown, context: string): void {
     console.error('room %s unexpected %s error', this.roomId, context, error);
-    this.sendError(socket, 'INTERNAL_ERROR', 'Internal error');
-    try {
-      socket.close(1011, 'internal error');
-    } catch (closeError) {
-      console.error(
-        'room %s failed to close socket after %s error',
-        this.roomId,
-        context,
-        closeError,
-      );
-    }
+    console.error('WS handler error', error);
+    this.sendFatalError(socket, 'INTERNAL_ERROR', 'Internal error');
   }
 }
 

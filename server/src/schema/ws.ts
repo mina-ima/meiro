@@ -99,6 +99,14 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     .passthrough(),
   z
     .object({
+      type: z.literal('DEBUG_CONNECTED'),
+      roomId: z.string(),
+      role: RoleSchema,
+      sessionId: z.string().optional(),
+    })
+    .passthrough(),
+  z
+    .object({
       type: z.literal('EV'),
       event: z.string(),
       payload: StatePayloadSchema.optional(),
@@ -107,6 +115,14 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('ERR'),
+      code: z.string(),
+      message: z.string(),
+      data: StatePayloadSchema.optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      type: z.literal('ERROR'),
       code: z.string(),
       message: z.string(),
       data: StatePayloadSchema.optional(),

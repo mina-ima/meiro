@@ -47,8 +47,29 @@ describe('ServerMessageSchema', () => {
     expect(ServerMessageSchema.parse(msg)).toEqual(msg);
   });
 
+  it('accepts debug handshake message', () => {
+    const msg = {
+      type: 'DEBUG_CONNECTED',
+      roomId: 'ROOM-1',
+      role: 'owner',
+      sessionId: 'session-1',
+    } as const;
+
+    expect(ServerMessageSchema.parse(msg)).toEqual(msg);
+  });
+
   it('parses pong control message', () => {
     const parsed = parseServerMessage({ type: 'PONG', ts: 42 });
     expect(parsed.type).toBe('PONG');
+  });
+
+  it('accepts fatal error message', () => {
+    const msg = {
+      type: 'ERROR',
+      code: 'INTERNAL_ERROR',
+      message: 'Internal error',
+    } as const;
+
+    expect(ServerMessageSchema.parse(msg)).toEqual(msg);
   });
 });
