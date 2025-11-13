@@ -225,9 +225,10 @@ export class RoomDurableObject {
       normalizedSession.id,
       this.clients.size,
     );
-    console.log('WS connected', {
+    console.log('DO connected', {
       roomId: this.roomId,
       role: normalizedSession.role,
+      nick: normalizedSession.nick,
       sessionId: normalizedSession.id,
     });
     this.sendDebugConnected(socket, normalizedSession);
@@ -468,7 +469,7 @@ export class RoomDurableObject {
         immediateCount,
         excludedCount,
       );
-      console.log('WS send STATE', {
+      console.log('send STATE', {
         roomId: this.roomId,
         seq: seq ?? null,
         full: isFull,
@@ -1454,7 +1455,7 @@ export class RoomDurableObject {
 
     try {
       socket.send(JSON.stringify(payload));
-      console.log('WS send DEBUG_CONNECTED', {
+      console.log('send DEBUG_CONNECTED', {
         roomId: this.roomId,
         role: session.role,
         sessionId: session.id,
@@ -1498,7 +1499,7 @@ export class RoomDurableObject {
 
     try {
       socket.send(JSON.stringify(payload));
-      console.log('WS send ERROR', { roomId: this.roomId, code });
+      console.log('send ERROR', { roomId: this.roomId, code });
     } catch (error) {
       console.error('room %s failed to send fatal error message', this.roomId, error);
     }
@@ -1533,7 +1534,7 @@ export class RoomDurableObject {
           this.roomId,
           seq ?? 'n/a',
         );
-        console.log('WS send STATE', {
+        console.log('send STATE', {
           roomId: this.roomId,
           seq: seq ?? null,
           reason: 'initial-owner',
@@ -1563,7 +1564,7 @@ export class RoomDurableObject {
 
   private handleSocketInternalError(socket: WebSocket, error: unknown, context: string): void {
     console.error('room %s unexpected %s error', this.roomId, context, error);
-    console.error('WS handler error', error);
+    console.error('WS error', error);
     this.sendFatalError(socket, 'INTERNAL_ERROR', 'Internal error');
   }
 }
