@@ -43,12 +43,16 @@ async function join(
 ): Promise<void> {
   const request = new Request('https://example/session', {
     method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Upgrade: 'websocket',
+    },
     body: JSON.stringify({ roomId: 'ROOM-PREDICT', ...payload }),
   });
 
   const requestWithSocket = Object.assign(request, { webSocket: socket });
   const response = await room.fetch(requestWithSocket);
-  expect(response.ok).toBe(true);
+  expect(response.status).toBe(101);
 }
 
 describe('予測地点ボーナス', () => {

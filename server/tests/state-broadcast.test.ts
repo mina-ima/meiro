@@ -95,11 +95,17 @@ async function joinRoom(
 ): Promise<Response> {
   const request = new Request('https://example/session', {
     method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Upgrade: 'websocket',
+    },
     body: JSON.stringify(payload),
   });
 
   const requestWithSocket = Object.assign(request, { webSocket: socket });
-  return room.fetch(requestWithSocket);
+  const response = await room.fetch(requestWithSocket);
+  expect(response.status).toBe(101);
+  return response;
 }
 
 describe('RoomDurableObject state broadcast', () => {
@@ -128,7 +134,7 @@ describe('RoomDurableObject state broadcast', () => {
       nick: 'Owner',
     });
 
-    expect(response.ok).toBe(true);
+    expect(response.status).toBe(101);
 
     const connections = (room as unknown as { connections: Map<MockSocket, { sentImmediate: unknown[] }> })
       .connections;
@@ -152,7 +158,7 @@ describe('RoomDurableObject state broadcast', () => {
       nick: 'Owner',
     });
 
-    expect(response.ok).toBe(true);
+    expect(response.status).toBe(101);
 
     const parsed = socket.sent.map((raw) => JSON.parse(raw));
     const debugMessage = parsed.find((message) => message.type === 'DEBUG_CONNECTED');
@@ -180,7 +186,7 @@ describe('RoomDurableObject state broadcast', () => {
       nick: 'Runner',
     });
 
-    expect(response.ok).toBe(true);
+    expect(response.status).toBe(101);
 
     const connections = (room as unknown as {
       connections: Map<MockSocket, { sentImmediate: unknown[] }>;
@@ -293,7 +299,7 @@ describe('RoomDurableObject state broadcast', () => {
       nick: 'Player',
     });
 
-    expect(response.ok).toBe(true);
+    expect(response.status).toBe(101);
 
     const connections = (room as unknown as {
       connections: Map<MockSocket, { sentImmediate: unknown[]; enqueued: unknown[] }>;
@@ -328,7 +334,7 @@ describe('RoomDurableObject state broadcast', () => {
       nick: 'Owner',
     });
 
-    expect(response.ok).toBe(true);
+    expect(response.status).toBe(101);
 
     const connections = (room as unknown as {
       connections: Map<MockSocket, { sentImmediate: unknown[]; enqueued: unknown[] }>;

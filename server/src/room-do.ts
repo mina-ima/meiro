@@ -38,6 +38,8 @@ interface WebSocketRequest extends Request {
   webSocket?: WebSocket;
 }
 
+type WebSocketResponseInit = ResponseInit & { webSocket?: WebSocket };
+
 type PlayerInputMessage = Extract<ClientMessage, { type: 'P_INPUT' }>;
 type OwnerEditMessage = Extract<ClientMessage, { type: 'O_EDIT' }>;
 type OwnerMarkMessage = Extract<ClientMessage, { type: 'O_MRK' }>;
@@ -81,6 +83,34 @@ const MAX_FUTURE_INPUT_MS = 150;
 const MAX_POSITION_DELTA_PER_SECOND = MOVE_SPEED * 1.25;
 const MAX_VELOCITY = MOVE_SPEED * 1.25;
 const MAX_TICK_DELTA_S = SERVER_TICK_INTERVAL_S * 10;
+const upgradeRequiredHeaders = new Headers({
+  Connection: 'Upgrade',
+  Upgrade: 'websocket',
+});
+
+function createSwitchingProtocolsResponse(socket: WebSocket): Response {
+  try {
+    return new Response(null, { status: 101, webSocket: socket } as WebSocketResponseInit);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      const fallback = new Response(null, { status: 200 });
+      Object.defineProperty(fallback, 'status', {
+        configurable: true,
+        enumerable: true,
+        value: 101,
+        writable: false,
+      });
+      Object.defineProperty(fallback, 'webSocket', {
+        configurable: true,
+        enumerable: false,
+        value: socket,
+        writable: false,
+      });
+      return fallback;
+    }
+    throw error;
+  }
+}
 
 export class RoomDurableObject {
   private readonly state: DurableObjectState;
@@ -151,10 +181,25 @@ export class RoomDurableObject {
     }
 
     if (url.pathname === '/session' && request.method === 'POST') {
-      const payload = (await request.json()) as SessionPayload;
+      const upgradeHeader = request.headers.get('Upgrade');
       const { webSocket } = request as WebSocketRequest;
-      if (!webSocket) {
-        return new Response('WebSocket required', { status: 400 });
+      if (
+        !webSocket ||
+        typeof upgradeHeader !== 'string' ||
+        upgradeHeader.toLowerCase() !== 'websocket'
+      ) {
+        return new Response('Upgrade Required', {
+          status: 426,
+          headers: upgradeRequiredHeaders,
+        });
+      }
+
+      let payload: SessionPayload;
+      try {
+        payload = (await request.json()) as SessionPayload;
+      } catch {
+        console.error('room %s received invalid session payload', this.roomId);
+        return new Response('Invalid session payload', { status: 400 });
       }
 
       const now = Date.now();
@@ -189,9 +234,10 @@ export class RoomDurableObject {
         this.registerSocket(webSocket, joinResult.session);
       } catch (error) {
         this.handleSocketInternalError(webSocket, error, 'register');
-        return Response.json({ error: 'INTERNAL_ERROR' }, { status: 500 });
+        return createSwitchingProtocolsResponse(webSocket);
       }
-      return Response.json({ ok: true, sessionId: joinResult.session.id });
+
+      return createSwitchingProtocolsResponse(webSocket);
     }
 
     return new Response('not found', { status: 404 });
@@ -225,10 +271,9 @@ export class RoomDurableObject {
       normalizedSession.id,
       this.clients.size,
     );
-    console.log('DO connected', {
+    console.info('DO connected', {
       roomId: this.roomId,
       role: normalizedSession.role,
-      nick: normalizedSession.nick,
       sessionId: normalizedSession.id,
     });
     this.sendDebugConnected(socket, normalizedSession);
@@ -469,7 +514,7 @@ export class RoomDurableObject {
         immediateCount,
         excludedCount,
       );
-      console.log('send STATE', {
+      console.info('send STATE', {
         roomId: this.roomId,
         seq: seq ?? null,
         full: isFull,
@@ -1455,7 +1500,7 @@ export class RoomDurableObject {
 
     try {
       socket.send(JSON.stringify(payload));
-      console.log('send DEBUG_CONNECTED', {
+      console.info('send DEBUG_CONNECTED', {
         roomId: this.roomId,
         role: session.role,
         sessionId: session.id,
@@ -1499,7 +1544,7 @@ export class RoomDurableObject {
 
     try {
       socket.send(JSON.stringify(payload));
-      console.log('send ERROR', { roomId: this.roomId, code });
+      console.error('send ERROR', { roomId: this.roomId, code });
     } catch (error) {
       console.error('room %s failed to send fatal error message', this.roomId, error);
     }
@@ -1534,7 +1579,7 @@ export class RoomDurableObject {
           this.roomId,
           seq ?? 'n/a',
         );
-        console.log('send STATE', {
+        console.info('send STATE', {
           roomId: this.roomId,
           seq: seq ?? null,
           reason: 'initial-owner',

@@ -51,10 +51,14 @@ interface RecordedRequest {
 
 class RecordingDurableObjectStub implements DurableObjectStub {
   public readonly calls: RecordedRequest[] = [];
+  public response: Response = new Response(null, { status: 101 });
 
-  async fetch(input: RequestInfo | URL, init?: RequestInit & { webSocket?: WebSocket }): Promise<Response> {
+  async fetch(
+    input: RequestInfo | URL,
+    init?: RequestInit & { webSocket?: WebSocket },
+  ): Promise<Response> {
     this.calls.push({ input, init });
-    return new Response('ok');
+    return this.response;
   }
 }
 
@@ -180,5 +184,23 @@ describe('WebSocket upgrade handling', () => {
     expect(response.status).toBe(426);
     expect(await response.text()).toContain('Upgrade Required');
     expect(namespace.stub.calls).toHaveLength(0);
+  });
+
+  it('fails the upgrade when the Durable Object does not accept the socket', async () => {
+    const { env, namespace } = createEnv();
+    namespace.stub.response = new Response('do failed', { status: 500 });
+
+    const request = new Request('https://example.com/ws?room=abc234&role=owner&nick=FAIL', {
+      method: 'GET',
+      headers: {
+        Upgrade: 'websocket',
+      },
+    });
+
+    const response = await handler.fetch(request, env, {} as ExecutionContext);
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('do failed');
+    expect(namespace.stub.calls).toHaveLength(1);
   });
 });

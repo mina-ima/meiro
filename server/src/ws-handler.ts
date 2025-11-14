@@ -35,8 +35,9 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
 
   const stub = getRoomStub(env, roomId);
 
+  let sessionResponse: Response;
   try {
-    await (
+    sessionResponse = await (
       stub.fetch as unknown as (input: RequestInfo | URL, init?: WebSocketInit) => Promise<Response>
     )('https://internal/session', {
       method: 'POST',
@@ -49,20 +50,22 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
     });
   } catch (error) {
     console.error('WS error during /ws bootstrap', error);
-    try {
-      server.close(1011, 'internal error');
-    } catch (closeError) {
-      console.error('WS error closing DO socket', closeError);
-    }
-
-    try {
-      client.close(1011, 'internal error');
-    } catch (clientError) {
-      console.error('WS error closing client socket', clientError);
-    }
+    closeSockets(client, server, 1011, 'internal error');
 
     return new Response('Failed to establish WebSocket session', {
       status: 500,
+    });
+  }
+
+  if (sessionResponse.status !== 101) {
+    console.error('Durable Object rejected WebSocket upgrade', {
+      roomId,
+      status: sessionResponse.status,
+    });
+    closeSockets(client, server, 1011, 'upgrade rejected');
+    return new Response(sessionResponse.body, {
+      status: sessionResponse.status,
+      headers: cloneHeaders(sessionResponse.headers),
     });
   }
 
@@ -75,4 +78,25 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
 function isWebSocketUpgrade(request: Request): boolean {
   const upgrade = request.headers.get('upgrade');
   return typeof upgrade === 'string' && upgrade.toLowerCase() === 'websocket';
+}
+
+function closeSockets(client: WebSocket, server: WebSocket, code: number, reason: string): void {
+  safeClose(server, code, reason, 'DO socket');
+  safeClose(client, code, reason, 'client socket');
+}
+
+function safeClose(socket: WebSocket, code: number, reason: string, label: string): void {
+  try {
+    socket.close(code, reason);
+  } catch (error) {
+    console.error(`WS error closing ${label}`, error);
+  }
+}
+
+function cloneHeaders(source: Headers): Headers {
+  const headers = new Headers();
+  source.forEach((value, key) => {
+    headers.set(key, value);
+  });
+  return headers;
 }

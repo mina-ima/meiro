@@ -91,10 +91,16 @@ async function joinRoom(
 ): Promise<Response> {
   const request = new Request('https://example/session', {
     method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Upgrade: 'websocket',
+    },
     body: JSON.stringify(payload),
   });
   const requestWithSocket = Object.assign(request, { webSocket: socket });
-  return room.fetch(requestWithSocket);
+  const response = await room.fetch(requestWithSocket);
+  expect(response.status).toBe(101);
+  return response;
 }
 
 describe('owner edit cooldown', () => {

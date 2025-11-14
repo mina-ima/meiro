@@ -67,6 +67,8 @@
 ## 5. 通信（WebSocket, JSON Lines）
 - [x] 接続: `/ws?room=ID&role=owner|player&nick=foo`
   - DoD: 役割検証・重複入室禁止
+- [x] ルータ↔DOハンドシェイク: `/ws` ハンドラで `Upgrade: websocket` を検証し、DO の `/session` が `webSocket.accept()` 後に `DEBUG_CONNECTED` と初回 `STATE` を即送出する
+  - DoD: `server/tests/room-session-websocket.test.ts` と `server/tests/websocket-handler.test.ts` で 101 応答とリカバリ（DOが101以外を返した場合はルータがHTTPエラー転送）の両方を検証
 - [x] メッセージ定義（Zod）
   - [x] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`
   - [x] プレイヤー: `P_INPUT(yaw, fwd, ts)`

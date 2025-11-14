@@ -41,12 +41,16 @@ class MockSocket {
 async function joinOwner(room: RoomDurableObject, socket: MockSocket): Promise<void> {
   const request = new Request('https://example/session', {
     method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Upgrade: 'websocket',
+    },
     body: JSON.stringify({ roomId: 'ROOM-REMOVE', nick: 'Owner', role: 'owner' }),
   });
 
   const requestWithSocket = Object.assign(request, { webSocket: socket });
   const response = await room.fetch(requestWithSocket);
-  expect(response.ok).toBe(true);
+  expect(response.status).toBe(101);
 }
 
 const NOW = 1_700_000_000_000;
