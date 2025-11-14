@@ -50,7 +50,7 @@ async function connect(
   options?: ConnectOptions,
 ): Promise<Response> {
   const request = new Request(`https://example${options?.pathname ?? '/session'}`, {
-    method: options?.method ?? 'POST',
+    method: 'POST',
     headers: {
       'content-type': 'application/json',
       Upgrade: 'websocket',
@@ -58,6 +58,20 @@ async function connect(
     body: JSON.stringify({ roomId: 'ROOM-SESSION', ...payload }),
   });
   const requestWithSocket = Object.assign(request, { webSocket: socket });
+
+  if (options?.method && options.method !== 'POST') {
+    const methodOverride = options.method;
+    const proxied = new Proxy(requestWithSocket, {
+      get(target, property, receiver) {
+        if (property === 'method') {
+          return methodOverride;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    return room.fetch(proxied as Request);
+  }
+
   return room.fetch(requestWithSocket);
 }
 
@@ -114,6 +128,25 @@ describe('/session WebSocket handling', () => {
       socket,
       { role: 'owner', nick: 'Owner' },
       { pathname: '/ROOM-SESSION/session' },
+    );
+
+    expect(response.status).toBe(101);
+    expect(socket.accepted).toBe(true);
+    expect(hasMessage(socket, 'DEBUG_CONNECTED')).toBe(true);
+    expect(hasMessage(socket, 'STATE')).toBe(true);
+
+    room.dispose();
+  });
+
+  it('accepts the session upgrade when the Worker forwards a GET request to the Durable Object', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+
+    const socket = new MockSocket();
+    const response = await connect(
+      room,
+      socket,
+      { role: 'owner', nick: 'Owner' },
+      { method: 'GET' },
     );
 
     expect(response.status).toBe(101);

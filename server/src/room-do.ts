@@ -103,6 +103,14 @@ function matchesInternalRoute(pathname: string, route: string): boolean {
   return pathname.endsWith(normalizedRoute);
 }
 
+function isSessionUpgradeMethod(method: string): boolean {
+  if (!method) {
+    return false;
+  }
+  const normalized = method.toUpperCase();
+  return normalized === 'POST' || normalized === 'GET';
+}
+
 function createSwitchingProtocolsResponse(socket: WebSocket): Response {
   try {
     return new Response(null, { status: 101, webSocket: socket } as WebSocketResponseInit);
@@ -196,7 +204,7 @@ export class RoomDurableObject {
       return Response.json({ ok: true });
     }
 
-    if (matchesInternalRoute(pathname, '/session') && request.method === 'POST') {
+    if (matchesInternalRoute(pathname, '/session') && isSessionUpgradeMethod(request.method)) {
       const upgradeHeader = request.headers.get('Upgrade');
       const { webSocket } = request as WebSocketRequest;
       if (
