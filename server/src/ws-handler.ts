@@ -46,11 +46,7 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
       stub.fetch as unknown as (input: RequestInfo | URL, init?: WebSocketInit) => Promise<Response>
     )(connectUrl.toString(), {
       method: 'GET',
-      headers: {
-        'content-type': 'application/json',
-      },
       webSocket: server,
-      body: JSON.stringify({ roomId, nick, role }),
     });
   } catch (error) {
     console.error('WS error during /ws bootstrap', error);

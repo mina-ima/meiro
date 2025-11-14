@@ -67,8 +67,8 @@
 ## 5. 通信（WebSocket, JSON Lines）
 - [x] 接続: `/ws?room=ID&role=owner|player&nick=foo`
   - DoD: 役割検証・重複入室禁止
-- [x] ルータ↔DOハンドシェイク: `/ws` ハンドラで `Upgrade: websocket` を検証し、DO の `/connect`（互換 `/session`）が `request.webSocket` を受け取ったら `webSocket.accept()` 後に `DEBUG_CONNECTED` と初回 `STATE` を即送出する（Worker→DO は `stub.fetch(..., { method: 'GET', webSocket, headers:{'content-type':'application/json'} })` で渡し、`Upgrade` ヘッダは自前で付けない）
-  - DoD: `server/tests/room-session-websocket.test.ts` で `/connect` の GET・レガシー `/session`・POST いずれでも 101 応答と初期送信が行われることを検証し、`server/tests/websocket-handler.test.ts` で Worker 側が GET + `webSocket` だけで DO に渡すことと、DO が 101 以外を返した場合にルータが HTTP エラー転送することを検証
+- [x] ルータ↔DOハンドシェイク: `/ws` ハンドラで `Upgrade: websocket` を検証し、DO の `/connect`（互換 `/session`）が `request.webSocket` を受け取ったら `webSocket.accept()` 後に `DEBUG_CONNECTED` と初回 `STATE` を即送出する（Worker→DO は `stub.fetch("https://internal/connect?room=...&role=...&nick=...", { method: 'GET', webSocket })` で渡し、`Upgrade`/`body` は付けない）
+  - DoD: `server/tests/room-session-websocket.test.ts` で `/connect` の GET（クエリのみ）・レガシー `/session`・POST ボディの各経路で 101 応答と初期送信が行われることを検証し、`server/tests/websocket-handler.test.ts` で Worker 側が GET + `webSocket` だけで DO に渡すことと、DO が 101 以外を返した場合にルータが HTTP エラー転送することを検証
 - [x] DO 内部ルート判定: Cloudflare が `/<DurableObjectId>/` を付与するため `/connect` / `/session` / `/rematch` は `endsWith()` 判定でマッチさせる
   - DoD: `server/tests/room-session-websocket.test.ts` で `https://example/<id>/connect`（および互換 `/session`）への Upgrade が 101 になる
 - [x] メッセージ定義（Zod）

@@ -41,6 +41,7 @@ class MockSocket {
 interface ConnectOptions {
   method?: 'GET' | 'POST';
   pathname?: string;
+  includeQuery?: boolean;
 }
 
 async function connect(
@@ -50,30 +51,26 @@ async function connect(
   options?: ConnectOptions,
 ): Promise<Response> {
   const targetPath = options?.pathname ?? '/connect';
-  const desiredMethod = options?.method ?? 'GET';
-  const initMethod = desiredMethod === 'GET' ? 'POST' : desiredMethod;
+  const method = options?.method ?? 'GET';
+  const includeQuery = options?.includeQuery ?? true;
 
-  const request = new Request(`https://example${targetPath}`, {
-    method: initMethod,
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ roomId: 'ROOM-SESSION', ...payload }),
-  });
-  const requestWithSocket = Object.assign(request, { webSocket: socket });
-
-  if (desiredMethod !== initMethod) {
-    const proxied = new Proxy(requestWithSocket, {
-      get(target, property, receiver) {
-        if (property === 'method') {
-          return desiredMethod;
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    return room.fetch(proxied as Request);
+  const url = new URL(`https://example${targetPath}`);
+  if (includeQuery) {
+    url.searchParams.set('room', 'ROOM-SESSION');
+    url.searchParams.set('role', payload.role);
+    url.searchParams.set('nick', payload.nick);
   }
 
+  const init: RequestInit = { method };
+  if (method === 'POST') {
+    init.headers = {
+      'content-type': 'application/json',
+    };
+    init.body = JSON.stringify({ roomId: 'ROOM-SESSION', ...payload });
+  }
+
+  const request = new Request(url, init);
+  const requestWithSocket = Object.assign(request, { webSocket: socket });
   return room.fetch(requestWithSocket);
 }
 
@@ -167,7 +164,7 @@ describe('Room WebSocket handling', () => {
       room,
       socket,
       { role: 'owner', nick: 'Owner' },
-      { method: 'POST' },
+      { method: 'POST', includeQuery: false },
     );
 
     expect(response.status).toBe(101);

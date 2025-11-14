@@ -119,14 +119,14 @@ async function parseSessionPayload(
   request: Request,
   fallbackRoomId: string,
 ): Promise<SessionPayload> {
-  const fromBody = await readPayloadFromBody(request, fallbackRoomId);
-  if (fromBody) {
-    return fromBody;
-  }
-
   const fromQuery = readPayloadFromQuery(request.url, fallbackRoomId);
   if (fromQuery) {
     return fromQuery;
+  }
+
+  const fromBody = await readPayloadFromBody(request, fallbackRoomId);
+  if (fromBody) {
+    return fromBody;
   }
 
   throw new Error('invalid');
