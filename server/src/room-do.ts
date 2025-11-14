@@ -88,6 +88,21 @@ const upgradeRequiredHeaders = new Headers({
   Upgrade: 'websocket',
 });
 
+function normalizePathname(pathname: string): string {
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return pathname.replace(/\/+$/, '');
+  }
+  return pathname;
+}
+
+function matchesInternalRoute(pathname: string, route: string): boolean {
+  const normalizedRoute = route.startsWith('/') ? route : `/${route}`;
+  if (pathname === normalizedRoute) {
+    return true;
+  }
+  return pathname.endsWith(normalizedRoute);
+}
+
 function createSwitchingProtocolsResponse(socket: WebSocket): Response {
   try {
     return new Response(null, { status: 101, webSocket: socket } as WebSocketResponseInit);
@@ -142,8 +157,9 @@ export class RoomDurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const pathname = normalizePathname(url.pathname);
 
-    if (url.pathname === '/rematch' && request.method === 'POST') {
+    if (matchesInternalRoute(pathname, '/rematch') && request.method === 'POST') {
       const now = Date.now();
       if (!resetForRematch(this.roomState, now)) {
         return Response.json({ error: 'REMATCH_UNAVAILABLE' }, { status: 409 });
@@ -180,7 +196,7 @@ export class RoomDurableObject {
       return Response.json({ ok: true });
     }
 
-    if (url.pathname === '/session' && request.method === 'POST') {
+    if (matchesInternalRoute(pathname, '/session') && request.method === 'POST') {
       const upgradeHeader = request.headers.get('Upgrade');
       const { webSocket } = request as WebSocketRequest;
       if (

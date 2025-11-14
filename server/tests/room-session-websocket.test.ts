@@ -38,13 +38,19 @@ class MockSocket {
   }
 }
 
+interface ConnectOptions {
+  method?: 'GET' | 'POST';
+  pathname?: string;
+}
+
 async function connect(
   room: RoomDurableObject,
   socket: MockSocket,
   payload: { role: 'owner' | 'player'; nick: string },
+  options?: ConnectOptions,
 ): Promise<Response> {
-  const request = new Request('https://example/session', {
-    method: 'POST',
+  const request = new Request(`https://example${options?.pathname ?? '/session'}`, {
+    method: options?.method ?? 'POST',
     headers: {
       'content-type': 'application/json',
       Upgrade: 'websocket',
@@ -95,6 +101,25 @@ describe('/session WebSocket handling', () => {
     expect(playerSocket.accepted).toBe(true);
     expect(hasMessage(playerSocket, 'DEBUG_CONNECTED')).toBe(true);
     expect(hasMessage(playerSocket, 'STATE')).toBe(true);
+
+    room.dispose();
+  });
+
+  it('accepts Upgrade requests when the URL contains the Durable Object identifier prefix', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+
+    const socket = new MockSocket();
+    const response = await connect(
+      room,
+      socket,
+      { role: 'owner', nick: 'Owner' },
+      { pathname: '/ROOM-SESSION/session' },
+    );
+
+    expect(response.status).toBe(101);
+    expect(socket.accepted).toBe(true);
+    expect(hasMessage(socket, 'DEBUG_CONNECTED')).toBe(true);
+    expect(hasMessage(socket, 'STATE')).toBe(true);
 
     room.dispose();
   });
