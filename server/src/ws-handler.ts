@@ -35,15 +35,19 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
 
   const stub = getRoomStub(env, roomId);
 
+  const connectUrl = new URL('https://internal/connect');
+  connectUrl.searchParams.set('room', roomId);
+  connectUrl.searchParams.set('role', role);
+  connectUrl.searchParams.set('nick', nick);
+
   let sessionResponse: Response;
   try {
     sessionResponse = await (
       stub.fetch as unknown as (input: RequestInfo | URL, init?: WebSocketInit) => Promise<Response>
-    )('https://internal/session', {
-      method: 'POST',
+    )(connectUrl.toString(), {
+      method: 'GET',
       headers: {
         'content-type': 'application/json',
-        Upgrade: 'websocket',
       },
       webSocket: server,
       body: JSON.stringify({ roomId, nick, role }),

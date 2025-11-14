@@ -111,6 +111,76 @@ function isSessionUpgradeMethod(method: string): boolean {
   return normalized === 'POST' || normalized === 'GET';
 }
 
+function isRoleValue(value: unknown): value is Role {
+  return value === 'owner' || value === 'player';
+}
+
+async function parseSessionPayload(
+  request: Request,
+  fallbackRoomId: string,
+): Promise<SessionPayload> {
+  const fromBody = await readPayloadFromBody(request, fallbackRoomId);
+  if (fromBody) {
+    return fromBody;
+  }
+
+  const fromQuery = readPayloadFromQuery(request.url, fallbackRoomId);
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  throw new Error('invalid');
+}
+
+async function readPayloadFromBody(
+  request: Request,
+  fallbackRoomId: string,
+): Promise<SessionPayload | null> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return null;
+  }
+
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const candidate = body as Partial<SessionPayload>;
+  if (!candidate || typeof candidate.nick !== 'string' || !isRoleValue(candidate.role)) {
+    return null;
+  }
+
+  return {
+    roomId: typeof candidate.roomId === 'string' ? candidate.roomId : fallbackRoomId,
+    nick: candidate.nick,
+    role: candidate.role,
+  };
+}
+
+function readPayloadFromQuery(rawUrl: string, fallbackRoomId: string): SessionPayload | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  const nick = url.searchParams.get('nick');
+  const role = url.searchParams.get('role');
+  if (!nick || !role || !isRoleValue(role)) {
+    return null;
+  }
+
+  const roomId = url.searchParams.get('room') ?? fallbackRoomId;
+  return {
+    roomId,
+    nick,
+    role,
+  };
+}
+
 function createSwitchingProtocolsResponse(socket: WebSocket): Response {
   try {
     return new Response(null, { status: 101, webSocket: socket } as WebSocketResponseInit);
@@ -204,14 +274,12 @@ export class RoomDurableObject {
       return Response.json({ ok: true });
     }
 
-    if (matchesInternalRoute(pathname, '/session') && isSessionUpgradeMethod(request.method)) {
-      const upgradeHeader = request.headers.get('Upgrade');
+    const isSessionRoute = matchesInternalRoute(pathname, '/session');
+    const isConnectRoute = matchesInternalRoute(pathname, '/connect');
+
+    if ((isSessionRoute || isConnectRoute) && isSessionUpgradeMethod(request.method)) {
       const { webSocket } = request as WebSocketRequest;
-      if (
-        !webSocket ||
-        typeof upgradeHeader !== 'string' ||
-        upgradeHeader.toLowerCase() !== 'websocket'
-      ) {
+      if (!webSocket) {
         return new Response('Upgrade Required', {
           status: 426,
           headers: upgradeRequiredHeaders,
@@ -220,7 +288,7 @@ export class RoomDurableObject {
 
       let payload: SessionPayload;
       try {
-        payload = (await request.json()) as SessionPayload;
+        payload = await parseSessionPayload(request, this.roomId);
       } catch {
         console.error('room %s received invalid session payload', this.roomId);
         return new Response('Invalid session payload', { status: 400 });

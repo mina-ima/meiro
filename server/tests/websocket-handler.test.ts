@@ -167,7 +167,16 @@ describe('WebSocket upgrade handling', () => {
     expect(response.status).toBe(101);
     expect(namespace.stub.calls).toHaveLength(1);
     const call = namespace.stub.calls[0];
-    expect(call.input).toBe('https://internal/session');
+    expect(call.input).toBe('https://internal/connect?room=ABC234&role=owner&nick=ALICE');
+    expect(call.init?.method).toBe('GET');
+    const headers = new Headers(call.init?.headers);
+    expect(headers.get('content-type')).toBe('application/json');
+    expect(headers.has('Upgrade')).toBe(false);
+    expect(JSON.parse(String(call.init?.body))).toEqual({
+      roomId: 'ABC234',
+      role: 'owner',
+      nick: 'ALICE',
+    });
     expect(call.init?.webSocket).toBe(recordedPairs[0]?.server);
     expect(logSpy).toHaveBeenCalledWith(
       'WS fetch /ws',

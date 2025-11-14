@@ -49,22 +49,24 @@ async function connect(
   payload: { role: 'owner' | 'player'; nick: string },
   options?: ConnectOptions,
 ): Promise<Response> {
-  const request = new Request(`https://example${options?.pathname ?? '/session'}`, {
-    method: 'POST',
+  const targetPath = options?.pathname ?? '/connect';
+  const desiredMethod = options?.method ?? 'GET';
+  const initMethod = desiredMethod === 'GET' ? 'POST' : desiredMethod;
+
+  const request = new Request(`https://example${targetPath}`, {
+    method: initMethod,
     headers: {
       'content-type': 'application/json',
-      Upgrade: 'websocket',
     },
     body: JSON.stringify({ roomId: 'ROOM-SESSION', ...payload }),
   });
   const requestWithSocket = Object.assign(request, { webSocket: socket });
 
-  if (options?.method && options.method !== 'POST') {
-    const methodOverride = options.method;
+  if (desiredMethod !== initMethod) {
     const proxied = new Proxy(requestWithSocket, {
       get(target, property, receiver) {
         if (property === 'method') {
-          return methodOverride;
+          return desiredMethod;
         }
         return Reflect.get(target, property, receiver);
       },
@@ -88,7 +90,7 @@ function hasMessage(socket: MockSocket, type: string): boolean {
 
 const NOW = 1_700_000_000_000;
 
-describe('/session WebSocket handling', () => {
+describe('Room WebSocket handling', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -127,6 +129,25 @@ describe('/session WebSocket handling', () => {
       room,
       socket,
       { role: 'owner', nick: 'Owner' },
+      { pathname: '/ROOM-SESSION/connect' },
+    );
+
+    expect(response.status).toBe(101);
+    expect(socket.accepted).toBe(true);
+    expect(hasMessage(socket, 'DEBUG_CONNECTED')).toBe(true);
+    expect(hasMessage(socket, 'STATE')).toBe(true);
+
+    room.dispose();
+  });
+
+  it('accepts the legacy /session path for backward compatibility', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+
+    const socket = new MockSocket();
+    const response = await connect(
+      room,
+      socket,
+      { role: 'owner', nick: 'Owner' },
       { pathname: '/ROOM-SESSION/session' },
     );
 
@@ -138,7 +159,7 @@ describe('/session WebSocket handling', () => {
     room.dispose();
   });
 
-  it('accepts the session upgrade when the Worker forwards a GET request to the Durable Object', async () => {
+  it('accepts the session upgrade when the Worker falls back to POST', async () => {
     const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
 
     const socket = new MockSocket();
@@ -146,7 +167,7 @@ describe('/session WebSocket handling', () => {
       room,
       socket,
       { role: 'owner', nick: 'Owner' },
-      { method: 'GET' },
+      { method: 'POST' },
     );
 
     expect(response.status).toBe(101);
