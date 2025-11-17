@@ -5,15 +5,12 @@ import { MAX_ACTIVE_TRAPS } from '../src/config/spec';
 import type { NetClient } from '../src/net/NetClient';
 
 describe('OwnerView', () => {
-  it('HUDに壁残数・罠権利・クールダウン・禁止エリア・予測地点数を表示する', () => {
+  it('HUDでは初期設定に必要な罠・予測地点残数・残り時間だけを表示する', () => {
     render(
       <OwnerView
         client={null}
         roomId="ROOM-1"
-        wallCount={12}
         trapCharges={2}
-        wallRemoveLeft={1}
-        editCooldownMs={1_500}
         forbiddenDistance={2}
         activePredictions={2}
         predictionLimit={3}
@@ -27,37 +24,35 @@ describe('OwnerView', () => {
       />,
     );
 
-    expect(screen.getByText('壁残数: 12本')).toBeInTheDocument();
-    expect(screen.getByText(`罠: 権利2 / 設置1/${MAX_ACTIVE_TRAPS}`)).toBeInTheDocument();
-    expect(screen.getByText('壁削除権: 残り1回')).toBeInTheDocument();
-    expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
-    expect(screen.getByText('禁止エリア距離: 2')).toBeInTheDocument();
-    expect(screen.getByText('予測地点: 2 / 3')).toBeInTheDocument();
-    expect(screen.getByText(/プレイヤー座標/)).toHaveTextContent('3.5');
-
     const map = screen.getByLabelText('俯瞰マップ');
     const initialViewBox = map.getAttribute('viewBox');
     fireEvent.click(screen.getByRole('button', { name: 'ズームイン' }));
     expect(map.getAttribute('viewBox')).not.toBe(initialViewBox);
     fireEvent.click(screen.getByRole('button', { name: 'プレイヤーにセンタリング' }));
     expect(screen.getByTestId('player-marker')).toBeInTheDocument();
+    expect(screen.queryByText(/壁残数/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/クールダウン/)).not.toBeInTheDocument();
+    expect(screen.getByText('罠権利: 2')).toBeInTheDocument();
+    expect(screen.getByText('予測地点: 残り1 / 3')).toBeInTheDocument();
+    expect(screen.getByText('設定残り時間: 75秒')).toBeInTheDocument();
   });
 
-  it('迷路サイズに応じた壁リソース上限をHUDで表示する', () => {
+  it('罠の同時設置数は上限でクリップされて表示される', () => {
     render(
       <OwnerView
         client={null}
         roomId="ROOM-1"
-        wallCount={12}
         trapCharges={1}
-        wallRemoveLeft={1}
-        editCooldownMs={1_000}
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}
         timeRemaining={120}
         predictionMarks={[]}
-        traps={[]}
+        traps={[
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+          { x: 3, y: 3 },
+        ]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
         phase="explore"
@@ -65,12 +60,9 @@ describe('OwnerView', () => {
       />,
     );
 
-    expect(screen.getByText('規定ポイント: 48')).toBeInTheDocument();
-    expect(screen.getByText('ゴールボーナス: 10')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: '達成率' })).toHaveAttribute(
-      'aria-valuenow',
-      '25',
-    );
+    expect(
+      screen.getByText(`罠: 設置${MAX_ACTIVE_TRAPS}/${MAX_ACTIVE_TRAPS}`),
+    ).toBeInTheDocument();
   });
 
   it('ロビーでプレイヤー未参加なら参加状況を表示し開始ボタンを無効化する', () => {
@@ -78,10 +70,7 @@ describe('OwnerView', () => {
       <OwnerView
         client={null}
         roomId="ROOM-1"
-        wallCount={0}
         trapCharges={0}
-        wallRemoveLeft={1}
-        editCooldownMs={0}
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}
@@ -107,10 +96,7 @@ describe('OwnerView', () => {
       <OwnerView
         client={client}
         roomId="ROOM-1"
-        wallCount={0}
         trapCharges={0}
-        wallRemoveLeft={1}
-        editCooldownMs={0}
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}
@@ -138,10 +124,7 @@ describe('OwnerView', () => {
       <OwnerView
         client={null}
         roomId="ABC123"
-        wallCount={0}
         trapCharges={0}
-        wallRemoveLeft={1}
-        editCooldownMs={0}
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}

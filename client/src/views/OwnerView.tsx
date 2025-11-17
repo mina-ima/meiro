@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { NetClient } from '../net/NetClient';
-import { HUD } from './HUD';
-import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS, WALL_STOCK_BY_MAZE_SIZE } from '../config/spec';
+import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
 import type { PauseReason, ServerSessionEntry, SessionPhase } from '../state/sessionStore';
 
 interface Vector2 {
@@ -9,13 +8,67 @@ interface Vector2 {
   y: number;
 }
 
+interface InitialSetupPanelProps {
+  trapCharges: number;
+  activeTrapCount: number;
+  predictionLimit: number;
+  remainingPredictions: number;
+  timeText: string;
+  pauseMessage: string | null;
+}
+
+function InitialSetupPanel({
+  trapCharges,
+  activeTrapCount,
+  predictionLimit,
+  remainingPredictions,
+  timeText,
+  pauseMessage,
+}: InitialSetupPanelProps) {
+  return (
+    <section
+      aria-label="初期設定情報"
+      style={{
+        minWidth: '240px',
+        padding: '1rem',
+        border: '1px solid #cbd5f5',
+        borderRadius: '0.75rem',
+        background: '#f8fafc',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+      }}
+    >
+      <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>初期設定</h3>
+      <p style={{ margin: 0 }}>罠権利: {trapCharges}</p>
+      <p style={{ margin: 0 }}>
+        罠: 設置{activeTrapCount}/{MAX_ACTIVE_TRAPS}
+      </p>
+      <p style={{ margin: 0 }}>
+        予測地点: 残り{remainingPredictions} / {predictionLimit}
+      </p>
+      <p style={{ margin: 0 }}>設定残り時間: {timeText}</p>
+      {pauseMessage ? (
+        <p style={{ margin: 0, color: '#dc2626' }} aria-live="polite">
+          {pauseMessage}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function formatSetupTime(remainingSeconds: number): string {
+  if (!Number.isFinite(remainingSeconds) || remainingSeconds <= 0) {
+    return '0秒';
+  }
+
+  return `${Math.ceil(remainingSeconds)}秒`;
+}
+
 export interface OwnerViewProps {
   client: NetClient | null;
   roomId: string | null;
-  wallCount: number;
   trapCharges: number;
-  wallRemoveLeft: 0 | 1;
-  editCooldownMs: number;
   forbiddenDistance: number;
   activePredictions: number;
   predictionLimit: number;
@@ -33,10 +86,7 @@ export interface OwnerViewProps {
 export function OwnerView({
   client,
   roomId,
-  wallCount,
   trapCharges,
-  wallRemoveLeft,
-  editCooldownMs,
   forbiddenDistance,
   activePredictions,
   predictionLimit,
@@ -51,10 +101,10 @@ export function OwnerView({
   sessions,
 }: OwnerViewProps) {
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
-  const cooldownText = formatCooldown(editCooldownMs);
   const clampedPredictions = Math.max(0, Math.min(activePredictions, predictionLimit));
   const activeTrapCount = Math.min(traps.length, MAX_ACTIVE_TRAPS);
-  const wallCapacity = WALL_STOCK_BY_MAZE_SIZE[mazeSize];
+  const remainingPredictions = Math.max(0, predictionLimit - clampedPredictions);
+  const setupTimeText = formatSetupTime(timeRemaining);
   const ownerSession = useMemo(
     () => sessions.find((session) => session.role === 'owner'),
     [sessions],
@@ -186,24 +236,18 @@ export function OwnerView({
           onCenterPlayer={handleCenterOnPlayer}
         />
 
-        <HUD timeRemaining={timeRemaining} score={wallCount} targetScore={wallCapacity}>
-          <p>壁残数: {wallCount}本</p>
-          <p>
-            罠: 権利{trapCharges} / 設置{activeTrapCount}/{MAX_ACTIVE_TRAPS}
-          </p>
-          <p>壁削除権: 残り{wallRemoveLeft}回</p>
-          <p>編集クールダウン: {cooldownText}</p>
-          <p>禁止エリア距離: {forbiddenDistance}</p>
-          <p>
-            予測地点: {clampedPredictions} / {predictionLimit}
-          </p>
-          <p>
-            プレイヤー座標: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)})
-          </p>
-          {pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined ? (
-            <p aria-live="polite">通信再開待ち: 残り {pauseSecondsRemaining} 秒</p>
-          ) : null}
-        </HUD>
+        <InitialSetupPanel
+          trapCharges={trapCharges}
+          activeTrapCount={activeTrapCount}
+          predictionLimit={predictionLimit}
+          remainingPredictions={remainingPredictions}
+          timeText={setupTimeText}
+          pauseMessage={
+            pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined
+              ? `通信再開待ち: 残り ${pauseSecondsRemaining} 秒`
+              : null
+          }
+        />
       </div>
     </div>
   );
@@ -409,19 +453,6 @@ function clamp(value: number, min: number, max: number): number {
     return max;
   }
   return value;
-}
-
-function formatCooldown(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) {
-    return '0秒';
-  }
-
-  const seconds = Math.round((ms / 1000) * 10) / 10;
-  if (Number.isInteger(seconds)) {
-    return `${Math.trunc(seconds)}秒`;
-  }
-
-  return `${seconds}秒`;
 }
 
 const PHASE_LABELS: Record<SessionPhase, string> = {

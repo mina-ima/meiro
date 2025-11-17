@@ -173,6 +173,8 @@
   - DoD: client/tests/OwnerView.test.tsx で参加表示とボタン送信を検証、server/tests/manual-start.test.ts で手動開始のサーバ挙動を検証
 - [x] 共有用ルームID表示：オーナービューのヘッダーで現在のルームコードを強調表示し、未取得時は「取得中」を表示
   - DoD: client/tests/OwnerView.test.tsx の `room-id` テストケースで DOM 表示を検証
+- [x] 初期設定HUDの簡略化：オーナービューでは罠権利/同時設置数・予測地点残数・設定残り時間のみを表示し、迷路プレビューと合わせて共有する
+  - DoD: client/tests/OwnerView.test.tsx の `HUDでは初期設定` / `罠の同時設置数` テストでDOM内容を検証
 
 ---
 

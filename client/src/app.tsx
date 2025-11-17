@@ -201,10 +201,7 @@ export function App() {
       <OwnerView
         client={client}
         roomId={roomId}
-        wallCount={ownerState.wallStock}
         trapCharges={ownerState.trapCharges}
-        wallRemoveLeft={ownerState.wallRemoveLeft}
-        editCooldownMs={ownerCooldownMs}
         forbiddenDistance={forbiddenDistance}
         activePredictions={ownerState.activePredictionCount}
         predictionLimit={ownerState.predictionLimit}
