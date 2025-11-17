@@ -3,7 +3,14 @@ import { RoleSchema } from './schema/ws';
 import { validateNickname, validateRoomId } from './logic/validate';
 import { getRoomStub } from './logic/room-binding';
 
-type WebSocketInit = RequestInit & { webSocket?: WebSocket };
+type DurableObjectFetch = (
+  input: RequestInfo | URL,
+  init?: WebSocketRequestInit,
+) => Promise<Response>;
+
+type WebSocketRequestInit = RequestInit & {
+  webSocket?: WebSocket;
+};
 
 const upgradeRequiredHeaders = new Headers({
   Connection: 'Upgrade',
@@ -31,26 +38,33 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
   console.log('WS fetch /ws', { url: url.toString(), roomId, role, nick });
 
   const pair = new WebSocketPair();
-  const [client, server] = Object.values(pair);
+  const clientSocket = pair[0];
+  const serverSocket = pair[1];
 
   const stub = getRoomStub(env, roomId);
 
-  const connectUrl = new URL('https://internal/connect');
+  const connectUrl = new URL('https://do/connect');
   connectUrl.searchParams.set('room', roomId);
   connectUrl.searchParams.set('role', role);
   connectUrl.searchParams.set('nick', nick);
 
   let sessionResponse: Response;
   try {
-    sessionResponse = await (
-      stub.fetch as unknown as (input: RequestInfo | URL, init?: WebSocketInit) => Promise<Response>
-    )(connectUrl.toString(), {
+    const connectInit: WebSocketRequestInit & { websocket?: WebSocket } = {
       method: 'GET',
-      webSocket: server,
+      headers: request.headers,
+      webSocket: serverSocket,
+      websocket: serverSocket,
+    };
+    console.log('WS delegate /connect', {
+      url: connectUrl.toString(),
+      hasWebSocket: Boolean(connectInit.webSocket),
     });
+    const fetchWithSocket = stub.fetch as unknown as DurableObjectFetch;
+    sessionResponse = await fetchWithSocket.call(stub, connectUrl.toString(), connectInit);
   } catch (error) {
     console.error('WS error during /ws bootstrap', error);
-    closeSockets(client, server, 1011, 'internal error');
+    closeSockets(clientSocket, serverSocket, 1011, 'internal error');
 
     return new Response('Failed to establish WebSocket session', {
       status: 500,
@@ -62,7 +76,7 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
       roomId,
       status: sessionResponse.status,
     });
-    closeSockets(client, server, 1011, 'upgrade rejected');
+    closeSockets(clientSocket, serverSocket, 1011, 'upgrade rejected');
     return new Response(sessionResponse.body, {
       status: sessionResponse.status,
       headers: cloneHeaders(sessionResponse.headers),
@@ -71,7 +85,7 @@ export async function handleWebSocketRequest(request: Request, env: Env): Promis
 
   return new Response(null, {
     status: 101,
-    webSocket: client,
+    webSocket: clientSocket,
   });
 }
 

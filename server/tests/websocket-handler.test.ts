@@ -49,6 +49,7 @@ interface RecordedRequest {
   init?: RequestInit & { webSocket?: WebSocket | undefined };
 }
 
+
 class RecordingDurableObjectStub implements DurableObjectStub {
   public readonly calls: RecordedRequest[] = [];
   public response: Response = new Response(null, { status: 101 });
@@ -167,12 +168,13 @@ describe('WebSocket upgrade handling', () => {
     expect(response.status).toBe(101);
     expect(namespace.stub.calls).toHaveLength(1);
     const call = namespace.stub.calls[0];
-    expect(call.input).toBe('https://internal/connect?room=ABC234&role=owner&nick=ALICE');
-    expect(call.init?.method).toBe('GET');
-    const headers = new Headers(call.init?.headers);
+    expect(call.input).toBe('https://do/connect?room=ABC234&role=owner&nick=ALICE');
+    const init = call.init ?? {};
+    expect(init.method).toBe('GET');
+    const headers = new Headers(init.headers ?? {});
     expect(headers.get('content-type')).toBeNull();
-    expect(headers.has('Upgrade')).toBe(false);
-    expect(call.init?.body).toBeUndefined();
+    expect(headers.get('upgrade')).toBe('websocket');
+    expect(init.body).toBeUndefined();
     expect(call.init?.webSocket).toBe(recordedPairs[0]?.server);
     expect(logSpy).toHaveBeenCalledWith(
       'WS fetch /ws',
