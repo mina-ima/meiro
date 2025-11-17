@@ -42,6 +42,7 @@ interface ConnectOptions {
   method?: 'GET' | 'POST';
   pathname?: string;
   includeQuery?: boolean;
+  socketProperty?: 'webSocket' | 'websocket';
 }
 
 async function connect(
@@ -70,7 +71,16 @@ async function connect(
   }
 
   const request = new Request(url, init);
-  const requestWithSocket = Object.assign(request, { webSocket: socket });
+  const assignKey = options?.socketProperty ?? 'webSocket';
+  const requestWithSocket = request as Request & {
+    webSocket?: MockSocket;
+    websocket?: MockSocket;
+  };
+  if (assignKey === 'websocket') {
+    Object.assign(requestWithSocket, { websocket: socket });
+  } else {
+    Object.assign(requestWithSocket, { webSocket: socket });
+  }
   return room.fetch(requestWithSocket);
 }
 
@@ -165,6 +175,25 @@ describe('Room WebSocket handling', () => {
       socket,
       { role: 'owner', nick: 'Owner' },
       { method: 'POST', includeQuery: false },
+    );
+
+    expect(response.status).toBe(101);
+    expect(socket.accepted).toBe(true);
+    expect(hasMessage(socket, 'DEBUG_CONNECTED')).toBe(true);
+    expect(hasMessage(socket, 'STATE')).toBe(true);
+
+    room.dispose();
+  });
+
+  it('accepts sockets attached via request.websocket for compatibility', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+
+    const socket = new MockSocket();
+    const response = await connect(
+      room,
+      socket,
+      { role: 'owner', nick: 'Owner' },
+      { socketProperty: 'websocket' },
     );
 
     expect(response.status).toBe(101);

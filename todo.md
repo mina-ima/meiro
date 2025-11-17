@@ -69,6 +69,8 @@
   - DoD: 役割検証・重複入室禁止
 - [x] ルータ↔DOハンドシェイク: `/ws` ハンドラで `Upgrade: websocket` を検証し、DO の `/connect`（互換 `/session`）が `request.webSocket` を受け取ったら `webSocket.accept()` 後に `DEBUG_CONNECTED` と初回 `STATE` を即送出する（Worker→DO は `stub.fetch("https://internal/connect?room=...&role=...&nick=...", { method: 'GET', webSocket })` で渡し、`Upgrade`/`body` は付けない）
   - DoD: `server/tests/room-session-websocket.test.ts` で `/connect` の GET（クエリのみ）・レガシー `/session`・POST ボディの各経路で 101 応答と初期送信が行われることを検証し、`server/tests/websocket-handler.test.ts` で Worker 側が GET + `webSocket` だけで DO に渡すことと、DO が 101 以外を返した場合にルータが HTTP エラー転送することを検証
+- [x] WebSocket 互換キー: Workers が `request.websocket` にソケットを保持する場合でも必ず受理し、ルータ→DO の両経路で `webSocket`/`websocket` を併記する
+  - DoD: `server/tests/room-session-websocket.test.ts` で `request.websocket` だけを設定しても 101 応答と初期 `STATE` が送出されること、`server/tests/websocket-handler.test.ts` で DO 呼び出しの init に両プロパティが含まれることを検証
 - [x] Worker→DO WebSocket 受け渡しの構造化: Request へ直接 `webSocket` を追加せず、`stub.fetch(url, { method: 'GET', headers, webSocket })` で URL 文字列と init を渡す
   - DoD: `server/tests/websocket-handler.test.ts` が `stub.fetch` の input を URL 文字列として検証し、`init.webSocket` のみで DO に伝搬するリグレッションテストを持つ
 - [x] DO 内部ルート判定: Cloudflare が `/<DurableObjectId>/` を付与するため `/connect` / `/session` / `/rematch` は `endsWith()` 判定でマッチさせる

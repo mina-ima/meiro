@@ -36,6 +36,7 @@ interface PublishStateOptions {
 
 interface WebSocketRequest extends Request {
   webSocket?: WebSocket;
+  websocket?: WebSocket;
 }
 
 type WebSocketResponseInit = ResponseInit & { webSocket?: WebSocket };
@@ -181,6 +182,13 @@ function readPayloadFromQuery(rawUrl: string, fallbackRoomId: string): SessionPa
   };
 }
 
+function ensureSocketAccepted(socket: WebSocket): void {
+  if ((socket as { readyState?: number }).readyState === 1) {
+    return;
+  }
+  socket.accept();
+}
+
 function createSwitchingProtocolsResponse(socket: WebSocket): Response {
   try {
     return new Response(null, { status: 101, webSocket: socket } as WebSocketResponseInit);
@@ -236,6 +244,12 @@ export class RoomDurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const pathname = normalizePathname(url.pathname);
+    console.info('DO fetch request', {
+      roomId: this.roomId,
+      pathname,
+      method: request.method,
+      hasWebSocket: Boolean((request as WebSocketRequest).webSocket),
+    });
 
     if (matchesInternalRoute(pathname, '/rematch') && request.method === 'POST') {
       const now = Date.now();
@@ -276,10 +290,27 @@ export class RoomDurableObject {
 
     const isSessionRoute = matchesInternalRoute(pathname, '/session');
     const isConnectRoute = matchesInternalRoute(pathname, '/connect');
+    const isDirectConnect = pathname === '/connect' && request.method === 'GET';
 
-    if ((isSessionRoute || isConnectRoute) && isSessionUpgradeMethod(request.method)) {
-      const { webSocket } = request as WebSocketRequest;
+    if (
+      isDirectConnect ||
+      ((isSessionRoute || isConnectRoute) && isSessionUpgradeMethod(request.method))
+    ) {
+      const socketRequest = request as WebSocketRequest;
+      console.info('DO fetch connect', {
+        roomId: this.roomId,
+        pathname,
+        method: request.method,
+        hasWebSocket: Boolean(socketRequest.webSocket),
+        hasLegacyWebSocket: Boolean(socketRequest.websocket),
+      });
+      const webSocket = socketRequest.webSocket ?? socketRequest.websocket ?? null;
       if (!webSocket) {
+        console.error('DO missing request.webSocket during upgrade', {
+          roomId: this.roomId,
+          pathname,
+          method: request.method,
+        });
         return new Response('Upgrade Required', {
           status: 426,
           headers: upgradeRequiredHeaders,
@@ -322,7 +353,7 @@ export class RoomDurableObject {
       }
 
       try {
-        webSocket.accept();
+        ensureSocketAccepted(webSocket);
         this.registerSocket(webSocket, joinResult.session);
       } catch (error) {
         this.handleSocketInternalError(webSocket, error, 'register');

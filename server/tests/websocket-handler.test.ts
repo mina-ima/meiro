@@ -46,7 +46,12 @@ class TestResponse extends OriginalResponse {
 
 interface RecordedRequest {
   input: RequestInfo | URL;
-  init?: RequestInit & { webSocket?: WebSocket | undefined };
+  init?:
+    | (RequestInit & {
+        webSocket?: WebSocket | undefined;
+        websocket?: WebSocket | undefined;
+      })
+    | undefined;
 }
 
 
@@ -56,7 +61,7 @@ class RecordingDurableObjectStub implements DurableObjectStub {
 
   async fetch(
     input: RequestInfo | URL,
-    init?: RequestInit & { webSocket?: WebSocket },
+    init?: RequestInit & { webSocket?: WebSocket; websocket?: WebSocket },
   ): Promise<Response> {
     this.calls.push({ input, init });
     return this.response;
@@ -176,6 +181,7 @@ describe('WebSocket upgrade handling', () => {
     expect(headers.get('upgrade')).toBe('websocket');
     expect(init.body).toBeUndefined();
     expect(call.init?.webSocket).toBe(recordedPairs[0]?.server);
+    expect(call.init?.websocket).toBe(recordedPairs[0]?.server);
     expect(logSpy).toHaveBeenCalledWith(
       'WS fetch /ws',
       expect.objectContaining({ roomId: 'ABC234', role: 'owner', nick: 'ALICE' }),
