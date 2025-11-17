@@ -590,11 +590,36 @@ export class RoomDurableObject {
   }
 
   private async schedulePhaseAlarm(): Promise<void> {
-    if (!this.roomState.phaseEndsAt) {
+    const rawPhaseEndsAt: unknown = this.roomState.phaseEndsAt;
+    if (rawPhaseEndsAt == null) {
       return;
     }
 
-    await this.state.storage.setAlarm(new Date(this.roomState.phaseEndsAt));
+    const phaseEndsAt =
+      typeof rawPhaseEndsAt === 'number'
+        ? rawPhaseEndsAt
+        : typeof rawPhaseEndsAt === 'string'
+          ? Number.parseFloat(rawPhaseEndsAt)
+          : Number.NaN;
+
+    if (!Number.isFinite(phaseEndsAt)) {
+      console.warn('room %s invalid phaseEndsAt, skipping alarm', this.roomId, {
+        phase: this.roomState.phase,
+        phaseEndsAt: rawPhaseEndsAt,
+      });
+      return;
+    }
+
+    const alarmAt = new Date(phaseEndsAt);
+    if (Number.isNaN(alarmAt.getTime())) {
+      console.warn('room %s invalid alarm time, skipping alarm', this.roomId, {
+        phase: this.roomState.phase,
+        phaseEndsAt: rawPhaseEndsAt,
+      });
+      return;
+    }
+
+    await this.state.storage.setAlarm(alarmAt);
   }
 
   private handlePhaseTransition(

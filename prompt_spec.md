@@ -66,6 +66,7 @@
 
 * ロビー待機5分で自動解散。準備は**(ポイント40s→罠5s→予測15s)** 固定。再戦は**同部屋/役割50-50**。
 * カウントダウン開始は**ロビー中のオーナーのみ**が `O_START` を送信して実行する。プレイヤー未参加や既に進行中の場合は `START_WAITING_FOR_PLAYER` / `START_UNAVAILABLE` を即時返す。
+* DO 内の `phaseEndsAt` は**常にミリ秒タイムスタンプ(number)**で管理し、`state.storage.setAlarm()` に渡す前に `Number.isFinite` と `Invalid Date` をチェックする。不正値（`null`/`NaN`/文字列など）は `console.warn` を出してアラーム設定をスキップし、`server/tests/phase-alarm.test.ts` で DoD を担保する。
 
 ---
 

@@ -61,6 +61,8 @@
   - DoD: ログで全遷移が追跡できる
 - [x] 再戦: 同部屋・役割50/50
   - DoD: RESULT後にクリーン再初期化
+- [x] フェーズアラーム: `phaseEndsAt` が null/NaN/非数のときはアラーム設定をスキップし警告ログを残す
+  - DoD: `server/tests/phase-alarm.test.ts` が通過すること
 
 ---
 
