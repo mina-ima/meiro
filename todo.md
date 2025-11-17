@@ -67,14 +67,13 @@
 ## 5. 通信（WebSocket, JSON Lines）
 - [x] 接続: `/ws?room=ID&role=owner|player&nick=foo`
   - DoD: 役割検証・重複入室禁止
-- [x] ルータ↔DOハンドシェイク: `/ws` ハンドラで `Upgrade: websocket` を検証し、DO の `/connect`（互換 `/session`）が `request.webSocket` を受け取ったら `webSocket.accept()` 後に `DEBUG_CONNECTED` と初回 `STATE` を即送出する（Worker→DO は `stub.fetch("https://internal/connect?room=...&role=...&nick=...", { method: 'GET', webSocket })` で渡し、`Upgrade`/`body` は付けない）
-  - DoD: `server/tests/room-session-websocket.test.ts` で `/connect` の GET（クエリのみ）・レガシー `/session`・POST ボディの各経路で 101 応答と初期送信が行われることを検証し、`server/tests/websocket-handler.test.ts` で Worker 側が GET + `webSocket` だけで DO に渡すことと、DO が 101 以外を返した場合にルータが HTTP エラー転送することを検証
-- [x] WebSocket 互換キー: Workers が `request.websocket` にソケットを保持する場合でも必ず受理し、ルータ→DO の両経路で `webSocket`/`websocket` を併記する
-  - DoD: `server/tests/room-session-websocket.test.ts` で `request.websocket` だけを設定しても 101 応答と初期 `STATE` が送出されること、`server/tests/websocket-handler.test.ts` で DO 呼び出しの init に両プロパティが含まれることを検証
-- [x] Worker→DO WebSocket 受け渡しの構造化: Request へ直接 `webSocket` を追加せず、`stub.fetch(url, { method: 'GET', headers, webSocket })` で URL 文字列と init を渡す
-  - DoD: `server/tests/websocket-handler.test.ts` が `stub.fetch` の input を URL 文字列として検証し、`init.webSocket` のみで DO に伝搬するリグレッションテストを持つ
-- [x] DO 内部ルート判定: Cloudflare が `/<DurableObjectId>/` を付与するため `/connect` / `/session` / `/rematch` は `endsWith()` 判定でマッチさせる
-  - DoD: `server/tests/room-session-websocket.test.ts` で `https://example/<id>/connect`（および互換 `/session`）への Upgrade が 101 になる
+- [x] ルータ↔DOハンドシェイク: `/ws` ハンドラは `Upgrade: websocket` + GET を検証し、元の Request をそのまま DO stub へ渡す。DO 側は `/ws`（および `/<id>/ws`）を検出したら `WebSocketPair` を自前生成して `DEBUG_CONNECTED` → `STATE` を送出し、join 失敗時は JSON エラーを返す
+  - DoD: `server/tests/websocket-handler.test.ts` で Request をそのまま stub.fetch に渡すことと DO 応答をそのまま relay することを検証し、`server/tests/room-session-websocket.test.ts` で `/ws` と `/<id>/ws` の Upgrade が 101 + DEBUG/STATE を送ることを検証
+  - MEMO: `server/tests/helpers/upgrade-request.ts` で `/ws` 接続リクエスト作成＋モックWSの差し替えを共通化し、`server/tests/disconnect-timeout.test.ts` などの再接続ケースで DO ID ベースの `roomId` 受付を検証
+- [x] Worker→DO 委譲: Worker は `/ws` の Request をそのまま `stub.fetch(request)` に渡し、DO 応答 (101/409/410/500) を変換せずにクライアントへ返す
+  - DoD: `server/tests/websocket-handler.test.ts` で Request オブジェクトがそのまま stub に渡ることと、DO 応答が透過的に返却されることを検証
+- [x] DO 内部ルート判定: Cloudflare が `/<DurableObjectId>/` を付与するため `/ws` / `/rematch` は `endsWith()` 判定でマッチさせる
+  - DoD: `server/tests/room-session-websocket.test.ts` で `https://example/<id>/ws` への Upgrade が 101 になる
 - [x] メッセージ定義（Zod）
   - [x] 共通: `STATE`, `EV`, `ERR`, `PING`/`PONG`
   - [x] プレイヤー: `P_INPUT(yaw, fwd, ts)`

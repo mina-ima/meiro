@@ -11,6 +11,7 @@ import {
 } from '@meiro/common';
 import { createInitialRoomState } from './state';
 import type { Role } from './schema/ws';
+import { validateNickname, validateRoomId } from './logic/validate';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
 import { maybeStartCountdown, progressPhase, resetForRematch } from './logic/phases';
 import { MessageValidationError, processClientMessage, createServerEvents } from './logic/messages';
@@ -32,11 +33,6 @@ interface PublishStateOptions {
   forceFull?: boolean;
   immediate?: WebSocket | WebSocket[] | Set<WebSocket>;
   exclude?: WebSocket | WebSocket[] | Set<WebSocket>;
-}
-
-interface WebSocketRequest extends Request {
-  webSocket?: WebSocket;
-  websocket?: WebSocket;
 }
 
 type WebSocketResponseInit = ResponseInit & { webSocket?: WebSocket };
@@ -104,16 +100,31 @@ function matchesInternalRoute(pathname: string, route: string): boolean {
   return pathname.endsWith(normalizedRoute);
 }
 
-function isSessionUpgradeMethod(method: string): boolean {
-  if (!method) {
-    return false;
-  }
-  const normalized = method.toUpperCase();
-  return normalized === 'POST' || normalized === 'GET';
-}
-
 function isRoleValue(value: unknown): value is Role {
   return value === 'owner' || value === 'player';
+}
+
+function isWebSocketUpgradeRequest(request: Request): boolean {
+  const upgrade = request.headers.get('upgrade');
+  return typeof upgrade === 'string' && upgrade.toLowerCase() === 'websocket';
+}
+
+function normalizeRoomIdForComparison(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function resolveRoomIdentifier(roomId: string | null, fallbackRoomId: string): string {
+  if (typeof roomId === 'string' && roomId.trim().length > 0) {
+    try {
+      return validateRoomId(roomId);
+    } catch {
+      if (normalizeRoomIdForComparison(roomId) === normalizeRoomIdForComparison(fallbackRoomId)) {
+        return fallbackRoomId;
+      }
+      throw new Error('invalid-room-id');
+    }
+  }
+  return fallbackRoomId;
 }
 
 async function parseSessionPayload(
@@ -153,11 +164,18 @@ async function readPayloadFromBody(
     return null;
   }
 
-  return {
-    roomId: typeof candidate.roomId === 'string' ? candidate.roomId : fallbackRoomId,
-    nick: candidate.nick,
-    role: candidate.role,
-  };
+  try {
+    return {
+      roomId: resolveRoomIdentifier(
+        typeof candidate.roomId === 'string' ? candidate.roomId : null,
+        fallbackRoomId,
+      ),
+      nick: validateNickname(candidate.nick),
+      role: candidate.role,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function readPayloadFromQuery(rawUrl: string, fallbackRoomId: string): SessionPayload | null {
@@ -174,19 +192,15 @@ function readPayloadFromQuery(rawUrl: string, fallbackRoomId: string): SessionPa
     return null;
   }
 
-  const roomId = url.searchParams.get('room') ?? fallbackRoomId;
-  return {
-    roomId,
-    nick,
-    role,
-  };
-}
-
-function ensureSocketAccepted(socket: WebSocket): void {
-  if ((socket as { readyState?: number }).readyState === 1) {
-    return;
+  try {
+    return {
+      roomId: resolveRoomIdentifier(url.searchParams.get('room'), fallbackRoomId),
+      nick: validateNickname(nick),
+      role,
+    };
+  } catch {
+    return null;
   }
-  socket.accept();
 }
 
 function createSwitchingProtocolsResponse(socket: WebSocket): Response {
@@ -210,6 +224,14 @@ function createSwitchingProtocolsResponse(socket: WebSocket): Response {
       return fallback;
     }
     throw error;
+  }
+}
+
+function safeCloseSocket(socket: WebSocket, code: number, reason: string): void {
+  try {
+    socket.close(code, reason);
+  } catch (error) {
+    console.warn('failed to close WebSocket during cleanup', reason, error);
   }
 }
 
@@ -244,11 +266,12 @@ export class RoomDurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const pathname = normalizePathname(url.pathname);
+    const isUpgrade = isWebSocketUpgradeRequest(request);
     console.info('DO fetch request', {
       roomId: this.roomId,
       pathname,
       method: request.method,
-      hasWebSocket: Boolean((request as WebSocketRequest).webSocket),
+      isWebSocketUpgrade: isUpgrade,
     });
 
     if (matchesInternalRoute(pathname, '/rematch') && request.method === 'POST') {
@@ -288,82 +311,76 @@ export class RoomDurableObject {
       return Response.json({ ok: true });
     }
 
-    const isSessionRoute = matchesInternalRoute(pathname, '/session');
-    const isConnectRoute = matchesInternalRoute(pathname, '/connect');
-    const isDirectConnect = pathname === '/connect' && request.method === 'GET';
-
-    if (
-      isDirectConnect ||
-      ((isSessionRoute || isConnectRoute) && isSessionUpgradeMethod(request.method))
-    ) {
-      const socketRequest = request as WebSocketRequest;
-      console.info('DO fetch connect', {
-        roomId: this.roomId,
-        pathname,
-        method: request.method,
-        hasWebSocket: Boolean(socketRequest.webSocket),
-        hasLegacyWebSocket: Boolean(socketRequest.websocket),
-      });
-      const webSocket = socketRequest.webSocket ?? socketRequest.websocket ?? null;
-      if (!webSocket) {
-        console.error('DO missing request.webSocket during upgrade', {
-          roomId: this.roomId,
-          pathname,
-          method: request.method,
-        });
+    if (matchesInternalRoute(pathname, '/ws')) {
+      if (!isUpgrade) {
         return new Response('Upgrade Required', {
           status: 426,
           headers: upgradeRequiredHeaders,
         });
       }
 
-      let payload: SessionPayload;
-      try {
-        payload = await parseSessionPayload(request, this.roomId);
-      } catch {
-        console.error('room %s received invalid session payload', this.roomId);
-        return new Response('Invalid session payload', { status: 400 });
+      if (request.method !== 'GET') {
+        return new Response('Must use GET for WebSocket upgrades', { status: 400 });
       }
 
-      const now = Date.now();
-
-      if (hasLobbyExpired(this.roomState, now)) {
-        this.expireLobby(now);
-        return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
-      }
-
-      const joinResult = joinLobby(
-        this.roomState,
-        { nick: payload.nick, role: payload.role },
-        now,
-        () => this.createSessionId(),
-      );
-
-      if (joinResult.kind === 'full') {
-        return Response.json({ error: 'ROOM_FULL' }, { status: 409 });
-      }
-
-      if (joinResult.kind === 'role_taken') {
-        return Response.json({ error: 'ROLE_TAKEN' }, { status: 409 });
-      }
-
-      if (joinResult.kind === 'expired') {
-        this.expireLobby(now);
-        return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
-      }
-
-      try {
-        ensureSocketAccepted(webSocket);
-        this.registerSocket(webSocket, joinResult.session);
-      } catch (error) {
-        this.handleSocketInternalError(webSocket, error, 'register');
-        return createSwitchingProtocolsResponse(webSocket);
-      }
-
-      return createSwitchingProtocolsResponse(webSocket);
+      return this.handleWebSocketUpgrade(request);
     }
 
     return new Response('not found', { status: 404 });
+  }
+
+  private async handleWebSocketUpgrade(request: Request): Promise<Response> {
+    let payload: SessionPayload;
+    try {
+      payload = await parseSessionPayload(request, this.roomId);
+    } catch {
+      console.error('room %s received invalid session payload', this.roomId);
+      return new Response('Invalid session payload', { status: 400 });
+    }
+
+    const now = Date.now();
+
+    if (hasLobbyExpired(this.roomState, now)) {
+      this.expireLobby(now);
+      return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
+    }
+
+    const joinResult = joinLobby(
+      this.roomState,
+      { nick: payload.nick, role: payload.role },
+      now,
+      () => this.createSessionId(),
+    );
+
+    if (joinResult.kind === 'full') {
+      return Response.json({ error: 'ROOM_FULL' }, { status: 409 });
+    }
+
+    if (joinResult.kind === 'role_taken') {
+      return Response.json({ error: 'ROLE_TAKEN' }, { status: 409 });
+    }
+
+    if (joinResult.kind === 'expired') {
+      this.expireLobby(now);
+      return Response.json({ error: 'ROOM_EXPIRED' }, { status: 410 });
+    }
+
+    console.info('room %s websocket join role=%s', this.roomId, payload.role);
+
+    const pair = new WebSocketPair();
+    const [clientSocket, serverSocket] = Object.values(pair) as [WebSocket, WebSocket];
+
+    try {
+      serverSocket.accept();
+      this.registerSocket(serverSocket, joinResult.session);
+    } catch (error) {
+      this.handleSocketInternalError(serverSocket, error, 'register');
+      safeCloseSocket(serverSocket, 1011, 'register-failed');
+      safeCloseSocket(clientSocket, 1011, 'register-failed');
+      return new Response('Failed to register socket', { status: 500 });
+    }
+
+    return createSwitchingProtocolsResponse(clientSocket);
   }
 
   private registerSocket(socket: WebSocket, session: PlayerSession): void {

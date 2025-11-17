@@ -117,9 +117,9 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * `client->router`：`/ws?room=ABC123&role=owner|player&nick=foo`
 * ルータが該当`RoomDO`へプロキシ。**DOが唯一の真実**。
-* ルータ↔DOハンドシェイク：`/ws` ハンドラは `Upgrade: websocket` を必須とし、`WebSocketPair` の片方（server側）を `RoomDO.fetch("/connect")` へ `stub.fetch("https://internal/connect?room=...&role=...&nick=...", { method:"GET", webSocket: server })` で渡す。**Request インスタンスへ `webSocket` プロパティを生やしても structured clone で落ちるため、必ず `init.webSocket`（必要なら `websocket` 互換キーも）経由で渡す。** Cloudflare ランタイムが Upgrade ヘッダを自動付与するため **Worker で `Upgrade` や `body` を追加しない**。DO 側は `/connect`（およびレガシー互換の `/session`）で `request.webSocket` の存在を確認し、URL クエリから room/role/nick を復元（POST フォールバックのみ JSON body を受容）した上で `ws.accept()` → `DEBUG_CONNECTED` → `STATE(full)` の順で即送出し、ログ（`WS fetch /ws` / `DO connected` / `send DEBUG_CONNECTED` / `send STATE`）を残す。DO が 101 以外の HTTP ステータスを返した場合はルータが両ソケットを `close(1011, "upgrade rejected")` して DO 応答（409/410/500等）をそのままクライアントへ返却する。
-* Workers Runtime が `request.websocket` など別名プロパティでソケットを渡すケースにも対応し、ルータ側は `webSocket` / `websocket` の両方を stub.fetch に添付、DO 側はどちらか片方のみが存在しても受理する。
-* Cloudflare の DO ルーティングでは `request.url.pathname` に `/<DurableObjectId>/...` のプレフィックスが付与される。`RoomDO.fetch()` では `url.pathname.endsWith("/connect")` / （互換目的の）`endsWith("/session")` / `endsWith("/rematch")` のように末尾一致で判定し、いずれの場合も `webSocket.accept()` 後に **必ず 101** を返す。
+* ルータ↔DOハンドシェイク：`/ws` ハンドラは `Upgrade: websocket` と GET を検証したうえで、**元の Request をそのまま Durable Object stub へ `stub.fetch(request)` で委譲する。** Worker 側では `WebSocketPair` を生成せず、ログ (`WS fetch /ws`) を残すのみ。DO 側は `url.pathname.endsWith("/ws")`（`/<DurableObjectId>/ws` 含む）を検出したら `WebSocketPair` を生成し、`server.accept()` → `registerSocket` → `DEBUG_CONNECTED` → `STATE(full)` の順で送信する。join 失敗時は JSON エラー (409/410/500) を直接返し、Worker は Response をそのままクライアントに返却する。DoD: `server/tests/websocket-handler.test.ts` で Request をそのまま stub.fetch に渡し、エラー時もレスポンスを丸ごと返すことを検証し、`server/tests/room-session-websocket.test.ts` で DO が `/ws` と `/<id>/ws` の Upgrade に対して `DEBUG_CONNECTED` / `STATE` を配信することを検証。
+* DO でのセッションペイロード検証は router 側で検証済みの `room` 値をそのまま信頼し、**6桁Base32ではない DO ID（`/<DurableObjectId>/ws` 経由）であっても自身の DO ID と一致すれば受け入れる**。JSON body による `roomId` 指定も同様に扱い、`server/tests/disconnect-timeout.test.ts` / `server/tests/prediction-bonus.test.ts` などの再接続シナリオで担保する。
+* Cloudflare の DO ルーティングでは `request.url.pathname` に `/<DurableObjectId>/...` のプレフィックスが付与されるため、`RoomDO.fetch()` では `endsWith("/ws")` / `endsWith("/rematch")` のように末尾一致で判定し、Upgrade 要求が GET かつ `Upgrade: websocket` のときのみ 101 を返す。
 
 ### 6.2 メッセージ型
 

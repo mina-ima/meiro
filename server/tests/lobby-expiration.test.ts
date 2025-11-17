@@ -3,6 +3,7 @@ import type { DurableObjectState } from '@cloudflare/workers-types';
 import type { Role } from '../src/schema/ws';
 import { RoomDurableObject } from '../src/room-do';
 import { LOBBY_TIMEOUT_MS } from '../src/logic/lobby';
+import { attachWebSocket, createWebSocketUpgradeRequest } from './helpers/upgrade-request';
 
 vi.mock('../src/logic/outbound', async () => {
   const actual = await vi.importActual<typeof import('../src/logic/outbound')>(
@@ -101,16 +102,9 @@ async function joinRoom(
   socket: MockSocket,
   payload: { roomId: string; role: Role; nick: string },
 ): Promise<Response> {
-  const request = new Request('https://example/session', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Upgrade: 'websocket',
-    },
-    body: JSON.stringify(payload),
-  });
-  const requestWithSocket = Object.assign(request, { webSocket: socket });
-  const response = await room.fetch(requestWithSocket);
+  const request = createWebSocketUpgradeRequest(payload);
+  attachWebSocket(request, socket);
+  const response = await room.fetch(request);
   expect(response.status).toBe(101);
   return response;
 }

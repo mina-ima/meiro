@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { RoomDurableObject } from '../src/room-do';
 import { SERVER_TICK_INTERVAL_MS } from '@meiro/common';
+import { attachWebSocket, createWebSocketUpgradeRequest } from './helpers/upgrade-request';
 
 class FakeDurableObjectState {
   public readonly id = { toString: () => 'ROOM-DISCONNECT' };
@@ -51,17 +52,9 @@ async function join(
   socket: MockSocket,
   payload: { role: 'owner' | 'player'; nick: string },
 ): Promise<void> {
-  const request = new Request('https://example/session', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Upgrade: 'websocket',
-    },
-    body: JSON.stringify({ roomId: 'ROOM-DISCONNECT', ...payload }),
-  });
-
-  const requestWithSocket = Object.assign(request, { webSocket: socket });
-  const response = await room.fetch(requestWithSocket);
+  const request = createWebSocketUpgradeRequest({ roomId: 'ROOM-DISCONNECT', ...payload });
+  attachWebSocket(request, socket);
+  const response = await room.fetch(request);
   expect(response.status).toBe(101);
 }
 
@@ -148,7 +141,7 @@ describe('切断時のポーズ', () => {
     vi.setSystemTime(NOW + 20_000);
 
     const rejoinSocket = new MockSocket();
-    await join(room, rejoinSocket, { role: 'player', nick: 'Runner-Return' });
+    await join(room, rejoinSocket, { role: 'player', nick: 'Runner2' });
 
     expect(internal.roomState.paused).toBe(false);
     expect(internal.roomState.pauseReason).toBeUndefined();

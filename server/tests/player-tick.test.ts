@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { RoomDurableObject } from '../src/room-do';
 import { SERVER_TICK_INTERVAL_MS, PLAYER_RADIUS, MOVE_SPEED } from '@meiro/common';
+import { attachWebSocket, createWebSocketUpgradeRequest } from './helpers/upgrade-request';
 
 class FakeDurableObjectState {
   public readonly id = { toString: () => 'ROOM-TEST' };
@@ -45,17 +46,9 @@ async function join(
   socket: MockSocket,
   payload: { role: 'owner' | 'player'; nick: string },
 ): Promise<Response> {
-  const request = new Request('https://example/session', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Upgrade: 'websocket',
-    },
-    body: JSON.stringify({ roomId: 'ROOM-TEST', ...payload }),
-  });
-
-  const requestWithSocket = Object.assign(request, { webSocket: socket });
-  const response = await room.fetch(requestWithSocket);
+  const request = createWebSocketUpgradeRequest({ roomId: 'ROOM-TEST', ...payload });
+  attachWebSocket(request, socket);
+  const response = await room.fetch(request);
   expect(response.status).toBe(101);
   return response;
 }

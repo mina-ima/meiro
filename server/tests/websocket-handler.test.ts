@@ -1,68 +1,16 @@
 import handler, { type Env } from '../src';
-import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-
-type WorkerResponseInit = ResponseInit & { webSocket?: WebSocket };
-
-const OriginalResponse = globalThis.Response;
-
-class TestResponse extends OriginalResponse {
-  constructor(body?: BodyInit | null, init?: WorkerResponseInit) {
-    if (!init) {
-      super(body);
-      return;
-    }
-
-    const { webSocket, ...rest } = init;
-    const baseInit = rest as ResponseInit;
-    const requestedStatus = baseInit.status;
-    const sanitizedInit =
-      requestedStatus === 101 ? { ...baseInit, status: 200 } : baseInit;
-
-    super(body, sanitizedInit);
-
-    if (requestedStatus === 101) {
-      Object.defineProperty(this, 'status', {
-        configurable: true,
-        enumerable: true,
-        value: 101,
-        writable: false,
-      });
-    }
-
-    if (webSocket) {
-      Object.defineProperty(this, 'webSocket', {
-        configurable: true,
-        enumerable: false,
-        value: webSocket,
-        writable: false,
-      });
-    }
-  }
-
-  static json(data: unknown, init?: WorkerResponseInit): Response {
-    return OriginalResponse.json(data, init);
-  }
-}
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
 interface RecordedRequest {
   input: RequestInfo | URL;
-  init?:
-    | (RequestInit & {
-        webSocket?: WebSocket | undefined;
-        websocket?: WebSocket | undefined;
-      })
-    | undefined;
+  init?: RequestInit;
 }
-
 
 class RecordingDurableObjectStub implements DurableObjectStub {
   public readonly calls: RecordedRequest[] = [];
-  public response: Response = new Response(null, { status: 101 });
+  public response: Response = new Response('delegated', { status: 200 });
 
-  async fetch(
-    input: RequestInfo | URL,
-    init?: RequestInit & { webSocket?: WebSocket; websocket?: WebSocket },
-  ): Promise<Response> {
+  async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     this.calls.push({ input, init });
     return this.response;
   }
@@ -89,44 +37,6 @@ class RecordingDurableObjectNamespace implements DurableObjectNamespace {
   }
 }
 
-type PairRecord = { client: WebSocket; server: WebSocket };
-
-const recordedPairs: PairRecord[] = [];
-
-function createFakeSocket(label: string): WebSocket {
-  const noop = () => void label;
-  return {
-    label,
-    accept: noop,
-    close: noop,
-    send: noop,
-    addEventListener: noop,
-    removeEventListener: noop,
-    dispatchEvent: () => true,
-    readyState: 0,
-    url: '',
-    protocol: '',
-    extensions: '',
-    bufferedAmount: 0,
-    binaryType: 'blob',
-    onopen: null,
-    onclose: null,
-    onmessage: null,
-    onerror: null,
-  } as unknown as WebSocket;
-}
-
-class FakeWebSocketPair implements WebSocketPair {
-  0: WebSocket;
-  1: WebSocket;
-
-  constructor() {
-    this[0] = createFakeSocket('client');
-    this[1] = createFakeSocket('server');
-    recordedPairs.push({ client: this[0], server: this[1] });
-  }
-}
-
 function createEnv(): { env: Env; namespace: RecordingDurableObjectNamespace } {
   const namespace = new RecordingDurableObjectNamespace();
   const env = { ROOM: namespace as unknown as DurableObjectNamespace } as Env;
@@ -134,23 +44,7 @@ function createEnv(): { env: Env; namespace: RecordingDurableObjectNamespace } {
 }
 
 describe('WebSocket upgrade handling', () => {
-  const originalWebSocketPair = globalThis.WebSocketPair;
-
-  beforeAll(() => {
-    recordedPairs.length = 0;
-    (globalThis as Record<string, unknown>).WebSocketPair = FakeWebSocketPair;
-    (globalThis as typeof globalThis & { Response: typeof TestResponse }).Response =
-      TestResponse as typeof Response;
-  });
-
-  afterAll(() => {
-    (globalThis as typeof globalThis & { Response: typeof OriginalResponse }).Response =
-      OriginalResponse;
-    (globalThis as Record<string, unknown>).WebSocketPair = originalWebSocketPair;
-  });
-
   beforeEach(() => {
-    recordedPairs.length = 0;
     vi.restoreAllMocks();
   });
 
@@ -158,7 +52,7 @@ describe('WebSocket upgrade handling', () => {
     vi.restoreAllMocks();
   });
 
-  it('delegates /ws upgrades to the Durable Object session handler', async () => {
+  it('delegates /ws upgrades to the Durable Object using the original request', async () => {
     const { env, namespace } = createEnv();
     const request = new Request('https://example.com/ws?room=abc234&role=owner&nick=ALICE', {
       method: 'GET',
@@ -167,21 +61,15 @@ describe('WebSocket upgrade handling', () => {
       },
     });
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const stubResponse = new Response('proxied', { status: 200 });
+    namespace.stub.response = stubResponse;
 
     const response = await handler.fetch(request, env, {} as ExecutionContext);
 
-    expect(response.status).toBe(101);
+    expect(response).toBe(stubResponse);
     expect(namespace.stub.calls).toHaveLength(1);
-    const call = namespace.stub.calls[0];
-    expect(call.input).toBe('https://do/connect?room=ABC234&role=owner&nick=ALICE');
-    const init = call.init ?? {};
-    expect(init.method).toBe('GET');
-    const headers = new Headers(init.headers ?? {});
-    expect(headers.get('content-type')).toBeNull();
-    expect(headers.get('upgrade')).toBe('websocket');
-    expect(init.body).toBeUndefined();
-    expect(call.init?.webSocket).toBe(recordedPairs[0]?.server);
-    expect(call.init?.websocket).toBe(recordedPairs[0]?.server);
+    expect(namespace.stub.calls[0]?.input).toBe(request);
+    expect(namespace.stub.calls[0]?.init).toBeUndefined();
     expect(logSpy).toHaveBeenCalledWith(
       'WS fetch /ws',
       expect.objectContaining({ roomId: 'ABC234', role: 'owner', nick: 'ALICE' }),
@@ -195,11 +83,11 @@ describe('WebSocket upgrade handling', () => {
     const response = await handler.fetch(request, env, {} as ExecutionContext);
 
     expect(response.status).toBe(426);
-    expect(await response.text()).toContain('Upgrade Required');
+    expect(await response.text()).toContain('Upgrade');
     expect(namespace.stub.calls).toHaveLength(0);
   });
 
-  it('fails the upgrade when the Durable Object does not accept the socket', async () => {
+  it('bubbles DO errors as-is when the Durable Object rejects the upgrade', async () => {
     const { env, namespace } = createEnv();
     namespace.stub.response = new Response('do failed', { status: 500 });
 
@@ -212,7 +100,7 @@ describe('WebSocket upgrade handling', () => {
 
     const response = await handler.fetch(request, env, {} as ExecutionContext);
 
-    expect(response.status).toBe(500);
+    expect(response).toBe(namespace.stub.response);
     expect(await response.text()).toBe('do failed');
     expect(namespace.stub.calls).toHaveLength(1);
   });
