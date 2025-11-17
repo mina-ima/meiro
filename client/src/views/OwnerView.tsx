@@ -11,6 +11,7 @@ interface Vector2 {
 
 export interface OwnerViewProps {
   client: NetClient | null;
+  roomId: string | null;
   wallCount: number;
   trapCharges: number;
   wallRemoveLeft: 0 | 1;
@@ -31,6 +32,7 @@ export interface OwnerViewProps {
 
 export function OwnerView({
   client,
+  roomId,
   wallCount,
   trapCharges,
   wallRemoveLeft,
@@ -118,6 +120,12 @@ export function OwnerView({
     <div>
       <h2>オーナービュー</h2>
       <p>接続状態: {status}</p>
+      <p aria-live="polite">
+        ルームID:{' '}
+        <strong data-testid="room-id">
+          {roomId && roomId.trim().length > 0 ? roomId : '取得中'}
+        </strong>
+      </p>
       <section
         aria-label="参加状況"
         style={{

@@ -200,6 +200,7 @@ export function App() {
     ) : role === 'owner' ? (
       <OwnerView
         client={client}
+        roomId={roomId}
         wallCount={ownerState.wallStock}
         trapCharges={ownerState.trapCharges}
         wallRemoveLeft={ownerState.wallRemoveLeft}

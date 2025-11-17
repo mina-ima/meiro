@@ -9,6 +9,7 @@ describe('OwnerView', () => {
     render(
       <OwnerView
         client={null}
+        roomId="ROOM-1"
         wallCount={12}
         trapCharges={2}
         wallRemoveLeft={1}
@@ -46,6 +47,7 @@ describe('OwnerView', () => {
     render(
       <OwnerView
         client={null}
+        roomId="ROOM-1"
         wallCount={12}
         trapCharges={1}
         wallRemoveLeft={1}
@@ -75,6 +77,7 @@ describe('OwnerView', () => {
     render(
       <OwnerView
         client={null}
+        roomId="ROOM-1"
         wallCount={0}
         trapCharges={0}
         wallRemoveLeft={1}
@@ -103,6 +106,7 @@ describe('OwnerView', () => {
     render(
       <OwnerView
         client={client}
+        roomId="ROOM-1"
         wallCount={0}
         trapCharges={0}
         wallRemoveLeft={1}
@@ -127,5 +131,31 @@ describe('OwnerView', () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(send).toHaveBeenCalledWith({ type: 'O_START' });
+  });
+
+  it('ルームIDを共有用に表示する', () => {
+    render(
+      <OwnerView
+        client={null}
+        roomId="ABC123"
+        wallCount={0}
+        trapCharges={0}
+        wallRemoveLeft={1}
+        editCooldownMs={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={0}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        phase="lobby"
+        sessions={[]}
+      />,
+    );
+
+    expect(screen.getByTestId('room-id')).toHaveTextContent('ABC123');
+    expect(screen.getByText(/ルームID/)).toBeInTheDocument();
   });
 });

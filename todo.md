@@ -171,6 +171,8 @@
   - DoD: client/tests/OwnerView.test.tsx でズーム/センタリング操作を検証
 - [x] 参加状況と手動開始：ロビー中はオーナー/プレイヤーの入室状態を表示し、プレイヤー参加後にのみ「ゲーム開始」ボタンを有効化して `O_START` を送信
   - DoD: client/tests/OwnerView.test.tsx で参加表示とボタン送信を検証、server/tests/manual-start.test.ts で手動開始のサーバ挙動を検証
+- [x] 共有用ルームID表示：オーナービューのヘッダーで現在のルームコードを強調表示し、未取得時は「取得中」を表示
+  - DoD: client/tests/OwnerView.test.tsx の `room-id` テストケースで DOM 表示を検証
 
 ---
 
