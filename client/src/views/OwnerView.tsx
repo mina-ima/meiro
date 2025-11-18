@@ -213,7 +213,7 @@ export function OwnerView({
         }}
       >
         <h2 style={{ margin: 0 }}>オーナービュー</h2>
-        {onToggleSettings ? (
+        {onToggleSettings && inLobby ? (
           <button
             type="button"
             onClick={onToggleSettings}

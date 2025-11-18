@@ -30,7 +30,7 @@ describe('DebugHUD 仕様表示', () => {
       full: true,
       snapshot: {
         roomId: 'ROOM-HUD',
-        phase: 'explore',
+        phase: 'lobby',
         mazeSize: 40,
         updatedAt: 0,
         countdownDurationMs: 3_000,
@@ -154,7 +154,7 @@ describe('DebugHUD 仕様表示', () => {
       full: true,
       snapshot: {
         roomId: 'ROOM-HUD',
-        phase: 'explore',
+        phase: 'lobby',
         mazeSize: 20,
         updatedAt: 0,
         countdownDurationMs: 3_000,
@@ -199,6 +199,59 @@ describe('DebugHUD 仕様表示', () => {
     expect(screen.getByRole('region', { name: 'デバッグHUD' })).toBeInTheDocument();
     expect(button).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(button);
+    expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
+  });
+
+  it('ゲーム開始後は設定ボタンもDebugHUDも表示されない', () => {
+    act(() => {
+      useSessionStore.getState().setRoom('ROOM-HUD', 'owner');
+    });
+
+    render(<App />);
+
+    const payload: ServerStatePayload = {
+      seq: 1,
+      full: true,
+      snapshot: {
+        roomId: 'ROOM-HUD',
+        phase: 'explore',
+        mazeSize: 20,
+        updatedAt: 0,
+        countdownDurationMs: 3_000,
+        prepDurationMs: 60_000,
+        exploreDurationMs: 300_000,
+        targetScore: 0,
+        pointCompensationAward: 0,
+        paused: false,
+        sessions: [],
+        player: {
+          position: { x: 0, y: 0 },
+          velocity: { x: 0, y: 0 },
+          angle: 0,
+          predictionHits: 0,
+          score: 0,
+        },
+        owner: {
+          wallStock: 48,
+          wallRemoveLeft: 1,
+          trapCharges: 1,
+          editCooldownUntil: 0,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
+          predictionLimit: 3,
+          predictionHits: 0,
+          predictionMarks: [],
+          traps: [],
+          points: [],
+        },
+      },
+    };
+
+    act(() => {
+      useSessionStore.getState().applyServerState(payload);
+    });
+
+    expect(screen.queryByRole('button', { name: '設定' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
   });
 });

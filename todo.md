@@ -181,8 +181,8 @@
   - DoD: client/tests/DebugHUD.test.tsx の `ロビー中はDebugHUDを表示しない` でSTATE適用後でも `phase=lobby` の間はDOMに現れないことを確認
 - [x] ロビー迷路サイズ選択：オーナーはゲーム開始ボタン直上のメニューから 20×20 / 40×40 を選択し、`O_START` 送信時に指定サイズをサーバーへ伝える
   - DoD: client/tests/OwnerView.test.tsx の `迷路サイズを選択` テストで UI と送信内容を検証し、server/tests/manual-start.test.ts / server/tests/disconnect-heartbeat.test.ts で指定サイズでの再生成を検証
-- [x] オーナービューに「設定」ボタンを設置し、DebugHUDをオンデマンド表示に切り替える
-  - DoD: client/tests/OwnerView.test.tsx の設定ボタンテストと client/tests/DebugHUD.test.tsx の `設定ボタンでDebugHUDを開閉できる` で挙動を検証
+- [x] オーナービューに「設定」ボタンを設置し、ロビー中のみDebugHUDをオンデマンド表示する
+  - DoD: client/tests/OwnerView.test.tsx でロビー時のみボタンが表示されることを検証し、client/tests/DebugHUD.test.tsx の `設定ボタンでDebugHUDを開閉できる` / `ゲーム開始後は設定ボタンも表示されない` で挙動を検証
 
 ---
 

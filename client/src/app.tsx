@@ -169,10 +169,10 @@ export function App() {
   const isRoleAssigned = role === 'owner' || role === 'player';
   const readyForGameplay = hasAuthoritativeState && isRoleAssigned;
   useEffect(() => {
-    if (!readyForGameplay || role !== 'owner') {
+    if (!readyForGameplay || role !== 'owner' || phase !== 'lobby') {
       setDebugHudVisible(false);
     }
-  }, [readyForGameplay, role]);
+  }, [readyForGameplay, role, phase]);
   const pauseTargetMs =
     paused && pauseReason === 'disconnect' ? (pauseExpiresAt ?? undefined) : undefined;
   const pauseCountdownMs = useCountdown(pauseTargetMs, 1_000);
@@ -192,7 +192,7 @@ export function App() {
           phase: pausePhase,
         }
       : null;
-  const showDebugHud = debugHudVisible && readyForGameplay;
+  const showDebugHud = debugHudVisible && readyForGameplay && role === 'owner' && phase === 'lobby';
 
   const mainView =
     role == null ? (
@@ -222,8 +222,10 @@ export function App() {
         pauseSecondsRemaining={pauseInfo?.secondsRemaining}
         phase={phase}
         sessions={serverSnapshot?.sessions ?? []}
-        onToggleSettings={() => setDebugHudVisible((visible) => !visible)}
-        settingsOpen={debugHudVisible}
+        onToggleSettings={
+          phase === 'lobby' ? () => setDebugHudVisible((visible) => !visible) : undefined
+        }
+        settingsOpen={phase === 'lobby' ? debugHudVisible : false}
       />
     ) : (
       <PlayerView
