@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, act } from '@testing-library/react';
+import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import { App } from '../src/app';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
@@ -20,7 +20,7 @@ describe('DebugHUD 仕様表示', () => {
 
   it('仕様で定義された主要な数値が確認できる', () => {
     act(() => {
-      useSessionStore.getState().setRoom('ROOM-HUD', 'player');
+      useSessionStore.getState().setRoom('ROOM-HUD', 'owner');
     });
 
     render(<App />);
@@ -68,6 +68,8 @@ describe('DebugHUD 仕様表示', () => {
       useSessionStore.getState().applyServerState(payload);
     });
 
+    const settingsButton = screen.getByRole('button', { name: '設定' });
+    fireEvent.click(settingsButton);
     const panel = screen.getByRole('region', { name: 'デバッグHUD' });
     const scope = within(panel);
 
@@ -137,6 +139,66 @@ describe('DebugHUD 仕様表示', () => {
       useSessionStore.getState().applyServerState(payload);
     });
 
+    expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
+  });
+
+  it('設定ボタンでDebugHUDを開閉できる', () => {
+    act(() => {
+      useSessionStore.getState().setRoom('ROOM-HUD', 'owner');
+    });
+
+    render(<App />);
+
+    const payload: ServerStatePayload = {
+      seq: 1,
+      full: true,
+      snapshot: {
+        roomId: 'ROOM-HUD',
+        phase: 'explore',
+        mazeSize: 20,
+        updatedAt: 0,
+        countdownDurationMs: 3_000,
+        prepDurationMs: 60_000,
+        exploreDurationMs: 300_000,
+        phaseEndsAt: 300_000,
+        targetScore: 0,
+        pointCompensationAward: 0,
+        paused: false,
+        sessions: [],
+        player: {
+          position: { x: 0, y: 0 },
+          velocity: { x: 0, y: 0 },
+          angle: 0,
+          predictionHits: 0,
+          score: 0,
+        },
+        owner: {
+          wallStock: 48,
+          wallRemoveLeft: 1,
+          trapCharges: 1,
+          editCooldownUntil: 5_000,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
+          predictionLimit: 3,
+          predictionHits: 0,
+          predictionMarks: [],
+          traps: [],
+          points: [],
+        },
+      },
+    };
+
+    act(() => {
+      useSessionStore.getState().applyServerState(payload);
+    });
+
+    const button = screen.getByRole('button', { name: '設定' });
+    expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
+    expect(screen.getByRole('region', { name: 'デバッグHUD' })).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
     expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
   });
 });

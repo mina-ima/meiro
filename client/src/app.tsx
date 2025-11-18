@@ -66,6 +66,7 @@ export function App() {
   const resetSession = useSessionStore((state) => state.reset);
   const timeRemaining = useTimeRemaining(phaseEndsAt);
   const previousPhase = useRef(phase);
+  const [debugHudVisible, setDebugHudVisible] = useState(false);
 
   useEffect(() => {
     logClientInit({
@@ -167,6 +168,11 @@ export function App() {
   const hasAuthoritativeState = serverSnapshot !== null;
   const isRoleAssigned = role === 'owner' || role === 'player';
   const readyForGameplay = hasAuthoritativeState && isRoleAssigned;
+  useEffect(() => {
+    if (!readyForGameplay || role !== 'owner') {
+      setDebugHudVisible(false);
+    }
+  }, [readyForGameplay, role]);
   const pauseTargetMs =
     paused && pauseReason === 'disconnect' ? (pauseExpiresAt ?? undefined) : undefined;
   const pauseCountdownMs = useCountdown(pauseTargetMs, 1_000);
@@ -186,7 +192,7 @@ export function App() {
           phase: pausePhase,
         }
       : null;
-  const showDebugHud = readyForGameplay && phase !== 'lobby';
+  const showDebugHud = debugHudVisible && readyForGameplay;
 
   const mainView =
     role == null ? (
@@ -216,6 +222,8 @@ export function App() {
         pauseSecondsRemaining={pauseInfo?.secondsRemaining}
         phase={phase}
         sessions={serverSnapshot?.sessions ?? []}
+        onToggleSettings={() => setDebugHudVisible((visible) => !visible)}
+        settingsOpen={debugHudVisible}
       />
     ) : (
       <PlayerView

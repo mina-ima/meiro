@@ -226,4 +226,33 @@ describe('OwnerView', () => {
     expect(screen.getByText('罠権利: 3')).toBeInTheDocument();
     expect(screen.getByText('予測地点: 残り3 / 3')).toBeInTheDocument();
   });
+
+  it('設定ボタンで設定表示の開閉をトリガーする', () => {
+    const toggle = vi.fn();
+    render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={30}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[]}
+        onToggleSettings={toggle}
+        settingsOpen
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: '設定' });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
 });

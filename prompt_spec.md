@@ -239,7 +239,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ### 8.4 デバッグHUD
 
-* `App` 下部に `DebugHUD` を常設し、**速度/視界/ズーム倍率/編集CD/禁止距離/資源上限/ポイント係数/罠効果**などの仕様値と現在値を一覧表示する。ただしロビー（`phase=lobby`）では初期設定に不要なため非表示とし、`countdown` 以降のみ描画する（client/src/ui/DebugHUD.tsx / client/tests/DebugHUD.test.tsx）。
+* `App` 下部に `DebugHUD` を常設し、**速度/視界/ズーム倍率/編集CD/禁止距離/資源上限/ポイント係数/罠効果**などの仕様値と現在値を一覧表示する。オーナービューでは見出し右上の「設定」ボタンでオンデマンド表示/非表示を切り替え、ロビー直後は非表示のままにする（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx / client/tests/DebugHUD.test.tsx / client/src/ui/DebugHUD.tsx）。
 
 ---
 

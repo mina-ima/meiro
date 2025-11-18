@@ -97,6 +97,8 @@ export interface OwnerViewProps {
   pauseSecondsRemaining?: number;
   phase: SessionPhase;
   sessions: ServerSessionEntry[];
+  onToggleSettings?: () => void;
+  settingsOpen?: boolean;
 }
 
 export function OwnerView({
@@ -116,6 +118,8 @@ export function OwnerView({
   pauseSecondsRemaining,
   phase,
   sessions,
+  onToggleSettings,
+  settingsOpen,
 }: OwnerViewProps) {
   const status = useMemo(() => (client ? '接続済み' : '未接続'), [client]);
   const clampedPredictions = Math.max(0, Math.min(activePredictions, predictionLimit));
@@ -199,7 +203,35 @@ export function OwnerView({
 
   return (
     <div>
-      <h2>オーナービュー</h2>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <h2 style={{ margin: 0 }}>オーナービュー</h2>
+        {onToggleSettings ? (
+          <button
+            type="button"
+            onClick={onToggleSettings}
+            aria-pressed={settingsOpen ?? false}
+            style={{
+              padding: '0.4rem 0.75rem',
+              borderRadius: '9999px',
+              border: '1px solid #0f172a',
+              backgroundColor: settingsOpen ? '#0f172a' : '#e2e8f0',
+              color: settingsOpen ? '#f8fafc' : '#0f172a',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            設定
+          </button>
+        ) : null}
+      </div>
       <p>接続状態: {status}</p>
       <p aria-live="polite">
         ルームID:{' '}
