@@ -316,4 +316,136 @@ describe('OwnerView', () => {
     expect(rightOuterWall).not.toBeNull();
     expect(bottomOuterWall).not.toBeNull();
   });
+
+  it('準備フェーズで罠アイコンを配置するとO_EDITが送信される', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    const maze = createMockMaze(40);
+    render(
+      <OwnerView
+        client={client}
+        roomId="ROOM-DRAG"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={60}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={40}
+        editCooldownMs={0}
+        phase="prep"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+        maze={maze}
+      />,
+    );
+
+    const trapIcon = screen.getByLabelText('罠アイコン');
+    const map = screen.getByLabelText('俯瞰マップ');
+    expect(map.getAttribute('data-placement-enabled')).toBe('true');
+    mockBoundingRect(map);
+
+    fireEvent.click(trapIcon);
+    fireEvent.click(map, { clientX: 240, clientY: 240 });
+
+    expect(send).toHaveBeenCalledWith({
+      type: 'O_EDIT',
+      edit: { action: 'PLACE_TRAP', cell: { x: 20, y: 20 } },
+    });
+  });
+
+  it('準備フェーズで予測地点アイコンを配置するとO_MRKが送信される', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    render(
+      <OwnerView
+        client={client}
+        roomId="ROOM-DRAG"
+        trapCharges={2}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={60}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={40}
+        editCooldownMs={0}
+        phase="prep"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+        maze={createMockMaze(40)}
+      />,
+    );
+
+    const predictionIcon = screen.getByLabelText('予測地点アイコン');
+    const map = screen.getByLabelText('俯瞰マップ');
+    expect(map.getAttribute('data-placement-enabled')).toBe('true');
+    mockBoundingRect(map);
+
+    fireEvent.click(predictionIcon);
+    fireEvent.click(map, { clientX: 120, clientY: 120 });
+
+    expect(send).toHaveBeenCalledWith({
+      type: 'O_MRK',
+      cell: { x: 10, y: 10 },
+      active: true,
+    });
+  });
+
+  it('準備フェーズ以外では配置しても送信されない', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    render(
+      <OwnerView
+        client={client}
+        roomId="ROOM-DRAG"
+        trapCharges={2}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={60}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={40}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+        maze={createMockMaze(40)}
+      />,
+    );
+
+    const trapIcon = screen.getByLabelText('罠アイコン');
+    const map = screen.getByLabelText('俯瞰マップ');
+    mockBoundingRect(map);
+
+    fireEvent.click(trapIcon);
+    fireEvent.click(map, { clientX: 200, clientY: 200 });
+
+    expect(send).not.toHaveBeenCalled();
+  });
 });
+
+function mockBoundingRect(element: Element) {
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+    width: 480,
+    height: 480,
+    top: 0,
+    left: 0,
+    bottom: 480,
+    right: 480,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  } as DOMRect);
+}
