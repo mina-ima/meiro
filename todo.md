@@ -246,6 +246,8 @@
   - DoD: `client/tests/DebugHUD.test.tsx` で仕様値の表示を確認
 - [x] 準備中プレビューにゴール映像が含まれる
   - DoD: `client/tests/PlayerViewPreview.test.tsx` でゴールプレビュー映像の表示を確認
+- [x] 準備中プレビューが迷路固有の座標/分岐情報を表示する
+  - DoD: `client/tests/PlayerViewPreview.test.tsx` でスタート/ゴール座標を含むクリップ切替を検証
 - [x] 規定到達で終了（到達未満なら継続）  
   - DoD: `server/tests/points-scoring.test.ts` でターゲット到達時の `RESULT` 通知と未達時継続を検証
 

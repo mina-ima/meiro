@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { PlayerView } from '../src/views/PlayerView';
+import { useSessionStore } from '../src/state/sessionStore';
+import { createMockMaze } from './helpers/mockMaze';
 
 const baseProps = {
   points: 0,
@@ -12,24 +14,47 @@ const baseProps = {
 describe('PlayerView 準備プレビュー', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    act(() => {
+      useSessionStore.getState().reset();
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    act(() => {
+      useSessionStore.getState().reset();
+    });
   });
 
-  it('準備フェーズ中にプレビューオーバーレイが表示される', () => {
+  it('準備フェーズ中に迷路データ由来のスタート映像が表示される', () => {
+    const maze = prepareMaze({
+      start: { x: 5, y: 3 },
+      goal: { x: 17, y: 11 },
+    });
+    initializePrepPreviewState(maze);
+
     render(<PlayerView {...baseProps} phase="prep" />);
 
     const group = screen.getByRole('group', { name: '準備中プレビュー' });
     expect(group).toBeInTheDocument();
-    expect(screen.getByText(/クリップ 1/)).toBeInTheDocument();
+    expect(screen.getByText('スタート地点 (5, 3)')).toBeInTheDocument();
+    expect(screen.getByText(/北|東|南|西/)).toBeInTheDocument();
+  });
+
+  it('プレビューには必ずゴール座標付きの映像が含まれる', () => {
+    const maze = prepareMaze({
+      start: { x: 1, y: 2 },
+      goal: { x: 18, y: 16 },
+    });
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
 
     act(() => {
       vi.advanceTimersByTime(10_000);
     });
-    expect(screen.getByText(/ゴールの光が一瞬だけ映ります/)).toBeInTheDocument();
-    expect(screen.getByAltText('ゴールプレビュー映像')).toBeInTheDocument();
+    expect(screen.getByText('ゴール直前の視界 (18, 16)')).toBeInTheDocument();
+    expect(screen.getByAltText('ゴール (18, 16) プレビュー映像')).toBeInTheDocument();
   });
 
   it('探索フェーズではキャンバスのみが表示される', () => {
@@ -39,3 +64,27 @@ describe('PlayerView 準備プレビュー', () => {
     expect(screen.queryByRole('group', { name: '準備中プレビュー' })).not.toBeInTheDocument();
   });
 });
+
+function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
+  act(() => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      maze,
+      mazeSize: 20,
+      phase: 'prep',
+      player: {
+        ...state.player,
+        position: { x: maze.start.x + 0.5, y: maze.start.y + 0.5 },
+      },
+    }));
+  });
+}
+
+function prepareMaze(overrides: { start: { x: number; y: number }; goal: { x: number; y: number } }) {
+  const maze = createMockMaze(20);
+  return {
+    ...maze,
+    start: { ...overrides.start },
+    goal: { ...overrides.goal },
+  };
+}

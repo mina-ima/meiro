@@ -8,13 +8,18 @@ import {
   type RaycasterState,
 } from '../game/Raycaster';
 import { PLAYER_FOV_DEGREES, PLAYER_MAX_RAY_COUNT, PLAYER_VIEW_RANGE } from '../config/spec';
-import { useSessionStore, type PauseReason } from '../state/sessionStore';
+import {
+  useSessionStore,
+  type PauseReason,
+  type ServerMazeCell,
+  type ServerMazeState,
+} from '../state/sessionStore';
 
 function createSvgDataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
 }
 
-const PREVIEW_IMAGES = {
+const FALLBACK_PREVIEW_IMAGES = {
   entry: createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
       <rect width="320" height="180" fill="#0f172a"/>
@@ -60,13 +65,13 @@ interface PreviewClip {
   previewAlt: string;
 }
 
-const PREVIEW_CLIPS: readonly PreviewClip[] = [
+const DEFAULT_PREVIEW_CLIPS: readonly PreviewClip[] = [
   {
     id: 'entry',
     title: 'スタート地点の全体像',
     description: '最初の広場と正面の分岐を確認しておきましょう。',
     hint: 'スタート直後の導線をイメージしておくと迷いません。',
-    previewImage: PREVIEW_IMAGES.entry,
+    previewImage: FALLBACK_PREVIEW_IMAGES.entry,
     previewAlt: 'スタート地点プレビュー映像',
   },
   {
@@ -74,7 +79,7 @@ const PREVIEW_CLIPS: readonly PreviewClip[] = [
     title: '複雑な十字路',
     description: '左手に長い通路、右手に袋小路。無駄なく抜けるルートをイメージしましょう。',
     hint: '曲がり角で減速しないよう、進行ルートを決めておきましょう。',
-    previewImage: PREVIEW_IMAGES.junction,
+    previewImage: FALLBACK_PREVIEW_IMAGES.junction,
     previewAlt: '十字路プレビュー映像',
   },
   {
@@ -82,7 +87,7 @@ const PREVIEW_CLIPS: readonly PreviewClip[] = [
     title: 'ゴールへの最終コーナー',
     description: 'ゴールの光が一瞬だけ映ります。右折→直進でゴールに到達します。',
     hint: 'ゴール直前の曲がり方と光源位置をこの映像で確認してください。',
-    previewImage: PREVIEW_IMAGES.goal,
+    previewImage: FALLBACK_PREVIEW_IMAGES.goal,
     previewAlt: 'ゴールプレビュー映像',
   },
 ] as const;
@@ -117,7 +122,7 @@ export function PlayerView({
   pauseSecondsRemaining,
   compensationBonus,
 }: PlayerViewProps) {
-  const clips = useMemo(() => PREVIEW_CLIPS, []);
+  const clips = usePreviewClips();
   const [clipIndex, setClipIndex] = useState(0);
   const [secondsUntilNextClip, setSecondsUntilNextClip] = useState(PREVIEW_INTERVAL_MS / 1000);
   const initialCompensation = Number.isFinite(compensationBonus)
@@ -336,6 +341,11 @@ export function PlayerView({
   );
 }
 
+function usePreviewClips(): readonly PreviewClip[] {
+  const maze = useSessionStore((state) => state.maze);
+  return useMemo(() => createPreviewClipsFromMaze(maze), [maze]);
+}
+
 function createBoundaryEnvironment(size: number): RaycasterEnvironment {
   const limit = Math.max(0, size);
   return {
@@ -419,4 +429,240 @@ function intensityToColor(intensity: number): string {
   const b = Math.round(far.b + (near.b - far.b) * clamped);
 
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly PreviewClip[] {
+  if (!maze || !Array.isArray(maze.cells) || maze.cells.length === 0) {
+    return DEFAULT_PREVIEW_CLIPS;
+  }
+
+  const startCell = findCell(maze, maze.start) ?? maze.cells[0];
+  const goalCell = findCell(maze, maze.goal) ?? startCell;
+
+  if (!startCell || !goalCell) {
+    return DEFAULT_PREVIEW_CLIPS;
+  }
+
+  const rng = createSeededRandom(maze.seed);
+  const corridorCell = selectCorridorCell(maze, startCell, goalCell, rng);
+
+  return [createStartClip(startCell), createCorridorClip(corridorCell), createGoalClip(goalCell)];
+}
+
+function createStartClip(cell: ServerMazeCell): PreviewClip {
+  const openDirections = getOpenDirections(cell);
+  const description = `スタート近辺 (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}`;
+  const hint =
+    openDirections.length > 0
+      ? `${directionShortLabel(openDirections[0])}側へ抜けるルートを決めておくと迷いません。`
+      : '四方を壁に囲まれるため、周囲を確認して進みましょう。';
+
+  return {
+    id: 'entry',
+    title: `スタート地点 (${cell.x}, ${cell.y})`,
+    description,
+    hint,
+    previewImage: createCellPreviewSvg(cell, openDirections, 'start'),
+    previewAlt: `スタート (${cell.x}, ${cell.y}) プレビュー映像`,
+  };
+}
+
+function createCorridorClip(cell: ServerMazeCell): PreviewClip {
+  const openDirections = getOpenDirections(cell);
+  const description = `分岐ポイント (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}`;
+  const hint = buildCorridorHint(openDirections);
+
+  return {
+    id: 'junction',
+    title: `迷路内の分岐 (${cell.x}, ${cell.y})`,
+    description,
+    hint,
+    previewImage: createCellPreviewSvg(cell, openDirections, 'junction'),
+    previewAlt: `分岐 (${cell.x}, ${cell.y}) プレビュー映像`,
+  };
+}
+
+function createGoalClip(cell: ServerMazeCell): PreviewClip {
+  const openDirections = getOpenDirections(cell);
+  const description = `ゴール周辺 (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}光源の位置を覚えましょう。`;
+  const hint =
+    openDirections.length > 0
+      ? `${directionShortLabel(openDirections[0])}側から差し込む光を目印に、最後のコーナーで減速を抑えてください。`
+      : '袋小路の光を見失わないよう、壁沿いに進んでください。';
+
+  return {
+    id: 'goal',
+    title: `ゴール直前の視界 (${cell.x}, ${cell.y})`,
+    description,
+    hint,
+    previewImage: createCellPreviewSvg(cell, openDirections, 'goal'),
+    previewAlt: `ゴール (${cell.x}, ${cell.y}) プレビュー映像`,
+  };
+}
+
+type Direction = 'north' | 'east' | 'south' | 'west';
+
+const DIRECTION_INFO: Record<
+  Direction,
+  { wall: keyof ServerMazeCell['walls']; label: string; short: string }
+> = {
+  north: { wall: 'top', label: '北側', short: '北' },
+  east: { wall: 'right', label: '東側', short: '東' },
+  south: { wall: 'bottom', label: '南側', short: '南' },
+  west: { wall: 'left', label: '西側', short: '西' },
+};
+
+function getOpenDirections(cell: ServerMazeCell): Direction[] {
+  const directions: Direction[] = [];
+  (Object.keys(DIRECTION_INFO) as Direction[]).forEach((direction) => {
+    const wallKey = DIRECTION_INFO[direction].wall;
+    if (!cell.walls[wallKey]) {
+      directions.push(direction);
+    }
+  });
+  return directions;
+}
+
+function describeOpenDirections(directions: Direction[]): string {
+  if (directions.length === 0) {
+    return '四方を壁に囲まれています。';
+  }
+
+  if (directions.length === 4) {
+    return '四方向すべてに分岐しています。';
+  }
+
+  const labels = directions.map((direction) => DIRECTION_INFO[direction].label);
+  return `${labels.join('・')}に抜けられます。`;
+}
+
+function directionShortLabel(direction: Direction): string {
+  return DIRECTION_INFO[direction].short;
+}
+
+function buildCorridorHint(directions: Direction[]): string {
+  if (directions.length >= 2) {
+    const [first, second] = directions;
+    return `${directionShortLabel(first)}→${directionShortLabel(second)}のラインで減速を抑えましょう。`;
+  }
+
+  if (directions.length === 1) {
+    return `${directionShortLabel(directions[0])}方向へ素早く抜ける準備を整えてください。`;
+  }
+
+  return '袋小路なので最短で折り返すルートを想定しましょう。';
+}
+
+function findCell(
+  maze: ServerMazeState,
+  target: { x: number; y: number },
+): ServerMazeCell | undefined {
+  return maze.cells.find((cell) => cell.x === target.x && cell.y === target.y);
+}
+
+function selectCorridorCell(
+  maze: ServerMazeState,
+  start: ServerMazeCell,
+  goal: ServerMazeCell,
+  rng: () => number,
+): ServerMazeCell {
+  const isSpecial = (cell: ServerMazeCell) => cell.x === start.x && cell.y === start.y;
+  const isGoal = (cell: ServerMazeCell) => cell.x === goal.x && cell.y === goal.y;
+
+  const preferred = maze.cells.filter((cell) => {
+    if (isSpecial(cell) || isGoal(cell)) {
+      return false;
+    }
+    return getOpenDirections(cell).length >= 3;
+  });
+
+  const fallback = maze.cells.filter((cell) => {
+    if (isSpecial(cell) || isGoal(cell)) {
+      return false;
+    }
+    return getOpenDirections(cell).length >= 2;
+  });
+
+  const pool = preferred.length > 0 ? preferred : fallback;
+  if (pool.length === 0) {
+    return start;
+  }
+  const index = Math.floor(rng() * pool.length);
+  return pool[index] ?? pool[0];
+}
+
+type MazePreviewVariant = 'start' | 'junction' | 'goal';
+
+function createCellPreviewSvg(
+  cell: ServerMazeCell,
+  openDirections: Direction[],
+  variant: MazePreviewVariant,
+): string {
+  const accent = variant === 'goal' ? '#fde047' : variant === 'junction' ? '#38bdf8' : '#22d3ee';
+  const connectors = openDirections
+    .map((direction) => createDirectionPath(direction, accent))
+    .join('');
+  const glowDefs =
+    variant === 'goal'
+      ? `<defs>
+          <radialGradient id="goalGlow" cx="0.8" cy="0.2" r="0.5">
+            <stop offset="0%" stop-color="#fde68a" stop-opacity="1" />
+            <stop offset="65%" stop-color="#facc15" stop-opacity="0.45" />
+            <stop offset="100%" stop-color="#facc15" stop-opacity="0" />
+          </radialGradient>
+        </defs>`
+      : '';
+
+  const glow = variant === 'goal' ? `<circle cx="240" cy="50" r="40" fill="url(#goalGlow)" />` : '';
+
+  const coordinateLabel = `${cell.x}, ${cell.y}`;
+
+  return createSvgDataUri(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+      ${glowDefs}
+      <rect width="320" height="180" fill="#0f172a" />
+      ${connectors}
+      <circle cx="160" cy="90" r="28" fill="${accent}" opacity="0.9" />
+      ${glow}
+      <text x="160" y="166" fill="#e2e8f0" font-size="16" text-anchor="middle" opacity="0.85">
+        ${coordinateLabel}
+      </text>
+    </svg>
+  `);
+}
+
+function createDirectionPath(direction: Direction, color: string): string {
+  const strokeWidth = 18;
+  switch (direction) {
+    case 'north':
+      return `<path d="M160 30 L160 80" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
+    case 'south':
+      return `<path d="M160 100 L160 150" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
+    case 'west':
+      return `<path d="M50 90 L150 90" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
+    case 'east':
+      return `<path d="M170 90 L270 90" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
+    default:
+      return '';
+  }
+}
+
+function createSeededRandom(seed: string): () => number {
+  let state = hashSeed(seed);
+  return () => {
+    state += 0x6d2b79f5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(seed: string): number {
+  let hash = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = Math.imul(hash ^ seed.charCodeAt(i), 3432918353);
+    hash = (hash << 13) | (hash >>> 19);
+  }
+  return hash >>> 0;
 }
