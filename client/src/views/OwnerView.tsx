@@ -117,6 +117,8 @@ export interface OwnerViewProps {
 }
 
 const DRAG_DATA_TYPE = 'application/meiro-owner-placement';
+const PLAYER_MARKER_TIP_OFFSET = 0.6;
+const PLAYER_MARKER_BASE_WIDTH = 0.7;
 type PlacementType = 'trap' | 'prediction';
 
 export function OwnerView({
@@ -508,6 +510,16 @@ function OwnerMap({
   const viewSize = mazeSize / zoom;
   const viewBox = `${offset.x} ${offset.y} ${viewSize} ${viewSize}`;
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const playerMarkerPoints = useMemo(() => {
+    const baseOffset = PLAYER_MARKER_TIP_OFFSET / 2;
+    const halfBase = PLAYER_MARKER_BASE_WIDTH / 2;
+    const tipX = playerPosition.x;
+    const tipY = playerPosition.y - PLAYER_MARKER_TIP_OFFSET;
+    const baseY = playerPosition.y + baseOffset;
+    const leftX = playerPosition.x - halfBase;
+    const rightX = playerPosition.x + halfBase;
+    return `${tipX},${tipY} ${leftX},${baseY} ${rightX},${baseY}`;
+  }, [playerPosition.x, playerPosition.y]);
 
   const gridLines = useMemo(() => {
     const lines: ReactNode[] = [];
@@ -744,16 +756,16 @@ function OwnerMap({
           <title>禁止エリア</title>
         </circle>
 
-        <circle
-          cx={playerPosition.x}
-          cy={playerPosition.y}
-          r={0.4}
+        <polygon
+          points={playerMarkerPoints}
           fill="#38bdf8"
           stroke="#0ea5e9"
+          strokeWidth={0.12}
+          strokeLinejoin="round"
           data-testid="player-marker"
         >
           <title>プレイヤー位置</title>
-        </circle>
+        </polygon>
 
         {predictionMarks.map((mark, index) => (
           <rect

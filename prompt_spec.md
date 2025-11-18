@@ -227,6 +227,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 8.2 オーナー
 
 * 俯瞰全体マップ、**ズーム/パン**（最小=迷路全体, 最大=9マスを画面内）。初期表示は40×40でも全域が欠けないズーム（等倍）で描画し、ビューポート自体も 480px 角の固定サイズを確保する（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）。
+* プレイヤー位置のマーカーは **セルを覆わない小型の上向き三角形(▲)** とし、禁止距離サークルと重なっても迷路や罠/予測の視認性が損なわれないようにする。`client/tests/OwnerView.test.tsx` でSVGポリゴン・辺長が1マス未満であることを検証する。
 * ロビー（`phase=lobby`）中は迷路/HUDを描画せず、「ゲーム開始」を押すと迷路自動設計と60秒の準備フェーズが始まる旨を案内する。ボタン押下後（`countdown`/`prep`/`explore`）のみ俯瞰マップと初期設定HUDを表示し、**罠権利/同時設置数**、**禁止エリア距離**、**編集クールダウン残り**、**予測地点の残り数**、**設定可能な残り時間**だけに絞る（壁残数や得点は表示しない）。（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx / client/tests/AppPredictionIntegration.test.tsx / client/tests/AppOptimisticUi.test.tsx / client/tests/OwnerCooldownDisplay.test.tsx / client/tests/AppOwnerForbiddenDistance.test.tsx）。
 * 準備フェーズ中はHUD直下に **罠🪤 / 予測地点🎯 の配置パレット**を表示し、ドラッグ＆ドロップ（またはアクセシビリティ向けのクリック→マップクリック）で通路上に配置できるようにする。ドロップ時に `O_EDIT(PLACE_TRAP)` / `O_MRK` を送信し、設置後は自動的に選択解除。迷路データ未受信やフェーズ外ではパレットを無効化し、残り時間内に「罠1個 + 予測地点3個」の初期目標を説明する（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）。
 * 編集は**確認ポップ→同じ場所を再クリックで確定**。**右クリック/Escでキャンセル**。**1.0秒CD**。

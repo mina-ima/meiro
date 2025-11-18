@@ -69,6 +69,41 @@ describe('OwnerView', () => {
     ).toBeInTheDocument();
   });
 
+  it('プレイヤー位置は迷路を隠さないよう小さな三角形で描画する', () => {
+    render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={0}
+        forbiddenDistance={3}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={0}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 10.5, y: 12.5 }}
+        mazeSize={40}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[]}
+      />,
+    );
+
+    const marker = screen.getByTestId('player-marker');
+    expect(marker.tagName.toLowerCase()).toBe('polygon');
+    const points = marker.getAttribute('points');
+    expect(points).toBeTruthy();
+    const coords = points!.trim().split(/\s+/).map((pair) => {
+      const [x, y] = pair.split(',').map(Number);
+      return [x, y] as const;
+    });
+    expect(coords).toHaveLength(3);
+    const xs = coords.map(([x]) => x);
+    const ys = coords.map(([, y]) => y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(1);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1);
+  });
+
   it('ロビーでプレイヤー未参加なら参加状況を表示し開始ボタンを無効化する', () => {
     render(
       <OwnerView
