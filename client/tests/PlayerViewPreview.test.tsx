@@ -37,11 +37,14 @@ describe('PlayerView 準備プレビュー', () => {
 
     const group = screen.getByRole('group', { name: '準備中プレビュー' });
     expect(group).toBeInTheDocument();
-    expect(screen.getByText('スタート地点 (5, 3)')).toBeInTheDocument();
+    expect(screen.getByText('スタート地点プレビュー')).toBeInTheDocument();
     expect(screen.getByText(/北|東|南|西/)).toBeInTheDocument();
+    expect(
+      screen.queryByText((content) => /\(\d+\s*,\s*\d+\)/.test(content)),
+    ).not.toBeInTheDocument();
   });
 
-  it('プレビューには必ずゴール座標付きの映像が含まれる', () => {
+  it('プレビューには必ずゴール映像が含まれる', () => {
     const maze = prepareMaze({
       start: { x: 1, y: 2 },
       goal: { x: 18, y: 16 },
@@ -53,8 +56,8 @@ describe('PlayerView 準備プレビュー', () => {
     act(() => {
       vi.advanceTimersByTime(10_000);
     });
-    expect(screen.getByText('ゴール直前の視界 (18, 16)')).toBeInTheDocument();
-    expect(screen.getByAltText('ゴール (18, 16) プレビュー映像')).toBeInTheDocument();
+    expect(screen.getByText('ゴール直前プレビュー')).toBeInTheDocument();
+    expect(screen.getByAltText('ゴールプレビュー映像')).toBeInTheDocument();
   });
 
   it('探索フェーズではキャンバスのみが表示される', () => {

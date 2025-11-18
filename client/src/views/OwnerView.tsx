@@ -406,7 +406,6 @@ export function OwnerView({
             zoom={zoom}
             zoomIndex={zoomIndex}
             offset={offset}
-            forbiddenDistance={forbiddenDistance}
             playerPosition={playerPosition}
             predictionMarks={predictionMarks}
             traps={traps}
@@ -474,7 +473,6 @@ interface OwnerMapProps {
   zoom: number;
   zoomIndex: number;
   offset: Vector2;
-  forbiddenDistance: number;
   playerPosition: Vector2;
   predictionMarks: Vector2[];
   traps: Vector2[];
@@ -494,7 +492,6 @@ function OwnerMap({
   zoom,
   zoomIndex,
   offset,
-  forbiddenDistance,
   playerPosition,
   predictionMarks,
   traps,
@@ -744,17 +741,6 @@ function OwnerMap({
             />
           </>
         ) : null}
-
-        <circle
-          cx={playerPosition.x}
-          cy={playerPosition.y}
-          r={forbiddenDistance}
-          fill="rgba(56, 189, 248, 0.08)"
-          stroke="#38bdf8"
-          strokeDasharray="1 1"
-        >
-          <title>禁止エリア</title>
-        </circle>
 
         <polygon
           points={playerMarkerPoints}

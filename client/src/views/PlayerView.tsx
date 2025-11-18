@@ -19,43 +19,6 @@ function createSvgDataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
 }
 
-const FALLBACK_PREVIEW_IMAGES = {
-  entry: createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
-      <rect width="320" height="180" fill="#0f172a"/>
-      <rect x="36" y="48" width="248" height="84" rx="26" fill="#1e293b"/>
-      <path d="M60 90 H260" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
-      <circle cx="104" cy="90" r="12" fill="#22d3ee" opacity="0.8"/>
-      <circle cx="220" cy="90" r="12" fill="#facc15" opacity="0.9"/>
-    </svg>
-  `),
-  junction: createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
-      <rect width="320" height="180" fill="#0f172a"/>
-      <path d="M160 30 V150 M30 90 H290" stroke="#38bdf8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.75"/>
-      <circle cx="160" cy="90" r="18" fill="#22d3ee" opacity="0.85"/>
-      <rect x="210" y="46" width="34" height="88" rx="12" fill="#1e293b"/>
-      <rect x="76" y="46" width="34" height="88" rx="12" fill="#1e293b"/>
-    </svg>
-  `),
-  goal: createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
-      <defs>
-        <radialGradient id="goalGlow" cx="0.82" cy="0.18" r="0.45">
-          <stop offset="0%" stop-color="#fde68a" stop-opacity="1"/>
-          <stop offset="60%" stop-color="#facc15" stop-opacity="0.5"/>
-          <stop offset="100%" stop-color="#facc15" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <rect width="320" height="180" fill="#0f172a"/>
-      <path d="M40 150 L150 90 L210 120 L270 60" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-      <circle cx="270" cy="60" r="30" fill="url(#goalGlow)"/>
-      <circle cx="270" cy="60" r="10" fill="#fde047"/>
-      <path d="M262 32 L270 20 L278 32" fill="#f5d0c5" opacity="0.5"/>
-    </svg>
-  `),
-} as const;
-
 interface PreviewClip {
   id: 'entry' | 'junction' | 'goal';
   title: string;
@@ -65,32 +28,14 @@ interface PreviewClip {
   previewAlt: string;
 }
 
-const DEFAULT_PREVIEW_CLIPS: readonly PreviewClip[] = [
-  {
-    id: 'entry',
-    title: 'スタート地点の全体像',
-    description: '最初の広場と正面の分岐を確認しておきましょう。',
-    hint: 'スタート直後の導線をイメージしておくと迷いません。',
-    previewImage: FALLBACK_PREVIEW_IMAGES.entry,
-    previewAlt: 'スタート地点プレビュー映像',
-  },
-  {
-    id: 'junction',
-    title: '複雑な十字路',
-    description: '左手に長い通路、右手に袋小路。無駄なく抜けるルートをイメージしましょう。',
-    hint: '曲がり角で減速しないよう、進行ルートを決めておきましょう。',
-    previewImage: FALLBACK_PREVIEW_IMAGES.junction,
-    previewAlt: '十字路プレビュー映像',
-  },
-  {
-    id: 'goal',
-    title: 'ゴールへの最終コーナー',
-    description: 'ゴールの光が一瞬だけ映ります。右折→直進でゴールに到達します。',
-    hint: 'ゴール直前の曲がり方と光源位置をこの映像で確認してください。',
-    previewImage: FALLBACK_PREVIEW_IMAGES.goal,
-    previewAlt: 'ゴールプレビュー映像',
-  },
-] as const;
+let defaultPreviewClips: readonly PreviewClip[] | null = null;
+
+function getDefaultPreviewClips(): readonly PreviewClip[] {
+  if (!defaultPreviewClips) {
+    defaultPreviewClips = createDefaultPreviewClips();
+  }
+  return defaultPreviewClips;
+}
 
 const PREVIEW_INTERVAL_MS = 5_000;
 
@@ -433,14 +378,14 @@ function intensityToColor(intensity: number): string {
 
 function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly PreviewClip[] {
   if (!maze || !Array.isArray(maze.cells) || maze.cells.length === 0) {
-    return DEFAULT_PREVIEW_CLIPS;
+    return getDefaultPreviewClips();
   }
 
   const startCell = findCell(maze, maze.start) ?? maze.cells[0];
   const goalCell = findCell(maze, maze.goal) ?? startCell;
 
   if (!startCell || !goalCell) {
-    return DEFAULT_PREVIEW_CLIPS;
+    return getDefaultPreviewClips();
   }
 
   const rng = createSeededRandom(maze.seed);
@@ -451,7 +396,7 @@ function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly Pre
 
 function createStartClip(cell: ServerMazeCell): PreviewClip {
   const openDirections = getOpenDirections(cell);
-  const description = `スタート近辺 (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}`;
+  const description = `スタート近辺。${describeOpenDirections(openDirections)}`;
   const hint =
     openDirections.length > 0
       ? `${directionShortLabel(openDirections[0])}側へ抜けるルートを決めておくと迷いません。`
@@ -459,32 +404,32 @@ function createStartClip(cell: ServerMazeCell): PreviewClip {
 
   return {
     id: 'entry',
-    title: `スタート地点 (${cell.x}, ${cell.y})`,
+    title: 'スタート地点プレビュー',
     description,
     hint,
-    previewImage: createCellPreviewSvg(cell, openDirections, 'start'),
-    previewAlt: `スタート (${cell.x}, ${cell.y}) プレビュー映像`,
+    previewImage: createPerspectivePreviewSvg(openDirections, 'start'),
+    previewAlt: 'スタート地点プレビュー映像',
   };
 }
 
 function createCorridorClip(cell: ServerMazeCell): PreviewClip {
   const openDirections = getOpenDirections(cell);
-  const description = `分岐ポイント (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}`;
+  const description = `分岐ポイント。${describeOpenDirections(openDirections)}`;
   const hint = buildCorridorHint(openDirections);
 
   return {
     id: 'junction',
-    title: `迷路内の分岐 (${cell.x}, ${cell.y})`,
+    title: '迷路分岐プレビュー',
     description,
     hint,
-    previewImage: createCellPreviewSvg(cell, openDirections, 'junction'),
-    previewAlt: `分岐 (${cell.x}, ${cell.y}) プレビュー映像`,
+    previewImage: createPerspectivePreviewSvg(openDirections, 'junction'),
+    previewAlt: '迷路分岐プレビュー映像',
   };
 }
 
 function createGoalClip(cell: ServerMazeCell): PreviewClip {
   const openDirections = getOpenDirections(cell);
-  const description = `ゴール周辺 (${cell.x}, ${cell.y})。${describeOpenDirections(openDirections)}光源の位置を覚えましょう。`;
+  const description = `ゴール周辺。${describeOpenDirections(openDirections)}光源の位置を覚えましょう。`;
   const hint =
     openDirections.length > 0
       ? `${directionShortLabel(openDirections[0])}側から差し込む光を目印に、最後のコーナーで減速を抑えてください。`
@@ -492,11 +437,11 @@ function createGoalClip(cell: ServerMazeCell): PreviewClip {
 
   return {
     id: 'goal',
-    title: `ゴール直前の視界 (${cell.x}, ${cell.y})`,
+    title: 'ゴール直前プレビュー',
     description,
     hint,
-    previewImage: createCellPreviewSvg(cell, openDirections, 'goal'),
-    previewAlt: `ゴール (${cell.x}, ${cell.y}) プレビュー映像`,
+    previewImage: createPerspectivePreviewSvg(openDirections, 'goal'),
+    previewAlt: 'ゴールプレビュー映像',
   };
 }
 
@@ -593,58 +538,93 @@ function selectCorridorCell(
 
 type MazePreviewVariant = 'start' | 'junction' | 'goal';
 
-function createCellPreviewSvg(
-  cell: ServerMazeCell,
+function createPerspectivePreviewSvg(
   openDirections: Direction[],
   variant: MazePreviewVariant,
 ): string {
   const accent = variant === 'goal' ? '#fde047' : variant === 'junction' ? '#38bdf8' : '#22d3ee';
-  const connectors = openDirections
-    .map((direction) => createDirectionPath(direction, accent))
-    .join('');
+  const hasForward = openDirections.includes('north');
+  const hasLeft = openDirections.includes('west');
+  const hasRight = openDirections.includes('east');
+  const hasBack = openDirections.includes('south');
+
+  const forwardPath = `<path d="M140 110 L180 110 L220 20 L100 20 Z" fill="${accent}" opacity="${
+    hasForward ? '0.55' : '0.12'
+  }" />`;
+  const leftPath = `<path d="M80 110 L140 110 L110 20 L40 20 Z" fill="${accent}" opacity="${
+    hasLeft ? '0.4' : '0.08'
+  }" />`;
+  const rightPath = `<path d="M180 110 L240 110 L280 20 L210 20 Z" fill="${accent}" opacity="${
+    hasRight ? '0.4' : '0.08'
+  }" />`;
+  const backHighlight = `<path d="M60 180 L260 180 L230 130 L90 130 Z" fill="${accent}" opacity="${
+    hasBack ? '0.25' : '0.08'
+  }" />`;
+
   const glowDefs =
     variant === 'goal'
       ? `<defs>
-          <radialGradient id="goalGlow" cx="0.8" cy="0.2" r="0.5">
+          <radialGradient id="goalGlow" cx="0.75" cy="0.18" r="0.45">
             <stop offset="0%" stop-color="#fde68a" stop-opacity="1" />
-            <stop offset="65%" stop-color="#facc15" stop-opacity="0.45" />
+            <stop offset="60%" stop-color="#facc15" stop-opacity="0.5" />
             <stop offset="100%" stop-color="#facc15" stop-opacity="0" />
           </radialGradient>
         </defs>`
       : '';
 
-  const glow = variant === 'goal' ? `<circle cx="240" cy="50" r="40" fill="url(#goalGlow)" />` : '';
-
-  const coordinateLabel = `${cell.x}, ${cell.y}`;
+  const glow =
+    variant === 'goal'
+      ? `<circle cx="240" cy="60" r="45" fill="url(#goalGlow)" opacity="0.9" />`
+      : '';
 
   return createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
       ${glowDefs}
-      <rect width="320" height="180" fill="#0f172a" />
-      ${connectors}
-      <circle cx="160" cy="90" r="28" fill="${accent}" opacity="0.9" />
+      <rect width="320" height="180" fill="#020617" />
+      <path d="M0 0 L320 0 L260 110 L60 110 Z" fill="#0f172a" />
+      <path d="M60 110 L260 110 L320 180 L0 180 Z" fill="#082f49" />
+      ${leftPath}
+      ${rightPath}
+      ${forwardPath}
+      ${backHighlight}
       ${glow}
-      <text x="160" y="166" fill="#e2e8f0" font-size="16" text-anchor="middle" opacity="0.85">
-        ${coordinateLabel}
-      </text>
+      <path d="M0 0 L60 110" stroke="#0b212f" stroke-width="4" opacity="0.35" />
+      <path d="M320 0 L260 110" stroke="#0b212f" stroke-width="4" opacity="0.35" />
     </svg>
   `);
 }
 
-function createDirectionPath(direction: Direction, color: string): string {
-  const strokeWidth = 18;
-  switch (direction) {
-    case 'north':
-      return `<path d="M160 30 L160 80" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
-    case 'south':
-      return `<path d="M160 100 L160 150" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
-    case 'west':
-      return `<path d="M50 90 L150 90" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
-    case 'east':
-      return `<path d="M170 90 L270 90" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" opacity="0.85" />`;
-    default:
-      return '';
-  }
+function createDefaultPreviewClips(): readonly PreviewClip[] {
+  const startDirections: Direction[] = ['north', 'east'];
+  const junctionDirections: Direction[] = ['north', 'west', 'east'];
+  const goalDirections: Direction[] = ['north'];
+
+  return [
+    {
+      id: 'entry',
+      title: 'スタート地点プレビュー',
+      description: `スタート近辺。${describeOpenDirections(startDirections)}`,
+      hint: 'スタート直後の導線をイメージしておくと迷いません。',
+      previewImage: createPerspectivePreviewSvg(startDirections, 'start'),
+      previewAlt: 'スタート地点プレビュー映像',
+    },
+    {
+      id: 'junction',
+      title: '迷路分岐プレビュー',
+      description: `複雑な分岐。${describeOpenDirections(junctionDirections)}`,
+      hint: '二手目までの動きを決めて、角で減速しないようにしましょう。',
+      previewImage: createPerspectivePreviewSvg(junctionDirections, 'junction'),
+      previewAlt: '迷路分岐プレビュー映像',
+    },
+    {
+      id: 'goal',
+      title: 'ゴール直前プレビュー',
+      description: `ゴール周辺。${describeOpenDirections(goalDirections)}光源を追いかけましょう。`,
+      hint: '差し込む光を目印に、最後のコーナーで減速を抑えてください。',
+      previewImage: createPerspectivePreviewSvg(goalDirections, 'goal'),
+      previewAlt: 'ゴールプレビュー映像',
+    },
+  ] as const;
 }
 
 function createSeededRandom(seed: string): () => number {
