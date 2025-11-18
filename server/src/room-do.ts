@@ -9,7 +9,7 @@ import {
   type PhysicsState,
   type Vector2,
 } from '@meiro/common';
-import { createInitialRoomState } from './state';
+import { createInitialRoomState, regenerateMaze, resetOwnerState } from './state';
 import type { Role } from './schema/ws';
 import { validateNickname, validateRoomId } from './logic/validate';
 import { hasLobbyExpired, joinLobby, removeSession, resetLobby } from './logic/lobby';
@@ -1141,7 +1141,7 @@ export class RoomDurableObject {
     return true;
   }
 
-  private handleOwnerStart(_message: OwnerStartMessage, socket: WebSocket, now: number): boolean {
+  private handleOwnerStart(message: OwnerStartMessage, socket: WebSocket, now: number): boolean {
     if (this.roomState.phase !== 'lobby') {
       this.sendError(socket, 'START_UNAVAILABLE', 'Countdown can only start from the lobby.');
       return false;
@@ -1156,6 +1156,8 @@ export class RoomDurableObject {
       return false;
     }
 
+    regenerateMaze(this.roomState, { mazeSize: message.mazeSize });
+    resetOwnerState(this.roomState, now);
     const started = maybeStartCountdown(this.roomState, now);
     if (!started) {
       this.sendError(socket, 'START_UNAVAILABLE', 'Countdown is already running.');

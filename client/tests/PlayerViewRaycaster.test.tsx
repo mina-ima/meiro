@@ -9,6 +9,7 @@ import { FRAME_LOOP_INTERVAL_MS } from '../src/game/frameLoop';
 import { castRays, type RaycasterConfig, type RayHit } from '../src/game/Raycaster';
 import { PlayerView } from '../src/views/PlayerView';
 import { useSessionStore } from '../src/state/sessionStore';
+import { createMockMaze } from './helpers/mockMaze';
 
 vi.mock('../src/game/Raycaster', async () => {
   const actual = await vi.importActual<typeof import('../src/game/Raycaster')>(
@@ -234,6 +235,7 @@ function initializeSessionState(overrides: SessionStateOverrides = {}) {
   const now = Date.now();
   const playerPosition = overrides.playerPosition ?? { x: 2, y: 2 };
   const playerAngle = overrides.playerAngle ?? 0;
+  const maze = createMockMaze(20);
 
   useSessionStore.setState((state) => ({
     ...state,
@@ -247,6 +249,7 @@ function initializeSessionState(overrides: SessionStateOverrides = {}) {
     pauseRemainingMs: undefined,
     pausePhase: undefined,
     mazeSize: 20,
+    maze,
     score: 0,
     targetScore: 10,
     serverSeq: 1,
@@ -287,6 +290,7 @@ function initializeSessionState(overrides: SessionStateOverrides = {}) {
         traps: [],
         points: [],
       },
+      maze,
     },
     player: {
       predictionHits: 0,

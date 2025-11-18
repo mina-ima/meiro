@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { App } from '../src/app';
 import { resetToastStoreForTest } from '../src/ui/toasts';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
+import { createMockMaze } from './helpers/mockMaze';
 
 describe('楽観UI禁止', () => {
   beforeEach(() => {
@@ -65,6 +66,7 @@ describe('楽観UI禁止', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(40),
       },
     };
 

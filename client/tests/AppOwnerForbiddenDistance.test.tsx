@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { App } from '../src/app';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
+import { createMockMaze } from './helpers/mockMaze';
 
 function applyServerState(payload: ServerStatePayload): void {
   act(() => {
@@ -63,6 +64,7 @@ describe('App owner forbidden distance integration', () => {
           points: [],
           forbiddenDistance: 4,
         },
+        maze: createMockMaze(40),
       },
     });
 

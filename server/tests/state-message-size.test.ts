@@ -90,6 +90,6 @@ describe('STATEメッセージのシリアライズサイズ', () => {
     expect(message).toBeTruthy();
 
     const encoded = JSON.stringify(message);
-    expect(encoded.length).toBeLessThanOrEqual(1_200);
+    expect(encoded.length).toBeLessThanOrEqual(20_000);
   });
 });

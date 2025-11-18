@@ -115,7 +115,7 @@ describe('オーナー手動開始', () => {
     await joinRoom(room, ownerSocket, { roomId: 'ROOM-1', role: 'owner', nick: 'OWNER' });
     await joinRoom(room, playerSocket, { roomId: 'ROOM-1', role: 'player', nick: 'PLAYER' });
 
-    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START' }));
+    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START', mazeSize: 40 }));
 
     const state = room as unknown as {
       roomState: { phase: string; phaseEndsAt?: number };
@@ -130,7 +130,7 @@ describe('オーナー手動開始', () => {
 
     await joinRoom(room, ownerSocket, { roomId: 'ROOM-1', role: 'owner', nick: 'OWNER' });
 
-    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START' }));
+    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START', mazeSize: 40 }));
 
     const state = room as unknown as {
       roomState: { phase: string };
@@ -138,5 +138,24 @@ describe('オーナー手動開始', () => {
     expect(state.roomState.phase).toBe('lobby');
     const error = parseLastError(ownerSocket);
     expect(error?.code).toBe('START_WAITING_FOR_PLAYER');
+  });
+
+  it('O_STARTで指定した迷路サイズに合わせて迷路とオーナー状態を初期化する', async () => {
+    const room = new RoomDurableObject(new FakeDurableObjectState() as unknown as DurableObjectState);
+    const ownerSocket = new MockSocket();
+    const playerSocket = new MockSocket();
+
+    await joinRoom(room, ownerSocket, { roomId: 'ROOM-1', role: 'owner', nick: 'OWNER' });
+    await joinRoom(room, playerSocket, { roomId: 'ROOM-1', role: 'player', nick: 'PLAYER' });
+
+    const internal = room as unknown as {
+      roomState: { mazeSize: number; owner: { wallStock: number } };
+    };
+    expect(internal.roomState.mazeSize).toBe(40);
+
+    ownerSocket.dispatchMessage(JSON.stringify({ type: 'O_START', mazeSize: 20 }));
+
+    expect(internal.roomState.mazeSize).toBe(20);
+    expect(internal.roomState.owner.wallStock).toBe(48);
   });
 });

@@ -173,6 +173,8 @@
   - DoD: client/tests/OwnerView.test.tsx で参加表示とボタン送信を検証、server/tests/manual-start.test.ts で手動開始のサーバ挙動を検証
 - [x] 共有用ルームID表示：オーナービューのヘッダーで現在のルームコードを強調表示し、未取得時は「取得中」を表示
   - DoD: client/tests/OwnerView.test.tsx の `room-id` テストケースで DOM 表示を検証
+- [x] 自動生成迷路の描画：サーバ STATE の `maze` 情報を俯瞰マップに反映し、スタート/ゴールをハイライト。未受信時はプレースホルダー表示に切り替える
+  - DoD: client/tests/OwnerView.test.tsx の `受信した迷路データから壁を描画する` シナリオ、server/tests/state-sync.test.ts の `迷路情報` ケースで `maze` が配信されることを確認
 - [x] 初期設定HUDの簡略化：オーナービューでは罠権利/同時設置数・禁止エリア距離・編集クールダウン残り・予測地点残数・設定残り時間をまとめて表示し、迷路プレビューと合わせて共有する
   - DoD: client/tests/OwnerView.test.tsx の `HUDでは初期設定` シナリオに加え、client/tests/AppOwnerForbiddenDistance.test.tsx / client/tests/OwnerCooldownDisplay.test.tsx で動的な距離・クールダウン表示を検証
 - [x] ロビー中は準備案内のみを表示し、カウントダウン以降に俯瞰マップと初期設定HUDをレンダリングする

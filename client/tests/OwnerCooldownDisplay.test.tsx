@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { App } from '../src/app';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
+import { createMockMaze } from './helpers/mockMaze';
 
 function applyServerState(payload: ServerStatePayload): void {
   act(() => {
@@ -66,6 +67,7 @@ describe('オーナー編集クールダウン表示', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(40),
       },
     } as unknown as ServerStatePayload);
 

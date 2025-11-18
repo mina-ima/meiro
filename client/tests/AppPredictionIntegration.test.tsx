@@ -3,6 +3,7 @@ import { render, screen, act } from '@testing-library/react';
 import { App } from '../src/app';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
+import { createMockMaze } from './helpers/mockMaze';
 
 function applyServerState(payload: ServerStatePayload): void {
   act(() => {
@@ -69,6 +70,7 @@ describe('App prediction integration', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(40),
       },
     });
 
@@ -120,6 +122,7 @@ describe('App prediction integration', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(40),
       },
     });
 

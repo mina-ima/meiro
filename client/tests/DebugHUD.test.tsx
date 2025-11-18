@@ -3,6 +3,7 @@ import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import { App } from '../src/app';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
 import { resetToastStoreForTest } from '../src/ui/toasts';
+import { createMockMaze } from './helpers/mockMaze';
 
 describe('DebugHUD 仕様表示', () => {
   beforeEach(() => {
@@ -61,6 +62,7 @@ describe('DebugHUD 仕様表示', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(40),
       },
     };
 
@@ -132,6 +134,7 @@ describe('DebugHUD 仕様表示', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(20),
       },
     };
 
@@ -185,6 +188,7 @@ describe('DebugHUD 仕様表示', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(20),
       },
     };
 
@@ -244,6 +248,7 @@ describe('DebugHUD 仕様表示', () => {
           traps: [],
           points: [],
         },
+        maze: createMockMaze(20),
       },
     };
 

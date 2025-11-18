@@ -119,6 +119,7 @@ export function createServerEvents(
           event: 'OWNER_START',
           payload: {
             sessionId: session.id,
+            mazeSize: message.mazeSize,
           },
         },
       ];

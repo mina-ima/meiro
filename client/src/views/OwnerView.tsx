@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import type { NetClient } from '../net/NetClient';
 import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
-import type { PauseReason, ServerSessionEntry, SessionPhase } from '../state/sessionStore';
+import type {
+  PauseReason,
+  ServerSessionEntry,
+  SessionPhase,
+  ServerMazeState,
+} from '../state/sessionStore';
 
 interface Vector2 {
   x: number;
@@ -92,6 +97,7 @@ export interface OwnerViewProps {
   traps: Vector2[];
   playerPosition: Vector2;
   mazeSize: 20 | 40;
+  maze?: ServerMazeState | null;
   editCooldownMs: number;
   pauseReason?: PauseReason;
   pauseSecondsRemaining?: number;
@@ -113,6 +119,7 @@ export function OwnerView({
   traps,
   playerPosition,
   mazeSize,
+  maze,
   editCooldownMs,
   pauseReason,
   pauseSecondsRemaining,
@@ -309,6 +316,7 @@ export function OwnerView({
         >
           <OwnerMap
             mazeSize={mazeSize}
+            maze={maze ?? null}
             zoom={zoom}
             zoomIndex={zoomIndex}
             offset={offset}
@@ -363,6 +371,7 @@ export function OwnerView({
 
 interface OwnerMapProps {
   mazeSize: number;
+  maze: ServerMazeState | null;
   zoom: number;
   zoomIndex: number;
   offset: Vector2;
@@ -378,6 +387,7 @@ interface OwnerMapProps {
 
 function OwnerMap({
   mazeSize,
+  maze,
   zoom,
   zoomIndex,
   offset,
@@ -426,8 +436,35 @@ function OwnerMap({
     return lines;
   }, [mazeSize]);
 
+  const wallSegments = useMemo(() => {
+    if (!maze) {
+      return [] as Array<{ key: string; x1: number; y1: number; x2: number; y2: number }>;
+    }
+    const segments: Array<{ key: string; x1: number; y1: number; x2: number; y2: number }> = [];
+    for (const cell of maze.cells) {
+      const x = cell.x;
+      const y = cell.y;
+      const nextX = x + 1;
+      const nextY = y + 1;
+      if (cell.walls.top) {
+        segments.push({ key: `t-${x}-${y}`, x1: x, y1: y, x2: nextX, y2: y });
+      }
+      if (cell.walls.left) {
+        segments.push({ key: `l-${x}-${y}`, x1: x, y1: y, x2: x, y2: nextY });
+      }
+      if (cell.walls.right && x === mazeSize - 1) {
+        segments.push({ key: `r-${x}-${y}`, x1: nextX, y1: y, x2: nextX, y2: nextY });
+      }
+      if (cell.walls.bottom && y === mazeSize - 1) {
+        segments.push({ key: `b-${x}-${y}`, x1: x, y1: nextY, x2: nextX, y2: nextY });
+      }
+    }
+    return segments;
+  }, [maze, mazeSize]);
+
   const zoomOutDisabled = zoomIndex === 0;
   const zoomInDisabled = zoomIndex === OWNER_ZOOM_LEVELS.length - 1;
+  const hasMaze = Boolean(maze && maze.cells.length > 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -477,6 +514,58 @@ function OwnerMap({
       >
         <rect x={0} y={0} width={mazeSize} height={mazeSize} fill="#111827" />
         {gridLines}
+
+        {hasMaze ? (
+          wallSegments.map((segment) => (
+            <line
+              key={segment.key}
+              x1={segment.x1}
+              y1={segment.y1}
+              x2={segment.x2}
+              y2={segment.y2}
+              stroke="#e2e8f0"
+              strokeWidth={0.2}
+              strokeLinecap="round"
+              data-testid="maze-wall"
+            />
+          ))
+        ) : (
+          <text
+            x={mazeSize / 2}
+            y={mazeSize / 2}
+            fill="#94a3b8"
+            fontSize={Math.max(mazeSize / 12, 1.5)}
+            textAnchor="middle"
+            dominantBaseline="middle"
+          >
+            迷路生成中…
+          </text>
+        )}
+
+        {maze ? (
+          <>
+            <rect
+              x={maze.start.x}
+              y={maze.start.y}
+              width={1}
+              height={1}
+              fill="rgba(59, 130, 246, 0.15)"
+              stroke="#3b82f6"
+              strokeWidth={0.12}
+              data-testid="maze-start"
+            />
+            <rect
+              x={maze.goal.x}
+              y={maze.goal.y}
+              width={1}
+              height={1}
+              fill="rgba(250, 204, 21, 0.25)"
+              stroke="#fbbf24"
+              strokeWidth={0.12}
+              data-testid="maze-goal"
+            />
+          </>
+        ) : null}
 
         <circle
           cx={playerPosition.x}

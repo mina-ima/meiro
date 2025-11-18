@@ -11,6 +11,8 @@ const CoordinateSchema = z
 
 const WallDirectionSchema = z.enum(['north', 'east', 'south', 'west']);
 
+const MazeSizeSchema = z.union([z.literal(20), z.literal(40)]);
+
 const OwnerEditPayloadSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -78,6 +80,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('O_START'),
+      mazeSize: MazeSizeSchema,
     })
     .passthrough(),
   z

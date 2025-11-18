@@ -10,6 +10,7 @@ interface SnapshotSession {
 
 type PackedVector = readonly [number, number];
 type PackedPoint = readonly [number, number, 1 | 3 | 5];
+type PackedMazeCell = readonly [number, number, number];
 
 interface SnapshotPlayer {
   position: Vector2;
@@ -34,6 +35,13 @@ interface SnapshotOwner {
   points: PackedPoint[];
 }
 
+interface SnapshotMaze {
+  seed: string;
+  start: Vector2;
+  goal: Vector2;
+  cells: PackedMazeCell[];
+}
+
 interface Snapshot {
   roomId: string;
   phase: RoomState['phase'];
@@ -53,6 +61,7 @@ interface Snapshot {
   pausePhase?: RoomState['phase'] | null;
   player: SnapshotPlayer;
   owner: SnapshotOwner;
+  maze: SnapshotMaze;
 }
 
 interface ComposeOptions {
@@ -163,6 +172,12 @@ function createSnapshot(room: RoomState): Snapshot {
         .map((point) => packPoint(point))
         .sort(comparePackedPoint),
     },
+    maze: {
+      seed: room.maze.seed,
+      start: cloneVector(room.maze.start),
+      goal: cloneVector(room.maze.goal),
+      cells: packMazeCells(room.maze.cells),
+    },
   };
 }
 
@@ -245,6 +260,10 @@ function diffSnapshot(previous: Snapshot, next: Snapshot): Partial<Snapshot> {
     changes.owner = next.owner;
   }
 
+  if (!mazeEqual(previous.maze, next.maze)) {
+    changes.maze = next.maze;
+  }
+
   return changes;
 }
 
@@ -271,6 +290,26 @@ function comparePackedPoint(a: PackedPoint, b: PackedPoint): number {
     return a[1] - b[1];
   }
   return a[2] - b[2];
+}
+
+const MAZE_WALL_MASKS = {
+  top: 1,
+  right: 1 << 1,
+  bottom: 1 << 2,
+  left: 1 << 3,
+} as const;
+
+function packMazeCell(cell: RoomState['maze']['cells'][number]): PackedMazeCell {
+  const mask =
+    (cell.walls.top ? MAZE_WALL_MASKS.top : 0) |
+    (cell.walls.right ? MAZE_WALL_MASKS.right : 0) |
+    (cell.walls.bottom ? MAZE_WALL_MASKS.bottom : 0) |
+    (cell.walls.left ? MAZE_WALL_MASKS.left : 0);
+  return [cell.x, cell.y, mask];
+}
+
+function packMazeCells(cells: RoomState['maze']['cells']): PackedMazeCell[] {
+  return cells.map((cell) => packMazeCell(cell));
 }
 
 function sessionsEqual(a: SnapshotSession[], b: SnapshotSession[]): boolean {
@@ -319,6 +358,15 @@ function ownerEqual(a: SnapshotOwner, b: SnapshotOwner): boolean {
   );
 }
 
+function mazeEqual(a: SnapshotMaze, b: SnapshotMaze): boolean {
+  return (
+    a.seed === b.seed &&
+    vectorsEqual(a.start, b.start) &&
+    vectorsEqual(a.goal, b.goal) &&
+    packedMazeCellsEqual(a.cells, b.cells)
+  );
+}
+
 function packedVectorsEqual(a: PackedVector[], b: PackedVector[]): boolean {
   if (a.length !== b.length) {
     return false;
@@ -335,5 +383,16 @@ function packedPointsEqual(a: PackedPoint[], b: PackedPoint[]): boolean {
   return a.every((point, index) => {
     const other = b[index];
     return point[0] === other[0] && point[1] === other[1] && point[2] === other[2];
+  });
+}
+
+function packedMazeCellsEqual(a: PackedMazeCell[], b: PackedMazeCell[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((cell, index) => {
+    const other = b[index];
+    return cell[0] === other[0] && cell[1] === other[1] && cell[2] === other[2];
   });
 }

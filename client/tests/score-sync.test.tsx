@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { useSessionStore, type ServerStatePayload } from '../src/state/sessionStore';
+import { createMockMaze } from './helpers/mockMaze';
 
 function ScoreProbe() {
   const score = useSessionStore((state) => state.score);
@@ -59,6 +60,7 @@ describe('セッションストアのスコア同期', () => {
           predictionHits: 0,
           score: 12,
         },
+        maze: createMockMaze(40),
       },
     } as unknown as ServerStatePayload;
 

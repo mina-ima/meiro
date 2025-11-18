@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialRoomState } from '../src/state';
+import { createInitialRoomState, regenerateMaze } from '../src/state';
 import type { ServerMessage } from '../src/schema/ws';
 import { StateComposer } from '../src/logic/state-sync';
 
@@ -118,6 +118,39 @@ describe('StateComposer', () => {
       predictionMarks: [],
       traps: [],
       points: [],
+    });
+  });
+
+  it('迷路情報をスナップショットに含める', () => {
+    const composer = new StateComposer();
+    const room = createInitialRoomState('ROOM', 1_000);
+
+    const message = composer.compose(room);
+
+    assertStateMessage(message);
+    expect(message.payload.full).toBe(true);
+    expect(message.payload.snapshot?.maze).toMatchObject({
+      seed: room.maze.seed,
+      start: room.maze.start,
+      goal: room.maze.goal,
+    });
+    expect(Array.isArray(message.payload.snapshot?.maze?.cells)).toBe(true);
+    expect((message.payload.snapshot?.maze?.cells as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('迷路再生成時は差分にmazeフィールドを含める', () => {
+    const composer = new StateComposer();
+    const room = createInitialRoomState('ROOM', 1_000);
+
+    composer.compose(room);
+    regenerateMaze(room, { mazeSeed: 'NEXT' });
+
+    const diff = composer.compose(room);
+
+    assertStateMessage(diff);
+    expect(diff.payload.full).toBe(false);
+    expect(diff.payload.changes?.maze).toMatchObject({
+      seed: room.maze.seed,
     });
   });
 });

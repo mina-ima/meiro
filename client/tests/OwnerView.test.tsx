@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { OwnerView } from '../src/views/OwnerView';
 import { MAX_ACTIVE_TRAPS } from '../src/config/spec';
 import type { NetClient } from '../src/net/NetClient';
+import { createMockMaze } from './helpers/mockMaze';
 
 describe('OwnerView', () => {
   it('HUDでは初期設定に必要な罠・予測地点残数・残り時間だけを表示する', () => {
@@ -279,5 +280,40 @@ describe('OwnerView', () => {
     );
 
     expect(screen.queryByRole('button', { name: '設定' })).not.toBeInTheDocument();
+  });
+
+  it('受信した迷路データから壁を描画する', () => {
+    const maze = createMockMaze(20);
+    const { container } = render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={30}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[]}
+        maze={maze}
+      />,
+    );
+
+    const topWall = container.querySelector('line[data-testid="maze-wall"][x1="0"][y1="0"][x2="1"][y2="0"]');
+    const rightOuterWall = container.querySelector(
+      'line[data-testid="maze-wall"][x1="20"][y1="0"][x2="20"][y2="1"]',
+    );
+    const bottomOuterWall = container.querySelector(
+      'line[data-testid="maze-wall"][x1="0"][y1="20"][x2="1"][y2="20"]',
+    );
+
+    expect(topWall).not.toBeNull();
+    expect(rightOuterWall).not.toBeNull();
+    expect(bottomOuterWall).not.toBeNull();
   });
 });

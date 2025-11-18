@@ -59,6 +59,7 @@ export function App() {
   const pauseRemainingMs = useSessionStore((state) => state.pauseRemainingMs);
   const pausePhase = useSessionStore((state) => state.pausePhase);
   const mazeSize = useSessionStore((state) => state.mazeSize);
+  const maze = useSessionStore((state) => state.maze);
   const serverSnapshot = useSessionStore((state) => state.serverSnapshot);
   const applyServerState = useSessionStore((state) => state.applyServerState);
   const setRoom = useSessionStore((state) => state.setRoom);
@@ -217,6 +218,7 @@ export function App() {
         traps={ownerState.traps}
         playerPosition={playerState.position}
         mazeSize={mazeSize}
+        maze={maze}
         editCooldownMs={ownerCooldownMs}
         pauseReason={pauseInfo?.reason}
         pauseSecondsRemaining={pauseInfo?.secondsRemaining}

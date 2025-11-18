@@ -23,6 +23,27 @@ export interface ServerSessionEntry {
 
 type PackedVector = readonly [number, number];
 type PackedPoint = readonly [number, number, 1 | 3 | 5];
+type PackedMazeCell = readonly [number, number, number];
+
+interface MazeCellWalls {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+}
+
+export interface ServerMazeCell {
+  x: number;
+  y: number;
+  walls: MazeCellWalls;
+}
+
+export interface ServerMazeState {
+  seed: string;
+  start: ServerVector;
+  goal: ServerVector;
+  cells: ServerMazeCell[];
+}
 
 export interface ServerOwnerState {
   wallStock: number;
@@ -65,6 +86,7 @@ export interface ServerSnapshot {
   sessions: ServerSessionEntry[];
   player: ServerPlayerState;
   owner: ServerOwnerState;
+  maze: ServerMazeState;
 }
 
 type NetworkPlayerState = ServerPlayerState & { trapSlowUntil?: number };
@@ -81,6 +103,13 @@ export interface NetworkOwnerState {
   predictionMarks: PackedVector[];
   traps: PackedVector[];
   points: PackedPoint[];
+}
+
+interface NetworkMazeState {
+  seed: string;
+  start: ServerVector;
+  goal: ServerVector;
+  cells: PackedMazeCell[];
 }
 
 export interface NetworkSnapshot {
@@ -102,12 +131,14 @@ export interface NetworkSnapshot {
   sessions: ServerSessionEntry[];
   player: NetworkPlayerState;
   owner: NetworkOwnerState;
+  maze: NetworkMazeState;
 }
 
 type PartialNetworkSnapshot = Partial<Omit<NetworkSnapshot, 'owner' | 'player' | 'sessions'>> & {
   owner?: Partial<NetworkOwnerState>;
   player?: Partial<NetworkPlayerState>;
   sessions?: ServerSessionEntry[];
+  maze?: NetworkMazeState;
 };
 
 export type NetworkStatePayload =
@@ -126,6 +157,7 @@ type PartialServerSnapshot = Partial<Omit<ServerSnapshot, 'owner' | 'player' | '
   owner?: Partial<ServerOwnerState>;
   player?: Partial<ServerPlayerState>;
   sessions?: ServerSessionEntry[];
+  maze?: ServerMazeState;
 };
 
 export type ServerStatePayload =
@@ -171,6 +203,7 @@ export interface SessionState {
   pauseRemainingMs?: number;
   pausePhase?: SessionPhase;
   mazeSize: 20 | 40;
+  maze: ServerMazeState | null;
   score: number;
   targetScore: number;
   pointCompensationAward: number;
@@ -240,6 +273,33 @@ function unpackPoint(point: PackedPoint): ServerPoint {
 
 function unpackPoints(list: PackedPoint[]): ServerPoint[] {
   return list.map(unpackPoint);
+}
+
+function unpackMazeCell(cell: PackedMazeCell): ServerMazeCell {
+  const [x, y, mask] = cell;
+  return {
+    x,
+    y,
+    walls: {
+      top: (mask & 1) !== 0,
+      right: (mask & (1 << 1)) !== 0,
+      bottom: (mask & (1 << 2)) !== 0,
+      left: (mask & (1 << 3)) !== 0,
+    },
+  };
+}
+
+function unpackMazeCells(list: PackedMazeCell[]): ServerMazeCell[] {
+  return list.map(unpackMazeCell);
+}
+
+function normalizeMaze(maze: NetworkMazeState): ServerMazeState {
+  return {
+    seed: maze.seed,
+    start: { ...maze.start },
+    goal: { ...maze.goal },
+    cells: unpackMazeCells(maze.cells ?? []),
+  };
 }
 
 function normalizePauseReasonValue(value: PauseReason | null | undefined): PauseReason | undefined {
@@ -321,6 +381,7 @@ function normalizeSnapshot(snapshot: NetworkSnapshot): ServerSnapshot {
       score: snapshot.player.score,
     },
     owner: normalizeOwnerState(snapshot.owner),
+    maze: normalizeMaze(snapshot.maze),
   };
 }
 
@@ -353,7 +414,7 @@ function normalizePlayerPatch(
 }
 
 function normalizePartialSnapshot(changes: PartialNetworkSnapshot): PartialServerSnapshot {
-  const { owner, player, sessions, ...rest } = changes;
+  const { owner, player, sessions, maze, ...rest } = changes;
   const restSnapshot = rest as PartialServerSnapshot & {
     pauseReason?: PauseReason | null;
     pauseExpiresAt?: number | null;
@@ -381,6 +442,10 @@ function normalizePartialSnapshot(changes: PartialNetworkSnapshot): PartialServe
 
   if (sessions) {
     normalized.sessions = sessions.map((session) => ({ ...session }));
+  }
+
+  if (maze) {
+    normalized.maze = normalizeMaze(maze);
   }
 
   const playerPatch = normalizePlayerPatch(player);
@@ -421,6 +486,19 @@ function cloneOwner(owner: ServerOwnerState): ServerOwnerState {
   };
 }
 
+function cloneMaze(maze: ServerMazeState): ServerMazeState {
+  return {
+    seed: maze.seed,
+    start: cloneVector(maze.start),
+    goal: cloneVector(maze.goal),
+    cells: maze.cells.map((cell) => ({
+      x: cell.x,
+      y: cell.y,
+      walls: { ...cell.walls },
+    })),
+  };
+}
+
 function clonePlayer(player: ServerPlayerState): ServerPlayerState {
   return {
     angle: player.angle,
@@ -441,6 +519,7 @@ function cloneSnapshot(snapshot: ServerSnapshot): ServerSnapshot {
     sessions: cloneSessions(snapshot.sessions),
     player: clonePlayer(snapshot.player),
     owner: cloneOwner(snapshot.owner),
+    maze: cloneMaze(snapshot.maze),
   };
 }
 
@@ -488,6 +567,7 @@ function mergeSnapshots(base: ServerSnapshot, changes: PartialServerSnapshot): S
     sessions: changes.sessions ? cloneSessions(changes.sessions) : cloneSessions(base.sessions),
     player: mergePlayer(base.player, changes.player),
     owner: mergeOwner(base.owner, changes.owner),
+    maze: cloneMaze(changes.maze ?? base.maze),
   };
 }
 
@@ -518,6 +598,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   pauseRemainingMs: undefined,
   pausePhase: undefined,
   mazeSize: 40,
+  maze: null,
   score: 0,
   targetScore: 0,
   pointCompensationAward: 0,
@@ -559,6 +640,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         score: nextSnapshot.player.score,
         targetScore: nextSnapshot.targetScore,
         pointCompensationAward: nextSnapshot.pointCompensationAward,
+        maze: cloneMaze(nextSnapshot.maze),
         owner: {
           wallStock: nextSnapshot.owner.wallStock,
           wallRemoveLeft: nextSnapshot.owner.wallRemoveLeft,
@@ -591,6 +673,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       pauseRemainingMs: undefined,
       pausePhase: undefined,
       mazeSize: 40,
+      maze: null,
       score: 0,
       targetScore: 0,
       pointCompensationAward: 0,
