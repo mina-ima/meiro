@@ -561,28 +561,58 @@ function createPerspectivePreviewSvg(
     hasBack ? '0.25' : '0.08'
   }" />`;
 
-  const glowDefs =
-    variant === 'goal'
-      ? `<defs>
-          <radialGradient id="goalGlow" cx="0.75" cy="0.18" r="0.45">
-            <stop offset="0%" stop-color="#fde68a" stop-opacity="1" />
-            <stop offset="60%" stop-color="#facc15" stop-opacity="0.5" />
-            <stop offset="100%" stop-color="#facc15" stop-opacity="0" />
-          </radialGradient>
-        </defs>`
-      : '';
+  const textureDefs = `
+    <defs>
+      <pattern id="wallTexture" width="12" height="12" patternUnits="userSpaceOnUse">
+        <rect width="12" height="12" fill="#0f172a" />
+        <path d="M0 6 H12" stroke="#12253b" stroke-width="1" opacity="0.45" />
+        <path d="M6 0 V12" stroke="#12253b" stroke-width="1" opacity="0.45" />
+      </pattern>
+      <pattern id="floorGrid" width="12" height="12" patternUnits="userSpaceOnUse">
+        <rect width="12" height="12" fill="#082f49" />
+        <path d="M0 0 L0 12" stroke="#0d3a5b" stroke-width="0.7" opacity="0.55" />
+        <path d="M0 0 L12 0" stroke="#0d3a5b" stroke-width="0.7" opacity="0.55" />
+      </pattern>
+      <linearGradient id="wallShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#12263c" stop-opacity="0.9" />
+        <stop offset="100%" stop-color="#061526" stop-opacity="0.95" />
+      </linearGradient>
+      <linearGradient id="floorShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#0a2f4d" stop-opacity="0.85" />
+        <stop offset="100%" stop-color="#041726" stop-opacity="0.95" />
+      </linearGradient>
+      ${
+        variant === 'goal'
+          ? `<radialGradient id="goalGlow" cx="0.75" cy="0.18" r="0.45">
+              <stop offset="0%" stop-color="#fde68a" stop-opacity="1" />
+              <stop offset="60%" stop-color="#facc15" stop-opacity="0.5" />
+              <stop offset="100%" stop-color="#facc15" stop-opacity="0" />
+            </radialGradient>`
+          : ''
+      }
+    </defs>
+  `;
 
   const glow =
     variant === 'goal'
       ? `<circle cx="240" cy="60" r="45" fill="url(#goalGlow)" opacity="0.9" />`
       : '';
 
+  const wallSurface = `
+    <path d="M0 0 L320 0 L260 110 L60 110 Z" fill="url(#wallTexture)" />
+    <path d="M0 0 L320 0 L260 110 L60 110 Z" fill="url(#wallShade)" opacity="0.75" />
+  `;
+  const floorSurface = `
+    <path d="M60 110 L260 110 L320 180 L0 180 Z" fill="url(#floorGrid)" />
+    <path d="M60 110 L260 110 L320 180 L0 180 Z" fill="url(#floorShade)" opacity="0.65" />
+  `;
+
   return createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
-      ${glowDefs}
+      ${textureDefs}
       <rect width="320" height="180" fill="#020617" />
-      <path d="M0 0 L320 0 L260 110 L60 110 Z" fill="#0f172a" />
-      <path d="M60 110 L260 110 L320 180 L0 180 Z" fill="#082f49" />
+      ${wallSurface}
+      ${floorSurface}
       ${leftPath}
       ${rightPath}
       ${forwardPath}
