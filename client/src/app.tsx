@@ -186,6 +186,7 @@ export function App() {
           phase: pausePhase,
         }
       : null;
+  const showDebugHud = readyForGameplay && phase !== 'lobby';
 
   const mainView =
     role == null ? (
@@ -210,6 +211,7 @@ export function App() {
         traps={ownerState.traps}
         playerPosition={playerState.position}
         mazeSize={mazeSize}
+        editCooldownMs={ownerCooldownMs}
         pauseReason={pauseInfo?.reason}
         pauseSecondsRemaining={pauseInfo?.secondsRemaining}
         phase={phase}
@@ -260,7 +262,7 @@ export function App() {
         {mainView}
         {pauseOverlay}
       </div>
-      {readyForGameplay ? (
+      {showDebugHud ? (
         <DebugHUD
           role={role}
           mazeSize={mazeSize}

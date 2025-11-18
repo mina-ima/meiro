@@ -87,4 +87,56 @@ describe('DebugHUD 仕様表示', () => {
     expect(scope.getByText(/禁止エリア距離\(現在値\)/)).toHaveTextContent(/2\s*マス/);
     expect(scope.getByText(/編集クールダウン定数\(現在値\)/)).toHaveTextContent(/1\.0\s*秒/);
   });
+
+  it('ロビー中はDebugHUDを表示しない', () => {
+    act(() => {
+      useSessionStore.getState().setRoom('ROOM-HUD', 'owner');
+    });
+
+    render(<App />);
+
+    const payload: ServerStatePayload = {
+      seq: 1,
+      full: true,
+      snapshot: {
+        roomId: 'ROOM-HUD',
+        phase: 'lobby',
+        mazeSize: 20,
+        updatedAt: 0,
+        countdownDurationMs: 3_000,
+        prepDurationMs: 60_000,
+        exploreDurationMs: 300_000,
+        targetScore: 0,
+        pointCompensationAward: 0,
+        paused: false,
+        sessions: [],
+        player: {
+          position: { x: 0, y: 0 },
+          velocity: { x: 0, y: 0 },
+          angle: 0,
+          predictionHits: 0,
+          score: 0,
+        },
+        owner: {
+          wallStock: 48,
+          wallRemoveLeft: 1,
+          trapCharges: 1,
+          editCooldownUntil: 0,
+          editCooldownDuration: 1_000,
+          forbiddenDistance: 2,
+          predictionLimit: 3,
+          predictionHits: 0,
+          predictionMarks: [],
+          traps: [],
+          points: [],
+        },
+      },
+    };
+
+    act(() => {
+      useSessionStore.getState().applyServerState(payload);
+    });
+
+    expect(screen.queryByRole('region', { name: 'デバッグHUD' })).not.toBeInTheDocument();
+  });
 });
