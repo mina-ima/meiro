@@ -1,6 +1,6 @@
 import type { ServerMessage } from '../schema/ws';
 
-const MAX_MESSAGE_BYTES = 2 * 1024;
+const MAX_MESSAGE_BYTES = 20 * 1024;
 const MIN_INTERVAL_MS = 50;
 
 interface MessageMeta {

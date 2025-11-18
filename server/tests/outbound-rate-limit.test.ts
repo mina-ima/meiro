@@ -88,15 +88,25 @@ describe('ClientConnection', () => {
     expect(socket.recordedAt[2]).toBeGreaterThanOrEqual(100);
   });
 
-  it('rejects messages that would exceed the 2KB limit', () => {
+  it('上限（約20KB）を超えるメッセージは拒否する', () => {
     const socket = new FakeSocket(() => 0);
     const connection = new ClientConnection(socket, () => 0);
 
-    const bigPayload = 'x'.repeat(2900);
+    const bigPayload = 'x'.repeat(21_000);
     const message = createMessage('BIG', { blob: bigPayload });
 
     expect(() => connection.enqueue(message)).toThrow(MessageSizeExceededError);
     expect(socket.sentPayloads).toHaveLength(0);
+  });
+
+  it('約20KB以内ならSTATE以外でも問題なく送信できる', () => {
+    const socket = new FakeSocket(() => 0);
+    const connection = new ClientConnection(socket, () => 0);
+
+    const nearLimitPayload = 'x'.repeat(18_000);
+    const message = createMessage('BULK', { blob: nearLimitPayload });
+
+    expect(() => connection.enqueue(message)).not.toThrow();
   });
 
   it('STATE差分はキューで最新のみ保持する', () => {

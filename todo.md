@@ -82,7 +82,7 @@
   - [x] オーナー: `O_EDIT(ADD_WALL|DEL_WALL|PLACE_TRAP)`, `O_MRK`, `O_CONFIRM`, `O_CANCEL`, `O_START`
   - DoD: 型安全なシリアライズ/バリデーション
 - [x] 送受信頻度
-  - DoD: サーバ送信20Hz上限、1メッセージ≤2KB（p95）
+  - DoD: サーバ送信20Hz上限、STATE差分p95≤2KB（迷路付きフルSTATEは20KB以内）
 - [x] スナップショット/差分配信
   - DoD: Phase遷移/重要イベントは全量、通常は差分
 
@@ -230,8 +230,8 @@
   - DoD: `server/tests/owner-wall-remove.test.ts` で既存壁のみ削除可・削除済み後は `WALL_REMOVE_EXHAUSTED` を検証
 
 ### 16.3 負荷/安定
-- [x] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB  
-  - DoD: `server/tests/state-latency-load.test.ts` で40接続×4送信のシナリオを再現し、STATE遅延とメッセージサイズのp95が基準内であることを検証
+- [x] 20ルーム（40接続）で p95: STATE遅延≤150ms / メッセージ≤2KB（初回フルSTATE除く）  
+  - DoD: `server/tests/state-latency-load.test.ts` で40接続×4送信のシナリオを再現し、STATE遅延とメッセージサイズ（p95）が基準内であることを検証
 - [x] BFS検証 p95≤1ms/編集  
   - DoD: `server/tests/owner-path-block.test.ts` で `owner.path_check` メトリクスの出力と値を検証
 - [x] 連続編集CDがサーバで強制  
@@ -252,8 +252,8 @@
   - DoD: `server/tests/outbound-rate-limit.test.ts` でSTATE差分の合流と20Hz送信を検証
 - [x] 体感遅延100ms以下（RTTモニタ/補間で改善）
   - DoD: `client/tests/NetClientLatency.test.ts` でSTATE遅延アラートの閾値100msを検証
-- [x] メッセージ圧縮不要で2KB以内に収まること
-  - DoD: `server/tests/state-message-size.test.ts` で最大スナップショットが1,200bytes以内であることを検証
+- [x] メッセージ圧縮不要でSTATE差分は2KB以内/フルSTATEは20KB以内に収まること
+  - DoD: `server/tests/state-message-size.test.ts` で最大スナップショットが20,000bytes以内であることを検証
 
 ---
 

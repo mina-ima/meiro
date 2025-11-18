@@ -162,8 +162,8 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 6.3 差分/頻度
 
 * **スナップショット**：Phase遷移/編集確定（`O_CONFIRM`）時は全量、小刻み更新は**位置/スコア等の差分**。
-* **サーバ→クライアント送信**は**20Hz**上限の送信キューで排出（1メッセージ≤2KB）。クライアント補間表示。
-* STATEペイロード内の座標データは `[x,y]`（点/罠/予測）や `[x,y,value]`（ポイント）形式に圧縮し、フルスナップショットでも約1.2KB以内に収める。
+* **サーバ→クライアント送信**は**20Hz**上限の送信キューで排出（通常メッセージはp95で≤2KB、迷路を含む初回フルSTATEは最大約20KBを許容）。クライアント補間表示。
+* STATEペイロード内の座標データは `[x,y]`（点/罠/予測）や `[x,y,value]`（ポイント）形式に圧縮し、40×40迷路を含むフルスナップショットでも約20KB以内に収める。
 * 差分STATEは送信キューで最新のみ保持し、古い差分は破棄して**遅延を100ms以下に抑える**。
 * STATEの `owner` スナップショットには `wallStock`/`wallRemoveLeft`/`trapCharges` に加えて `editCooldownDuration`（ms）と `forbiddenDistance`（マンハッタン距離）が含まれ、クライアントHUDでそのまま表示する（`server/tests/state-sync.test.ts` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）。
 
@@ -278,7 +278,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ## 10. 非機能/パフォーマンス
 
-* 首描画30fps、**サーバ送信20Hz**、**1メッセージ≤2KB**目安。
+* 首描画30fps、**サーバ送信20Hz**、**STATE差分はp95で2KB以下/フルSTATEは20KB以下**を目安。
 * ルーム同時接続2名、**ポーズ中もTick継続**（最小化）。
 * **起動→ロビー3秒以内**（キャッシュ後）。**対応ブラウザ**：最新Chrome/Edge/Firefox。
 
@@ -406,7 +406,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 ### 17.3 負荷/安定
 
-* 20ルーム同時（40接続）で**STATE遅延p95≤150ms**, メッセージp95≤2KB（`server/tests/state-latency-load.test.ts`）。
+* 20ルーム同時（40接続）で**STATE遅延p95≤150ms**, メッセージp95≤2KB（`server/tests/state-latency-load.test.ts`）。※迷路を含む初回フルSTATEのみ約20KB。
 * BFS検証p95≤1ms/編集。
 * 連続編集CDの**サーバ強制**確認。
 

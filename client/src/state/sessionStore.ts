@@ -293,7 +293,20 @@ function unpackMazeCells(list: PackedMazeCell[]): ServerMazeCell[] {
   return list.map(unpackMazeCell);
 }
 
-function normalizeMaze(maze: NetworkMazeState): ServerMazeState {
+function createEmptyMazeState(): ServerMazeState {
+  return {
+    seed: 'UNKNOWN',
+    start: { x: 0, y: 0 },
+    goal: { x: 0, y: 0 },
+    cells: [],
+  };
+}
+
+function normalizeMaze(maze?: NetworkMazeState | null): ServerMazeState {
+  if (!maze) {
+    return createEmptyMazeState();
+  }
+
   return {
     seed: maze.seed,
     start: { ...maze.start },
