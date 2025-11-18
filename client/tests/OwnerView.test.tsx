@@ -19,6 +19,7 @@ describe('OwnerView', () => {
         traps={[{ x: 2, y: 8 }]}
         playerPosition={{ x: 3.5, y: 4.5 }}
         mazeSize={20}
+        editCooldownMs={1500}
         phase="explore"
         sessions={[]}
       />,
@@ -31,8 +32,9 @@ describe('OwnerView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'プレイヤーにセンタリング' }));
     expect(screen.getByTestId('player-marker')).toBeInTheDocument();
     expect(screen.queryByText(/壁残数/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/クールダウン/)).not.toBeInTheDocument();
     expect(screen.getByText('罠権利: 2')).toBeInTheDocument();
+    expect(screen.getByText('禁止エリア距離: 2')).toBeInTheDocument();
+    expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
     expect(screen.getByText('予測地点: 残り1 / 3')).toBeInTheDocument();
     expect(screen.getByText('設定残り時間: 75秒')).toBeInTheDocument();
   });
@@ -55,6 +57,7 @@ describe('OwnerView', () => {
         ]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
+        editCooldownMs={0}
         phase="explore"
         sessions={[]}
       />,
@@ -79,6 +82,7 @@ describe('OwnerView', () => {
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
+        editCooldownMs={0}
         phase="lobby"
         sessions={[{ id: 'owner', role: 'owner', nick: 'OWNER' }]}
       />,
@@ -105,6 +109,7 @@ describe('OwnerView', () => {
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
+        editCooldownMs={1500}
         phase="lobby"
         sessions={[
           { id: 'owner', role: 'owner', nick: 'OWNER' },
@@ -116,7 +121,39 @@ describe('OwnerView', () => {
     const button = screen.getByRole('button', { name: 'ゲーム開始' });
     expect(button).toBeEnabled();
     fireEvent.click(button);
-    expect(send).toHaveBeenCalledWith({ type: 'O_START' });
+    expect(send).toHaveBeenCalledWith({ type: 'O_START', mazeSize: 20 });
+  });
+
+  it('迷路サイズを選択してから開始ボタンで送信する', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    render(
+      <OwnerView
+        client={client}
+        roomId="ROOM-1"
+        trapCharges={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={0}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={1500}
+        phase="lobby"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+      />,
+    );
+
+    const select = screen.getByLabelText('迷路サイズ');
+    expect(select).toHaveValue('20');
+    fireEvent.change(select, { target: { value: '40' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ゲーム開始' }));
+    expect(send).toHaveBeenCalledWith({ type: 'O_START', mazeSize: 40 });
   });
 
   it('ルームIDを共有用に表示する', () => {
@@ -133,6 +170,7 @@ describe('OwnerView', () => {
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
         mazeSize={20}
+        editCooldownMs={0}
         phase="lobby"
         sessions={[]}
       />,
@@ -140,5 +178,52 @@ describe('OwnerView', () => {
 
     expect(screen.getByTestId('room-id')).toHaveTextContent('ABC123');
     expect(screen.getByText(/ルームID/)).toBeInTheDocument();
+  });
+
+  it('ゲーム開始前は迷路HUDを隠し、開始後に表示する', () => {
+    const { rerender } = render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={3}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={60}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={500}
+        phase="lobby"
+        sessions={[]}
+      />,
+    );
+
+    expect(screen.queryByLabelText('俯瞰マップ')).not.toBeInTheDocument();
+    expect(screen.queryByText('罠権利: 3')).not.toBeInTheDocument();
+
+    rerender(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={3}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={60}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={500}
+        phase="countdown"
+        sessions={[]}
+      />,
+    );
+
+    expect(screen.getByLabelText('俯瞰マップ')).toBeInTheDocument();
+    expect(screen.getByText('罠権利: 3')).toBeInTheDocument();
+    expect(screen.getByText('予測地点: 残り3 / 3')).toBeInTheDocument();
   });
 });

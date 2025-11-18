@@ -151,10 +151,11 @@ type PointItem = {x:number,y:number,value:1|3|5};
 { "t":"O_MRK",  "pos":{"x":11,"y":9} }                                // 予測地点(準備15s)
 { "t":"O_CONFIRM", "target":"<opaque-id>" }                            // 2度押し確定
 { "t":"O_CANCEL",  "target":"<opaque-id>" }
-{ "t":"O_START" }                                                      // 両者揃ったらオーナーが送信しカウントダウン開始
+{ "t":"O_START", "mazeSize":20|40 }                                    // 20×20 / 40×40 を指定してカウントダウン開始
 ```
 
 * **接続直後デバッグ**: WebSocket 接続が成立した瞬間に DO から `DEBUG_CONNECTED` を1度だけ送信し、`roomId`/`role`/`sessionId` を通知する。ブラウザの WS Messages に最低1件表示させ、`wrangler tail` でも `WS fetch /ws` → `DO connected` → `send DEBUG_CONNECTED` → `send STATE` のログを必ず残す。
+* `O_START` は受信時に指定された `mazeSize` を用いて `regenerateMaze` と `resetOwnerState` を行ってからカウントダウンへ遷移する。迷路サイズの更新は `server/tests/manual-start.test.ts` / `server/tests/disconnect-heartbeat.test.ts` で検証する。
 * **初期STATE保証**: どちらの役割でも初回接続時は `STATE(full:true)` を即時送信する。存在しない場合は `createInitialRoomState` で生成し、`state-broadcast` テストで担保する。
 * **致命的エラー**: WebSocket ハンドラで未捕捉の例外が発生した場合は `console.error("WS handler error", err)` を記録し、`{ type:"ERROR", code:"INTERNAL_ERROR" }` を送ってから `socket.close(1011, "internal error")` で終了する。
 
@@ -226,9 +227,9 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 8.2 オーナー
 
 * 俯瞰全体マップ、**ズーム/パン**（最小=全体, 最大=9マスを画面内）。v1実装では SVG ベースの簡易マップを `client/src/views/OwnerView.tsx` で提供。
-* HUD：初期設定に必要な情報へ絞り、**罠権利/同時設置数**、**予測地点の残り数**、**設定可能な残り時間**のみを表示する。迷路は常時俯瞰マップに描画し、余計なポイントや壁情報は表示しない（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx）。
+* ロビー（`phase=lobby`）中は迷路/HUDを描画せず、「ゲーム開始」を押すと迷路自動設計と60秒の準備フェーズが始まる旨を案内する。ボタン押下後（`countdown`/`prep`/`explore`）のみ俯瞰マップと初期設定HUDを表示し、**罠権利/同時設置数**、**禁止エリア距離**、**編集クールダウン残り**、**予測地点の残り数**、**設定可能な残り時間**だけに絞る（壁残数や得点は表示しない）。（client/src/views/OwnerView.tsx / client/tests/OwnerView.test.tsx / client/tests/AppPredictionIntegration.test.tsx / client/tests/AppOptimisticUi.test.tsx / client/tests/OwnerCooldownDisplay.test.tsx / client/tests/AppOwnerForbiddenDistance.test.tsx）。
 * 編集は**確認ポップ→同じ場所を再クリックで確定**。**右クリック/Escでキャンセル**。**1.0秒CD**。
-* ロビー中は参加状況（オーナー/プレイヤーの入室可視化）と「ゲーム開始」ボタンを表示。プレイヤー入室後のみ有効化し、押下で `O_START` を送信してカウントダウンを始動する。
+* ロビー中は参加状況（オーナー/プレイヤーの入室可視化）と「ゲーム開始」ボタンを表示。プレイヤー入室後のみ有効化し、押下で `O_START` を送信してカウントダウンを始動する。ボタン直上には**迷路サイズ選択（20×20 / 40×40）**用のメニューを配置し、オーナーは開始時に希望サイズを指定できる（client/tests/OwnerView.test.tsx）。
 * 接続後はヘッダー部に**現在のルームID**を常時表示し、取得前は「取得中」とプレースホルダーを出す。オーナー自身がコードを共有できるよう `client/tests/OwnerView.test.tsx` でDOM表示を検証する。
 
 ### 8.3 サウンド

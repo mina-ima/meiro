@@ -26,7 +26,7 @@ describe('楽観UI禁止', () => {
     expect(
       screen.getByText(/サーバーからのSTATE更新を待機しています。/)
     ).toBeInTheDocument();
-    expect(screen.queryByText(/壁残数/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/罠権利/)).not.toBeInTheDocument();
     expect(screen.queryByText(/予測地点ヒット/)).not.toBeInTheDocument();
 
     const payload: ServerStatePayload = {
@@ -73,6 +73,8 @@ describe('楽観UI禁止', () => {
     });
 
     expect(screen.queryByRole('heading', { name: '接続待機中' })).not.toBeInTheDocument();
-    expect(screen.getByText('壁残数: 12本')).toBeInTheDocument();
+    expect(screen.getByText('罠権利: 1')).toBeInTheDocument();
+    expect(screen.getByText('予測地点: 残り3 / 3')).toBeInTheDocument();
+    expect(screen.getByLabelText('俯瞰マップ')).toBeInTheDocument();
   });
 });

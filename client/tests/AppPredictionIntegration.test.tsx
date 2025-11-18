@@ -72,10 +72,10 @@ describe('App prediction integration', () => {
       },
     });
 
-    expect(screen.getByText('壁残数: 12本')).toBeInTheDocument();
-    expect(screen.getByText('罠: 権利2 / 設置0/2')).toBeInTheDocument();
+    expect(screen.getByText('罠権利: 2')).toBeInTheDocument();
+    expect(screen.getByText('罠: 設置0/2')).toBeInTheDocument();
     expect(screen.getByText('編集クールダウン: 1.5秒')).toBeInTheDocument();
-    expect(screen.getByText('予測地点: 2 / 3')).toBeInTheDocument();
+    expect(screen.getByText('予測地点: 残り1 / 3')).toBeInTheDocument();
   });
 
   it('予測地点ヒット数が増えるとプレイヤービューとトーストが更新される', () => {

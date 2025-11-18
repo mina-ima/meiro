@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import type { NetClient } from '../net/NetClient';
 import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
 import type { PauseReason, ServerSessionEntry, SessionPhase } from '../state/sessionStore';
@@ -15,6 +15,8 @@ interface InitialSetupPanelProps {
   remainingPredictions: number;
   timeText: string;
   pauseMessage: string | null;
+  forbiddenDistance: number;
+  editCooldownText: string;
 }
 
 function InitialSetupPanel({
@@ -24,6 +26,8 @@ function InitialSetupPanel({
   remainingPredictions,
   timeText,
   pauseMessage,
+  forbiddenDistance,
+  editCooldownText,
 }: InitialSetupPanelProps) {
   return (
     <section
@@ -44,6 +48,8 @@ function InitialSetupPanel({
       <p style={{ margin: 0 }}>
         罠: 設置{activeTrapCount}/{MAX_ACTIVE_TRAPS}
       </p>
+      <p style={{ margin: 0 }}>禁止エリア距離: {forbiddenDistance}</p>
+      <p style={{ margin: 0 }}>編集クールダウン: {editCooldownText}</p>
       <p style={{ margin: 0 }}>
         予測地点: 残り{remainingPredictions} / {predictionLimit}
       </p>
@@ -65,6 +71,15 @@ function formatSetupTime(remainingSeconds: number): string {
   return `${Math.ceil(remainingSeconds)}秒`;
 }
 
+function formatEditCooldown(remainingMs: number): string {
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+    return '0.0秒';
+  }
+
+  const rounded = Math.round(remainingMs);
+  return `${(rounded / 1000).toFixed(1)}秒`;
+}
+
 export interface OwnerViewProps {
   client: NetClient | null;
   roomId: string | null;
@@ -77,6 +92,7 @@ export interface OwnerViewProps {
   traps: Vector2[];
   playerPosition: Vector2;
   mazeSize: 20 | 40;
+  editCooldownMs: number;
   pauseReason?: PauseReason;
   pauseSecondsRemaining?: number;
   phase: SessionPhase;
@@ -95,6 +111,7 @@ export function OwnerView({
   traps,
   playerPosition,
   mazeSize,
+  editCooldownMs,
   pauseReason,
   pauseSecondsRemaining,
   phase,
@@ -116,16 +133,23 @@ export function OwnerView({
   const ownerStatus = ownerSession ? `入室済 (${ownerSession.nick})` : '未接続';
   const playerStatus = playerSession ? `入室済 (${playerSession.nick})` : '未接続';
   const inLobby = phase === 'lobby';
+  const showSetupHud = !inLobby;
   const canStartGame = Boolean(inLobby && ownerSession && playerSession);
   const phaseLabel = PHASE_LABELS[phase];
+  const editCooldownText = formatEditCooldown(editCooldownMs);
 
   const [zoomIndex, setZoomIndex] = useState(3);
   const zoom = OWNER_ZOOM_LEVELS[zoomIndex];
   const [offset, setOffset] = useState(() => centerOffset(mazeSize, zoom));
+  const [selectedMazeSize, setSelectedMazeSize] = useState<20 | 40>(mazeSize);
 
   useEffect(() => {
     setOffset((prev) => clampOffset(prev, mazeSize, zoom));
   }, [mazeSize, zoom]);
+
+  useEffect(() => {
+    setSelectedMazeSize(mazeSize);
+  }, [mazeSize]);
 
   const handleZoomIn = useCallback(() => {
     setZoomIndex((index) => Math.min(index + 1, OWNER_ZOOM_LEVELS.length - 1));
@@ -159,12 +183,19 @@ export function OwnerView({
     setOffset(clampOffset(next, mazeSize, zoom));
   }, [mazeSize, zoom, playerPosition.x, playerPosition.y]);
 
+  const handleMazeSizeChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    const value = Number(event.target.value);
+    if (value === 20 || value === 40) {
+      setSelectedMazeSize(value);
+    }
+  }, []);
+
   const handleStartGame = useCallback(() => {
     if (!client || !canStartGame) {
       return;
     }
-    client.send({ type: 'O_START' });
-  }, [client, canStartGame]);
+    client.send({ type: 'O_START', mazeSize: selectedMazeSize });
+  }, [client, canStartGame, selectedMazeSize]);
 
   return (
     <div>
@@ -193,6 +224,25 @@ export function OwnerView({
         <p style={{ margin: 0 }}>プレイヤー: {playerStatus}</p>
         {inLobby ? (
           <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label htmlFor="maze-size-select" style={{ fontWeight: 600 }}>
+                迷路サイズ
+              </label>
+              <select
+                id="maze-size-select"
+                value={String(selectedMazeSize)}
+                onChange={handleMazeSizeChange}
+                style={{
+                  padding: '0.45rem',
+                  borderRadius: '0.375rem',
+                  border: '1px solid #94a3b8',
+                  maxWidth: '180px',
+                }}
+              >
+                <option value="20">20 × 20</option>
+                <option value="40">40 × 40</option>
+              </select>
+            </div>
             <button
               type="button"
               onClick={handleStartGame}
@@ -220,35 +270,61 @@ export function OwnerView({
           <p style={{ margin: 0 }}>現在フェーズ: {phaseLabel}</p>
         )}
       </section>
-      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <OwnerMap
-          mazeSize={mazeSize}
-          zoom={zoom}
-          zoomIndex={zoomIndex}
-          offset={offset}
-          forbiddenDistance={forbiddenDistance}
-          playerPosition={playerPosition}
-          predictionMarks={predictionMarks}
-          traps={traps}
-          onZoomIn={handleZoomIn}
-          onZoomOut={handleZoomOut}
-          onPan={handlePan}
-          onCenterPlayer={handleCenterOnPlayer}
-        />
+      {showSetupHud ? (
+        <div
+          style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}
+          aria-live="polite"
+        >
+          <OwnerMap
+            mazeSize={mazeSize}
+            zoom={zoom}
+            zoomIndex={zoomIndex}
+            offset={offset}
+            forbiddenDistance={forbiddenDistance}
+            playerPosition={playerPosition}
+            predictionMarks={predictionMarks}
+            traps={traps}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onPan={handlePan}
+            onCenterPlayer={handleCenterOnPlayer}
+          />
 
-        <InitialSetupPanel
-          trapCharges={trapCharges}
-          activeTrapCount={activeTrapCount}
-          predictionLimit={predictionLimit}
-          remainingPredictions={remainingPredictions}
-          timeText={setupTimeText}
-          pauseMessage={
-            pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined
-              ? `通信再開待ち: 残り ${pauseSecondsRemaining} 秒`
-              : null
-          }
-        />
-      </div>
+          <InitialSetupPanel
+            trapCharges={trapCharges}
+            activeTrapCount={activeTrapCount}
+            predictionLimit={predictionLimit}
+            remainingPredictions={remainingPredictions}
+            timeText={setupTimeText}
+            forbiddenDistance={forbiddenDistance}
+            editCooldownText={editCooldownText}
+            pauseMessage={
+              pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined
+                ? `通信再開待ち: 残り ${pauseSecondsRemaining} 秒`
+                : null
+            }
+          />
+        </div>
+      ) : (
+        <section
+          aria-label="初期設定待機中"
+          style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            border: '1px solid #cbd5f5',
+            borderRadius: '0.75rem',
+            background: '#f8fafc',
+            maxWidth: '520px',
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            ゲーム開始を押すと迷路が自動設計され、罠/予測地点を設定する60秒の準備が始まります。
+          </p>
+          <p style={{ margin: '0.5rem 0 0', color: '#475569' }}>
+            プレイヤーの探索が始まるまでは他のHUD情報は表示されません。
+          </p>
+        </section>
+      )}
     </div>
   );
 }
