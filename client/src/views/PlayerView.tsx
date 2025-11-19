@@ -652,117 +652,251 @@ function createPerspectivePreviewSvg(
   openDirections: Direction[],
   variant: MazePreviewVariant,
 ): string {
-  const accent = variant === 'goal' ? '#fde047' : variant === 'junction' ? '#38bdf8' : '#22d3ee';
-  const hasForward = openDirections.includes('north');
-  const hasLeft = openDirections.includes('west');
-  const hasRight = openDirections.includes('east');
-  const hasBack = openDirections.includes('south');
+  const dims = {
+    width: 320,
+    height: 180,
+    topY: 38,
+    bottomY: 170,
+    leftNearX: 38,
+    rightNearX: 282,
+    leftFarX: 120,
+    rightFarX: 200,
+    centerX: 160,
+  } as const;
 
-  const textureDefs = `
-    <defs>
-      <linearGradient id="ceilingGradient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#0f172a" />
-        <stop offset="100%" stop-color="#020617" />
-      </linearGradient>
-      <linearGradient id="wallVerticalShade" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#0f172a" />
-        <stop offset="100%" stop-color="#050b16" />
-      </linearGradient>
-      <linearGradient id="wallColumnShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#132a4a" />
-        <stop offset="100%" stop-color="#030712" />
-      </linearGradient>
-      <linearGradient id="pathHighlight" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#f0fdff" />
-        <stop offset="45%" stop-color="#7dd3fc" />
-        <stop offset="100%" stop-color="#0ea5e9" />
-      </linearGradient>
-      <linearGradient id="pathEdgeHighlight" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#bae6fd" />
-        <stop offset="100%" stop-color="#0284c7" />
-      </linearGradient>
-      <radialGradient id="forwardGuide" cx="0.5" cy="0" r="1">
-        <stop offset="0%" stop-color="#e0f2fe" stop-opacity="0.8" />
-        <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0" />
-      </radialGradient>
-      ${
-        variant === 'goal'
-          ? `<radialGradient id="goalGlow" cx="0.75" cy="0.18" r="0.45">
-              <stop offset="0%" stop-color="#fde68a" stop-opacity="1" />
-              <stop offset="60%" stop-color="#facc15" stop-opacity="0.5" />
-              <stop offset="100%" stop-color="#facc15" stop-opacity="0" />
-            </radialGradient>`
-          : ''
-      }
-    </defs>
-  `;
+  const horizontalLines = buildHorizontalWireLines(dims, 5);
+  const verticalLines = buildVerticalWireLines(dims, 3);
+  const dotRows = buildDotRows(dims, 4, 5);
+  const door = buildDoorSvg(dims, variant);
+  const directionOverlay = buildDirectionOverlay(openDirections, dims);
 
-  const glow =
-    variant === 'goal'
-      ? `<circle cx="240" cy="60" r="45" fill="url(#goalGlow)" opacity="0.9" />`
-      : '';
-
-  const ceilingSurface = `
-    <path d="M0 0 L320 0 L260 110 L60 110 Z" fill="url(#ceilingGradient)" />
-    <path d="M0 0 L60 110" stroke="#050b16" stroke-width="3" opacity="0.45" />
-    <path d="M320 0 L260 110" stroke="#050b16" stroke-width="3" opacity="0.45" />
-  `;
-  const frontWallBase = `
-    <path d="M70 0 L250 0 L210 115 L110 115 Z" fill="url(#wallColumnShade)" opacity="0.9" />
-  `;
-  const leftWallBase = `
-    <path d="M0 0 L60 110 L60 180 L0 180 Z" fill="url(#wallVerticalShade)" />
-  `;
-  const rightWallBase = `
-    <path d="M260 110 L320 0 L320 180 L260 180 Z" fill="url(#wallVerticalShade)" />
-  `;
-  const walkwayOpacity = hasForward ? 0.95 : 0.75;
-  const walkwayHighlight = `
-    <path d="M85 125 L235 125 L275 180 L45 180 Z" fill="url(#pathHighlight)" opacity="${walkwayOpacity}" />
-    <path d="M110 135 L210 135 L230 180 L90 180 Z" fill="rgba(224,242,254,0.16)" />
-  `;
-  const walkwayGuides = `
-    <path d="M85 125 L45 180" stroke="url(#pathEdgeHighlight)" stroke-width="3.4" />
-    <path d="M235 125 L275 180" stroke="url(#pathEdgeHighlight)" stroke-width="3.4" />
-    <path d="M155 125 L185 180" stroke="rgba(255,255,255,0.4)" stroke-dasharray="8 8" stroke-width="1.8" />
-  `;
-  const horizonBand = `
-    <path d="M50 95 L270 95 L320 150 L0 150 Z" fill="rgba(2,8,23,0.68)" />
-  `;
-  const backGlow = hasBack
-    ? `<path d="M90 140 L230 140 L265 180 L55 180 Z" fill="${accent}" opacity="0.24" />`
-    : '';
-
-  const leftElement = hasLeft
-    ? `<path d="M15 55 L75 55 L105 150 L35 150 Z" fill="rgba(125,211,252,0.35)" stroke="rgba(14,165,233,0.9)" stroke-width="2" />`
-    : `<path d="M0 0 L70 120 L70 180 L0 180 Z" fill="rgba(2,6,23,0.96)" stroke="#0f172a" stroke-width="2" />`;
-  const rightElement = hasRight
-    ? `<path d="M245 55 L305 55 L285 150 L215 150 Z" fill="rgba(125,211,252,0.35)" stroke="rgba(14,165,233,0.9)" stroke-width="2" />`
-    : `<path d="M320 0 L250 120 L250 180 L320 180 Z" fill="rgba(2,6,23,0.96)" stroke="#0f172a" stroke-width="2" />`;
-  const forwardElement = hasForward
-    ? `<path d="M110 60 L210 60 L230 120 L90 120 Z" fill="url(#forwardGuide)" stroke="rgba(56,189,248,0.65)" stroke-width="2" />`
-    : `<path d="M95 45 L225 45 L210 115 L110 115 Z" fill="rgba(2,8,23,0.95)" stroke="#041126" stroke-width="2" />`;
+  const outerWalls = [
+    createWirePath(
+      [
+        { x: dims.leftNearX, y: dims.bottomY },
+        { x: dims.leftFarX, y: dims.topY },
+      ],
+      { width: 2.4 },
+    ),
+    createWirePath(
+      [
+        { x: dims.rightNearX, y: dims.bottomY },
+        { x: dims.rightFarX, y: dims.topY },
+      ],
+      { width: 2.4 },
+    ),
+    createWirePath(
+      [
+        { x: dims.leftNearX, y: dims.bottomY },
+        { x: dims.rightNearX, y: dims.bottomY },
+      ],
+      { width: 2.4 },
+    ),
+  ];
 
   return createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
-      ${textureDefs}
-      <rect width="320" height="180" fill="#020617" />
-      ${leftWallBase}
-      ${rightWallBase}
-      ${frontWallBase}
-      ${ceilingSurface}
-      ${horizonBand}
-      ${walkwayHighlight}
-      ${walkwayGuides}
-      ${leftElement}
-      ${rightElement}
-      ${forwardElement}
-      ${backGlow}
-      ${glow}
-      <path d="M0 0 L60 110" stroke="#0b212f" stroke-width="4" opacity="0.35" />
-      <path d="M320 0 L260 110" stroke="#0b212f" stroke-width="4" opacity="0.35" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dims.width} ${dims.height}">
+      <rect width="${dims.width}" height="${dims.height}" fill="${BACKGROUND_COLOR}" />
+      ${outerWalls.join('\n')}
+      ${horizontalLines}
+      ${verticalLines}
+      ${dotRows}
+      ${door}
+      ${directionOverlay}
     </svg>
   `);
+}
+
+type WireframeDimensions = {
+  width: number;
+  height: number;
+  topY: number;
+  bottomY: number;
+  leftNearX: number;
+  rightNearX: number;
+  leftFarX: number;
+  rightFarX: number;
+  centerX: number;
+};
+
+function createWirePath(
+  points: Array<{ x: number; y: number }>,
+  options?: { width?: number; dash?: string },
+): string {
+  const d = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`)
+    .join(' ');
+  const dash = options?.dash ? ` stroke-dasharray="${options.dash}"` : '';
+  const width = options?.width ?? 2;
+  return `<path d="${d}" fill="none" stroke="${LINE_COLOR}" stroke-width="${width}" stroke-linecap="round"${dash} />`;
+}
+
+function buildHorizontalWireLines(dims: WireframeDimensions, count: number): string {
+  const lines: string[] = [];
+  for (let i = 1; i <= count; i += 1) {
+    const t = i / (count + 1);
+    const y = dims.bottomY - (dims.bottomY - dims.topY) * t;
+    const leftX = lerp(dims.leftNearX, dims.leftFarX, t);
+    const rightX = lerp(dims.rightNearX, dims.rightFarX, t);
+    lines.push(
+      createWirePath(
+        [
+          { x: leftX, y },
+          { x: rightX, y },
+        ],
+        { dash: '6 12', width: 1.4 },
+      ),
+    );
+  }
+  return lines.join('\n');
+}
+
+function buildVerticalWireLines(dims: WireframeDimensions, count: number): string {
+  const lines: string[] = [];
+  for (let i = 1; i <= count; i += 1) {
+    const t = i / (count + 1);
+    const leftStart = lerp(dims.leftNearX, dims.centerX - dims.width * 0.04, t * 0.5);
+    const leftEnd = lerp(dims.leftFarX, dims.centerX - dims.width * 0.02, t * 0.35);
+    lines.push(
+      createWirePath(
+        [
+          { x: leftStart, y: dims.bottomY },
+          { x: leftEnd, y: dims.topY },
+        ],
+        { dash: '2 8', width: 1.2 },
+      ),
+    );
+    const rightStart = lerp(dims.rightNearX, dims.centerX + dims.width * 0.04, t * 0.5);
+    const rightEnd = lerp(dims.rightFarX, dims.centerX + dims.width * 0.02, t * 0.35);
+    lines.push(
+      createWirePath(
+        [
+          { x: rightStart, y: dims.bottomY },
+          { x: rightEnd, y: dims.topY },
+        ],
+        { dash: '2 8', width: 1.2 },
+      ),
+    );
+  }
+  return lines.join('\n');
+}
+
+function buildDotRows(dims: WireframeDimensions, columns: number, rows: number): string {
+  const dots: string[] = [];
+  const dotSize = 1.8;
+  for (let row = 0; row < rows; row += 1) {
+    const ratio = row / (rows - 1);
+    const y = dims.bottomY - (dims.bottomY - dims.topY) * ratio;
+    const leftStart = lerp(dims.leftNearX, dims.leftFarX, ratio);
+    const leftEnd = lerp(leftStart, dims.centerX - dims.width * 0.06, 0.65);
+    const rightStart = lerp(dims.rightNearX, dims.rightFarX, ratio);
+    const rightEnd = lerp(rightStart, dims.centerX + dims.width * 0.06, 0.65);
+    for (let col = 0; col < columns; col += 1) {
+      const denominator = Math.max(1, columns - 1);
+      const t = col / denominator;
+      const leftX = lerp(leftStart, leftEnd, t);
+      const rightX = lerp(rightStart, rightEnd, t);
+      dots.push(
+        `<rect x="${leftX - dotSize / 2}" y="${y - dotSize / 2}" width="${dotSize}" height="${dotSize}" fill="${LINE_COLOR}" />`,
+      );
+      dots.push(
+        `<rect x="${rightX - dotSize / 2}" y="${y - dotSize / 2}" width="${dotSize}" height="${dotSize}" fill="${LINE_COLOR}" />`,
+      );
+    }
+  }
+  return dots.join('\n');
+}
+
+function buildDoorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): string {
+  const baseWidth = variant === 'goal' ? 52 : variant === 'junction' ? 58 : 64;
+  const width = baseWidth;
+  const height = Math.max(18, width * 0.45);
+  const depth = height * 0.8;
+  const rectX = dims.centerX - width / 2;
+  const rectY = dims.topY - height / 2;
+
+  const doorRect = `<rect data-name="wireframe-door" x="${rectX}" y="${rectY}" width="${width}" height="${height}" fill="none" stroke="${LINE_COLOR}" stroke-width="2" />`;
+  const depthLines = [
+    createWirePath(
+      [
+        { x: dims.centerX - width / 2, y: rectY },
+        { x: dims.centerX - width / 3, y: dims.topY - depth },
+      ],
+      { width: 1.4 },
+    ),
+    createWirePath(
+      [
+        { x: dims.centerX + width / 2, y: rectY },
+        { x: dims.centerX + width / 3, y: dims.topY - depth },
+      ],
+      { width: 1.4 },
+    ),
+    createWirePath(
+      [
+        { x: dims.centerX - width / 2, y: rectY + height },
+        { x: dims.centerX - width / 3, y: dims.topY + depth * 0.15 },
+      ],
+      { width: 1.2 },
+    ),
+    createWirePath(
+      [
+        { x: dims.centerX + width / 2, y: rectY + height },
+        { x: dims.centerX + width / 3, y: dims.topY + depth * 0.15 },
+      ],
+      { width: 1.2 },
+    ),
+  ];
+  return [doorRect, ...depthLines].join('\n');
+}
+
+function buildDirectionOverlay(openDirections: Direction[], dims: WireframeDimensions): string {
+  const overlays: string[] = [];
+  if (openDirections.includes('north')) {
+    overlays.push(
+      createWirePath(
+        [
+          { x: dims.centerX, y: dims.bottomY - 20 },
+          { x: dims.centerX, y: dims.topY - 20 },
+        ],
+        { dash: '4 10', width: 1.6 },
+      ),
+    );
+  }
+  if (openDirections.includes('south')) {
+    overlays.push(
+      createWirePath(
+        [
+          { x: dims.centerX - 12, y: dims.bottomY },
+          { x: dims.centerX - 4, y: dims.bottomY + 12 },
+          { x: dims.centerX + 12, y: dims.bottomY + 12 },
+        ],
+        { width: 1.4 },
+      ),
+    );
+  }
+  if (openDirections.includes('west')) {
+    overlays.push(
+      createWirePath(
+        [
+          { x: dims.leftNearX + 6, y: dims.bottomY - 10 },
+          { x: dims.leftFarX - 8, y: dims.topY + 6 },
+        ],
+        { width: 1.2 },
+      ),
+    );
+  }
+  if (openDirections.includes('east')) {
+    overlays.push(
+      createWirePath(
+        [
+          { x: dims.rightNearX - 6, y: dims.bottomY - 10 },
+          { x: dims.rightFarX + 8, y: dims.topY + 6 },
+        ],
+        { width: 1.2 },
+      ),
+    );
+  }
+  return overlays.join('\n');
 }
 
 function createDefaultPreviewClips(): readonly PreviewClip[] {

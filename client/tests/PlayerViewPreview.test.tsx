@@ -84,9 +84,9 @@ describe('PlayerView 準備プレビュー', () => {
     const [, encodedSvg] = src.split(',', 2);
     const decodedSvg = decodeURIComponent(encodedSvg ?? '');
 
-    expect(decodedSvg).not.toContain('floorGrid');
-    expect(decodedSvg).toContain('pathHighlight');
-    expect(decodedSvg).toContain('#f0fdff');
+    expect(decodedSvg).toContain('#ef4444');
+    expect(decodedSvg).toContain('wireframe-door');
+    expect(decodedSvg).not.toContain('#0f172a');
   });
 });
 
