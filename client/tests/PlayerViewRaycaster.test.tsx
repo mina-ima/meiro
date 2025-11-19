@@ -487,6 +487,76 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(fakeContext.canvas.dataset.viewSilhouette).toBe('junction');
     expect(fakeContext.canvas.dataset.viewRightDepth).toBe(PLAYER_VIEW_RANGE.toFixed(2));
   });
+
+  it('4マス先は黒フォグで覆い床グローが抑制される', () => {
+    castRaysMock.mockReturnValue([
+      { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 0.9 },
+      { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0 },
+      { tile: { x: 3, y: 1 }, distance: 1.2, angle: 0.2, intensity: 0.8 },
+    ]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const fogLayers = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      return operation.fillStyle.startsWith('rgba(0, 0, 0');
+    });
+    expect(fogLayers.length).toBeGreaterThan(0);
+
+    const glowLayers = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      return operation.fillStyle.startsWith('rgba(56, 189, 248');
+    });
+    expect(glowLayers.length).toBeGreaterThan(0);
+    const highestGlow = Math.min(...glowLayers.map((layer) => layer.y));
+    const lowestFog = Math.min(...fogLayers.map((layer) => layer.y));
+    expect(lowestFog).toBeLessThan(highestGlow);
+  });
+
+  it('閉じた壁面にはテクスチャストライプを描画する', () => {
+    castRaysMock.mockReturnValue([
+      { tile: { x: 1, y: 1 }, distance: 0.6, angle: -0.3, intensity: 1 },
+      { tile: { x: 2, y: 1 }, distance: 0.7, angle: 0, intensity: 0.9 },
+      { tile: { x: 3, y: 1 }, distance: 0.6, angle: 0.3, intensity: 1 },
+    ]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const textureLayers = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      return operation.fillStyle.startsWith('rgba(252, 165, 165');
+    });
+
+    expect(textureLayers.length).toBeGreaterThan(0);
+  });
 });
 
 interface SessionStateOverrides {

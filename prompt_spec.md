@@ -221,7 +221,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **ミニマップなし**、**ヘッドボブなし**。HUD：残時間（mm:ssタイマー）、現在ポイント/規定ポイント、ゴール到達ボーナス値、達成率(%)進捗バー。
 * 不足補填が適用された探索開始時はHUDに「初期ポイント補填 +N」を表示してプレイヤーへ明示する。
 * 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。v1実装ではテキストオーバーレイでクリップを案内（client/src/views/PlayerView.tsx / client/tests/PlayerViewPreview.test.tsx）。
-* 探索フェーズ中のプレイヤービューは黒背景に**1点透視のワイヤーフレーム＋床/側壁グロー**を重ね、赤い廊下縁と青い奥行きレイヤーで壁・分岐・袋小路が一目で分かる構成とする。
+* 探索フェーズ中のプレイヤービューは黒背景に**1点透視のワイヤーフレーム＋床/側壁グロー**を重ね、4マス先は黒いフォグで完全遮光し、それより手前は赤い稜線と壁テクスチャで分岐/袋小路を表現する。
 * Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
 * **切断ポーズ中**はプレイヤー/オーナー共通で画面中央に半透明オーバーレイを重ね、「通信が途切れています」「残りXX秒で不在側敗北」をカウントダウン表示する（復帰で自動解除）。
 
@@ -460,7 +460,7 @@ npm run dev --workspace @meiro/server -- --local
 * [x] ロビー5分自動解散
 * [x] カウントダウン3s → 準備(40/5/15)固定（`server/tests/prep-phase-windows.test.ts`）
 * [x] 20×20/40×40、**最短≥4×L**（`server/tests/room-maze-initialization.test.ts`）
-* [x] 視界：FOV90°, 到達4マス（4マス目減光）＋迷路セルを2倍格子に投影してASCIIワイヤーフレームと床/壁レイヤーを動的描画し、開口部では床グローのみを残す（`client/tests/PlayerViewRaycaster.test.tsx`）
+* [x] 視界：FOV90°, 到達4マス（4マス目減光）＋迷路セルを2倍格子に投影してASCIIワイヤーフレームと床/壁レイヤーを動的描画し、4マス以遠は黒フォグで遮光＆閉じた壁面にはテクスチャストライプを描く（`client/tests/PlayerViewRaycaster.test.tsx`）
 * [x] プレイヤービュー：正面方向のみのワイヤーフレームに奥行きを反映し、dead-end / corner / junction 判定を `dataset` と描画で提示（`client/tests/PlayerViewRaycaster.test.tsx` 追加テスト）
 * [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持（`server/tests/owner-resources.test.ts` / `server/tests/owner-path-block.test.ts` / `client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）
 * [x] 罠：40%速度、limit/5、同時2

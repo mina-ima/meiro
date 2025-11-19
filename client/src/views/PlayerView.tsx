@@ -58,6 +58,12 @@ const FLOOR_GLOW_COLOR = '#38bdf8';
 const FLOOR_TRACK_COLOR = '#f87171';
 const SIDE_LEFT_COLOR = '#be185d';
 const SIDE_RIGHT_COLOR = '#fb7185';
+const WALL_TEXTURE_COLOR = '#fca5a5';
+const FOG_COLOR = '#000000';
+const FOG_MIN_RATIO = 0.55;
+const FOG_MAX_RATIO = 0.95;
+const WALL_TEXTURE_DEPTH_LIMIT = 0.7;
+const FLOOR_GLOW_DEPTH_LIMIT = 0.85;
 const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
@@ -443,6 +449,7 @@ function resetRayDataset(canvas: HTMLCanvasElement): void {
   canvas.dataset.viewCenterDepth = '';
   canvas.dataset.viewLeftDepth = '';
   canvas.dataset.viewRightDepth = '';
+  canvas.dataset.viewFogStart = '';
 }
 
 function drawWireframeBase(context: CanvasRenderingContext2D): void {
@@ -457,6 +464,8 @@ function drawPerspectiveBackdrop(context: CanvasRenderingContext2D, profile?: Vi
   drawSidewallLayers(context, dims, 'left', profile?.leftOpen ?? false);
   drawSidewallLayers(context, dims, 'right', profile?.rightOpen ?? false);
   drawFloorLayers(context, dims);
+  const fogStart = drawDepthFog(context, dims, profile);
+  context.canvas.dataset.viewFogStart = fogStart.toFixed(2);
 }
 
 function drawCeilingLayers(context: CanvasRenderingContext2D, dims: CorridorDimensions): void {
@@ -496,7 +505,11 @@ function drawSidewallLayers(
     const alphaBase = open ? 0.08 : 0.28;
     const alpha = clamp(alphaBase + (1 - endRatio) * 0.15, alphaBase, 0.65);
     context.fillStyle = toRgba(color, alpha);
-    context.fillRect(x, yEnd, width, Math.max(1, yStart - yEnd));
+    const segmentHeight = Math.max(1, yStart - yEnd);
+    context.fillRect(x, yEnd, width, segmentHeight);
+    if (!open) {
+      drawWallTexture(context, side, x, yEnd, width, segmentHeight, endRatio);
+    }
   }
 }
 
@@ -505,6 +518,9 @@ function drawFloorLayers(context: CanvasRenderingContext2D, dims: CorridorDimens
   for (let i = 0; i < layers; i += 1) {
     const startRatio = i / layers;
     const endRatio = (i + 1) / layers;
+    if (endRatio > FLOOR_GLOW_DEPTH_LIMIT) {
+      continue;
+    }
     const yStart = lerp(dims.bottomY, dims.topY, startRatio);
     const yEnd = lerp(dims.bottomY, dims.topY, endRatio);
     const left = lerp(dims.leftNearX, dims.leftFarX, endRatio);
@@ -519,6 +535,54 @@ function drawFloorLayers(context: CanvasRenderingContext2D, dims: CorridorDimens
     context.fillStyle = toRgba(FLOOR_TRACK_COLOR, clamp(alpha - 0.3, 0.08, 0.45));
     context.fillRect(trackLeft, yEnd, trackWidth, Math.max(1, yStart - yEnd));
   }
+}
+
+function drawWallTexture(
+  context: CanvasRenderingContext2D,
+  side: 'left' | 'right',
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depthRatio: number,
+): void {
+  if (depthRatio > WALL_TEXTURE_DEPTH_LIMIT || width <= 0 || height <= 0) {
+    return;
+  }
+  const stripes = 2;
+  for (let i = 0; i < stripes; i += 1) {
+    const stripeWidth = Math.max(1, width * (0.25 + i * 0.2));
+    const inset = Math.max(0, width * 0.05 + i * stripeWidth * 0.35);
+    const alpha = clamp(0.2 + (WALL_TEXTURE_DEPTH_LIMIT - depthRatio) * 0.6, 0.2, 0.65);
+    context.fillStyle = toRgba(WALL_TEXTURE_COLOR, alpha);
+    const stripeX = side === 'left' ? x + inset : x + width - inset - stripeWidth;
+    const stripeHeight = Math.max(1, height * 0.6);
+    context.fillRect(stripeX, y, stripeWidth, stripeHeight);
+  }
+  const bandHeight = Math.max(1, height * 0.18);
+  const bandY = y + height * 0.45;
+  context.fillRect(x, bandY, width, bandHeight);
+}
+
+function drawDepthFog(
+  context: CanvasRenderingContext2D,
+  dims: CorridorDimensions,
+  profile?: ViewProfile,
+): number {
+  const normalizedFocus = profile ? clamp(profile.focusDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.75;
+  const fogStartRatio = clamp(normalizedFocus, FOG_MIN_RATIO, FOG_MAX_RATIO);
+  const fogStartY = lerp(dims.bottomY, dims.topY, fogStartRatio);
+  const fogLayers = 14;
+  for (let i = 0; i < fogLayers; i += 1) {
+    const start = i / fogLayers;
+    const end = (i + 1) / fogLayers;
+    const yStart = lerp(fogStartY, dims.topY, start);
+    const yEnd = lerp(fogStartY, dims.topY, end);
+    const alpha = clamp(0.2 + start * 0.6, 0.2, 0.95);
+    context.fillStyle = toRgba(FOG_COLOR, alpha);
+    context.fillRect(0, yStart, dims.width, Math.max(1, yEnd - yStart));
+  }
+  return fogStartRatio;
 }
 
 function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
