@@ -66,6 +66,28 @@ describe('PlayerView 準備プレビュー', () => {
     expect(screen.getByLabelText('レイキャスト表示')).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: '準備中プレビュー' })).not.toBeInTheDocument();
   });
+
+  it('プレビュー画像は床グリッドを排し、前方の通路ハイライトを強調する', () => {
+    const maze = prepareMaze({
+      start: { x: 3, y: 2 },
+      goal: { x: 16, y: 14 },
+    });
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    const image = screen.getByAltText('スタート地点プレビュー映像') as HTMLImageElement;
+    const src = image.getAttribute('src') ?? '';
+
+    expect(src).toContain('data:image/svg+xml;utf8,');
+
+    const [, encodedSvg] = src.split(',', 2);
+    const decodedSvg = decodeURIComponent(encodedSvg ?? '');
+
+    expect(decodedSvg).not.toContain('floorGrid');
+    expect(decodedSvg).toContain('pathHighlight');
+    expect(decodedSvg).toContain('#f0fdff');
+  });
 });
 
 function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
