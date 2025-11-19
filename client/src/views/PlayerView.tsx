@@ -54,6 +54,28 @@ const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 const BACKGROUND_COLOR = '#000000';
 const LINE_COLOR = '#ef4444';
 const RAYCAST_GRID_SCALE = 2;
+const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
+const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
+const JUNCTION_FRONT_THRESHOLD = PLAYER_VIEW_RANGE * 0.65;
+
+type ViewSilhouette =
+  | 'dead-end'
+  | 'corner-left'
+  | 'corner-right'
+  | 'junction'
+  | 'corridor'
+  | 'unknown';
+
+interface ViewProfile {
+  silhouette: ViewSilhouette;
+  centerDistance: number;
+  leftDistance: number;
+  rightDistance: number;
+  focusDistance: number;
+  leftOpen: boolean;
+  rightOpen: boolean;
+  frontBlocked: boolean;
+}
 
 export function PlayerView({
   points,
@@ -361,8 +383,16 @@ function createBoundaryEnvironment(baseSize: number): RaycasterEnvironment {
 function clearScene(context: CanvasRenderingContext2D): void {
   drawWireframeBase(context);
   drawWireframeCorridor(context);
-  context.canvas.dataset.lastRayIntensity = '';
-  context.canvas.dataset.lastRayDistances = '';
+  resetRayDataset(context.canvas);
+}
+
+function resetRayDataset(canvas: HTMLCanvasElement): void {
+  canvas.dataset.lastRayIntensity = '';
+  canvas.dataset.lastRayDistances = '';
+  canvas.dataset.viewSilhouette = '';
+  canvas.dataset.viewCenterDepth = '';
+  canvas.dataset.viewLeftDepth = '';
+  canvas.dataset.viewRightDepth = '';
 }
 
 function drawWireframeBase(context: CanvasRenderingContext2D): void {
@@ -371,26 +401,40 @@ function drawWireframeBase(context: CanvasRenderingContext2D): void {
   context.fillRect(0, 0, width, height);
 }
 
-function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
+function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
   const { width, height } = context.canvas;
   const topY = Math.round(height * 0.2);
   const bottomY = Math.round(height * 0.96);
   const leftNearX = Math.round(width * 0.1);
   const rightNearX = width - leftNearX;
-  const leftFarX = Math.round(width * 0.32);
-  const rightFarX = width - leftFarX;
+  const leftFarBase = Math.round(width * 0.32);
+  const rightFarBase = width - leftFarBase;
   const centerX = width / 2;
+
+  const leftRatio = profile ? clamp(profile.leftDistance / PLAYER_VIEW_RANGE, 0, 1) : 0;
+  const rightRatio = profile ? clamp(profile.rightDistance / PLAYER_VIEW_RANGE, 0, 1) : 0;
+  const focusRatio = profile ? clamp(profile.focusDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5;
+  const leftFarX = lerp(leftFarBase, centerX - width * 0.08, leftRatio * 0.7);
+  const rightFarX = lerp(rightFarBase, centerX + width * 0.08, rightRatio * 0.7);
 
   applyLineDash(context, []);
   context.lineWidth = Math.max(1, width * 0.003);
   context.strokeStyle = LINE_COLOR;
+  applyLineDash(context, profile?.leftOpen ? [12, 10] : []);
   drawLine(context, leftNearX, bottomY, leftFarX, topY);
+  applyLineDash(context, profile?.rightOpen ? [12, 10] : []);
   drawLine(context, rightNearX, bottomY, rightFarX, topY);
+  applyLineDash(context, []);
   drawLine(context, leftNearX, bottomY, rightNearX, bottomY);
 
   context.strokeStyle = LINE_COLOR;
   applyLineDash(context, [8, 6]);
-  drawLine(context, centerX, bottomY, centerX, topY);
+  const centerLineTop = lerp(
+    bottomY,
+    topY,
+    profile ? clamp(profile.centerDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5,
+  );
+  drawLine(context, centerX, bottomY, centerX, centerLineTop);
   applyLineDash(context, []);
 
   context.strokeStyle = LINE_COLOR;
@@ -398,9 +442,10 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
   applyLineDash(context, [4, 8]);
   for (let i = 1; i <= 5; i += 1) {
     const t = i / 6;
-    const y = bottomY - (bottomY - topY) * t;
-    const leftX = lerp(leftNearX, leftFarX, t);
-    const rightX = lerp(rightNearX, rightFarX, t);
+    const eased = Math.pow(t, 0.75 + (1 - focusRatio) * 0.2);
+    const y = lerp(bottomY, topY, eased);
+    const leftX = lerp(leftNearX, leftFarX, eased);
+    const rightX = lerp(rightNearX, rightFarX, eased);
     drawLine(context, leftX, y, rightX, y);
   }
   applyLineDash(context, []);
@@ -419,9 +464,53 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
   }
   applyLineDash(context, []);
 
-  drawWallDots(context, leftNearX, leftFarX, centerX - width * 0.06, topY, bottomY, true);
-  drawWallDots(context, rightNearX, rightFarX, centerX + width * 0.06, topY, bottomY, false);
+  if (!profile?.leftOpen) {
+    drawWallDots(context, leftNearX, leftFarX, centerX - width * 0.06, topY, bottomY, true);
+  } else {
+    drawCornerGuide(context, 'left', leftNearX, leftFarX, topY, bottomY);
+  }
+  if (!profile?.rightOpen) {
+    drawWallDots(context, rightNearX, rightFarX, centerX + width * 0.06, topY, bottomY, false);
+  } else {
+    drawCornerGuide(context, 'right', rightNearX, rightFarX, topY, bottomY);
+  }
 
+  const showFrontPanel = !profile || profile.frontBlocked;
+  if (showFrontPanel) {
+    drawFrontPanel(context, centerX, topY, width, height);
+  } else if (profile.silhouette === 'junction') {
+    drawJunctionPanels(context, centerX, topY, width, height);
+  }
+}
+
+function drawCornerGuide(
+  context: CanvasRenderingContext2D,
+  side: 'left' | 'right',
+  nearX: number,
+  farX: number,
+  topY: number,
+  bottomY: number,
+): void {
+  const direction = side === 'left' ? -1 : 1;
+  const elbowX = lerp(nearX, farX, 0.45);
+  const elbowY = lerp(bottomY, topY, 0.4);
+  const tipX = elbowX + direction * context.canvas.width * 0.05;
+  const tipY = elbowY - context.canvas.height * 0.05;
+  context.lineWidth = Math.max(1, context.canvas.width * 0.002);
+  applyLineDash(context, [4, 6]);
+  drawLine(context, nearX, bottomY, elbowX, elbowY);
+  applyLineDash(context, []);
+  drawLine(context, elbowX, elbowY, tipX, tipY);
+  drawLine(context, tipX, tipY, elbowX, elbowY - context.canvas.height * 0.035);
+}
+
+function drawFrontPanel(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  topY: number,
+  width: number,
+  height: number,
+): void {
   const doorWidth = Math.max(16, width * 0.08);
   const doorHeight = Math.max(12, height * 0.08);
   context.strokeStyle = LINE_COLOR;
@@ -457,6 +546,34 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
     topY + doorHeight / 2,
     centerX + doorWidth / 3,
     topY + doorDepth * 0.15,
+  );
+}
+
+function drawJunctionPanels(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  topY: number,
+  width: number,
+  height: number,
+): void {
+  context.lineWidth = Math.max(1, width * 0.0025);
+  context.strokeStyle = LINE_COLOR;
+  const panelWidth = Math.max(12, width * 0.05);
+  const panelHeight = Math.max(12, height * 0.07);
+  const offset = width * 0.14;
+  strokeRectSafe(
+    context,
+    centerX - offset - panelWidth / 2,
+    topY - panelHeight / 2,
+    panelWidth,
+    panelHeight,
+  );
+  strokeRectSafe(
+    context,
+    centerX + offset - panelWidth / 2,
+    topY - panelHeight / 2,
+    panelWidth,
+    panelHeight,
   );
 }
 
@@ -533,23 +650,32 @@ function renderRaycastScene(context: CanvasRenderingContext2D, hits: RayHit[]): 
   drawWireframeBase(context);
 
   if (hits.length === 0) {
-    context.canvas.dataset.lastRayIntensity = '';
-    context.canvas.dataset.lastRayDistances = '';
+    resetRayDataset(context.canvas);
     drawWireframeCorridor(context);
     return;
   }
 
-  drawRayColumns(context, hits);
-
-  const lastIntensity = hits[hits.length - 1]?.intensity;
-  context.canvas.dataset.lastRayIntensity =
-    lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
-  context.canvas.dataset.lastRayDistances = hits.map((hit) => hit.distance.toFixed(2)).join(',');
-
-  drawWireframeCorridor(context);
+  const profile = analyzeViewProfile(hits);
+  drawRayColumns(context, hits, profile);
+  drawWireframeCorridor(context, profile);
+  updateRayDataset(context.canvas, hits, profile);
 }
 
-function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void {
+function updateRayDataset(canvas: HTMLCanvasElement, hits: RayHit[], profile: ViewProfile): void {
+  const lastIntensity = hits[hits.length - 1]?.intensity;
+  canvas.dataset.lastRayIntensity = lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
+  canvas.dataset.lastRayDistances = hits.map((hit) => hit.distance.toFixed(2)).join(',');
+  canvas.dataset.viewSilhouette = profile.silhouette;
+  canvas.dataset.viewCenterDepth = profile.centerDistance.toFixed(2);
+  canvas.dataset.viewLeftDepth = profile.leftDistance.toFixed(2);
+  canvas.dataset.viewRightDepth = profile.rightDistance.toFixed(2);
+}
+
+function drawRayColumns(
+  context: CanvasRenderingContext2D,
+  hits: RayHit[],
+  profile: ViewProfile,
+): void {
   const { width, height } = context.canvas;
   const horizon = Math.round(height * 0.18);
   const ground = Math.round(height * 0.98);
@@ -557,26 +683,121 @@ function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void
   const spacing = width / hits.length;
   const minHeight = height * 0.08;
 
+  const topPoints: Array<{ x: number; y: number }> = [];
+  const bottomPoints: Array<{ x: number; y: number }> = [];
+
   hits.forEach((hit, index) => {
     const normalizedDistance = clamp(hit.distance / PLAYER_VIEW_RANGE, 0, 1);
-    const columnHeight = Math.max(minHeight, viewHeight * (1 - normalizedDistance));
-    const columnWidth = Math.max(2, spacing * 0.35);
+    const depthFactor = 1 - normalizedDistance ** 0.85;
+    const columnHeight = Math.max(minHeight, viewHeight * depthFactor);
+    const columnWidth = Math.max(2, spacing * (0.45 + depthFactor * 0.4));
     const left = index * spacing + spacing / 2 - columnWidth / 2;
     const top = ground - columnHeight;
-    const alpha = clamp(0.35 + hit.intensity * 0.5, 0.35, 0.95);
+    const alpha = clamp(0.35 + hit.intensity * 0.5 + depthFactor * 0.1, 0.35, 0.98);
 
     context.fillStyle = toRgba(LINE_COLOR, alpha);
     context.fillRect(left, top, columnWidth, columnHeight);
 
-    const sparkWidth = Math.max(2, columnWidth * 0.6);
-    const sparkHeight = Math.max(1.5, columnWidth * 0.4);
+    const sparkWidth = Math.max(2, columnWidth * 0.45);
+    const sparkHeight = Math.max(1.5, columnWidth * 0.45);
     context.fillRect(
       left + columnWidth / 2 - sparkWidth / 2,
-      top - sparkHeight,
+      top - sparkHeight * 0.6,
       sparkWidth,
       sparkHeight,
     );
+
+    const centerX = left + columnWidth / 2;
+    topPoints.push({ x: centerX, y: top });
+    bottomPoints.push({ x: centerX, y: ground });
   });
+
+  if (topPoints.length > 1) {
+    context.strokeStyle = LINE_COLOR;
+    context.lineWidth = Math.max(1, width * 0.0015);
+    applyLineDash(context, [6, 10]);
+    for (let i = 1; i < topPoints.length; i += 1) {
+      const prevTop = topPoints[i - 1];
+      const currentTop = topPoints[i];
+      drawLine(context, prevTop.x, prevTop.y, currentTop.x, currentTop.y);
+      const prevBottom = bottomPoints[i - 1];
+      const currentBottom = bottomPoints[i];
+      drawLine(context, prevBottom.x, prevBottom.y, currentBottom.x, currentBottom.y);
+    }
+    applyLineDash(context, []);
+  }
+
+  const centerIndex = Math.floor(topPoints.length / 2);
+  const centerTop = topPoints[centerIndex];
+  const centerBottom = bottomPoints[centerIndex];
+  if (centerTop && centerBottom) {
+    context.lineWidth = Math.max(profile.frontBlocked ? 2 : 1.5, width * 0.0025);
+    drawLine(context, centerTop.x, centerTop.y, centerBottom.x, centerBottom.y);
+  }
+}
+
+function analyzeViewProfile(hits: RayHit[]): ViewProfile {
+  if (hits.length === 0) {
+    return {
+      silhouette: 'unknown',
+      centerDistance: PLAYER_VIEW_RANGE,
+      leftDistance: PLAYER_VIEW_RANGE,
+      rightDistance: PLAYER_VIEW_RANGE,
+      focusDistance: PLAYER_VIEW_RANGE,
+      leftOpen: false,
+      rightOpen: false,
+      frontBlocked: false,
+    };
+  }
+
+  const centerDistance = sampleDistance(hits, 0.5);
+  const leftDistance = sampleDistance(hits, 0.18);
+  const rightDistance = sampleDistance(hits, 0.82);
+  const focusDistance =
+    hits.reduce((sum, hit) => sum + clamp(hit.distance, 0, PLAYER_VIEW_RANGE), 0) / hits.length;
+
+  const frontBlocked = centerDistance <= NEAR_WALL_THRESHOLD;
+  const leftOpen = leftDistance >= OPEN_CORRIDOR_THRESHOLD;
+  const rightOpen = rightDistance >= OPEN_CORRIDOR_THRESHOLD;
+
+  let silhouette: ViewSilhouette = 'corridor';
+
+  if (frontBlocked && !leftOpen && !rightOpen) {
+    silhouette = 'dead-end';
+  } else if (frontBlocked && leftOpen && !rightOpen) {
+    silhouette = 'corner-left';
+  } else if (frontBlocked && rightOpen && !leftOpen) {
+    silhouette = 'corner-right';
+  } else if (leftOpen && rightOpen && centerDistance >= JUNCTION_FRONT_THRESHOLD) {
+    silhouette = 'junction';
+  } else if (!frontBlocked && leftOpen && !rightOpen) {
+    silhouette = 'corner-left';
+  } else if (!frontBlocked && rightOpen && !leftOpen) {
+    silhouette = 'corner-right';
+  } else if (!hits.length) {
+    silhouette = 'unknown';
+  }
+
+  return {
+    silhouette,
+    centerDistance,
+    leftDistance,
+    rightDistance,
+    focusDistance,
+    leftOpen,
+    rightOpen,
+    frontBlocked,
+  };
+}
+
+function sampleDistance(hits: RayHit[], fraction: number): number {
+  if (hits.length === 0) {
+    return PLAYER_VIEW_RANGE;
+  }
+  const clampedFraction = clamp(fraction, 0, 1);
+  const index = Math.round((hits.length - 1) * clampedFraction);
+  const hit = hits[index];
+  return hit ? clamp(hit.distance, 0, PLAYER_VIEW_RANGE) : PLAYER_VIEW_RANGE;
 }
 
 function scaleVector(vector: { x: number; y: number }): { x: number; y: number } {

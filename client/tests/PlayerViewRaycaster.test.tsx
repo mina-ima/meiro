@@ -374,6 +374,81 @@ describe('PlayerView レイキャスト仕様', () => {
     const normalizedCenter = parsed[Math.floor(parsed.length / 2)];
     expect(normalizedCenter).toBeCloseTo(PLAYER_VIEW_RANGE, 2);
   });
+
+  it('視界シルエットを dead-end として判定して公開する', () => {
+    const hits: RayHit[] = [
+      { tile: { x: 0, y: 0 }, distance: 0.5, angle: -0.3, intensity: 1 },
+      { tile: { x: 1, y: 0 }, distance: 0.6, angle: 0, intensity: 0.9 },
+      { tile: { x: 2, y: 0 }, distance: 0.5, angle: 0.3, intensity: 0.8 },
+    ];
+    castRaysMock.mockReturnValue(hits);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    expect(fakeContext.canvas.dataset.viewSilhouette).toBe('dead-end');
+    expect(fakeContext.canvas.dataset.viewCenterDepth).toBe('0.60');
+  });
+
+  it('視界シルエットを corner-left として判定して公開する', () => {
+    const hits: RayHit[] = [
+      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.5 },
+      { tile: { x: 1, y: 0 }, distance: 0.6, angle: -0.1, intensity: 0.8 },
+      { tile: { x: 2, y: 0 }, distance: 0.6, angle: 0.2, intensity: 0.7 },
+    ];
+    castRaysMock.mockReturnValue(hits);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    expect(fakeContext.canvas.dataset.viewSilhouette).toBe('corner-left');
+    expect(fakeContext.canvas.dataset.viewLeftDepth).toBe(PLAYER_VIEW_RANGE.toFixed(2));
+  });
+
+  it('視界シルエットを junction として判定して公開する', () => {
+    const hits: RayHit[] = [
+      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.6 },
+      { tile: { x: 1, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0.6 },
+      { tile: { x: 2, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0.4, intensity: 0.6 },
+    ];
+    castRaysMock.mockReturnValue(hits);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    expect(fakeContext.canvas.dataset.viewSilhouette).toBe('junction');
+    expect(fakeContext.canvas.dataset.viewRightDepth).toBe(PLAYER_VIEW_RANGE.toFixed(2));
+  });
 });
 
 interface SessionStateOverrides {

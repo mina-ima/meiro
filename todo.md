@@ -352,6 +352,8 @@
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤線／赤ドットのみの描画と中心ガイド・開口部表現を検証
 - [x] プレイヤービューのレイキャストに迷路セルの壁情報を反映し、距離に応じて縦線の高さ/透明度を変化  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の新規テストで迷路壁による距離変化と縦線描画の強弱を検証
+- [x] プレイヤービューで dead-end / corner / junction を判別して前方ワイヤーフレームと `dataset` に反映  
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の視界シルエット3テストでデータ属性と描画切替を確認
 
 ---
 
