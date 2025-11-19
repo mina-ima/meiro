@@ -174,6 +174,36 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(farColumn.fillStyle).toBe(expectedColor);
   });
 
+  it('空と床と通路ハイライトを同時に描画する', () => {
+    const hits: RayHit[] = [
+      { tile: { x: 2, y: 2 }, distance: 1.5, angle: 0, intensity: 0.9 },
+      { tile: { x: 5, y: 2 }, distance: 3.2, angle: 0.1, intensity: 0.6 },
+    ];
+
+    castRaysMock.mockReturnValue(hits);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const fillStyles = fakeContext.operations
+      .map((operation) => operation.fillStyle)
+      .filter((style): style is string => typeof style === 'string');
+
+    expect(fillStyles).toContain('#dbeafe');
+    expect(fillStyles).toContain('#0f172a');
+    expect(fillStyles).toContain('rgba(224,242,254,0.18)');
+  });
+
   it('境界の壁に命中した中央レイは距離4で減光する', async () => {
     const actualRaycaster = await vi.importActual<typeof import('../src/game/Raycaster')>(
       '../src/game/Raycaster',

@@ -51,10 +51,13 @@ export interface PlayerViewProps {
 }
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
-const DEFAULT_BACKGROUND = '#020617';
-const SKY_GRADIENT_TOP = '#0f172a';
-const SKY_GRADIENT_BOTTOM = '#1e293b';
-const FLOOR_COLOR = '#082f49';
+const BACKGROUND_COLOR = '#020617';
+const SKY_COLOR = '#dbeafe';
+const FLOOR_BASE_COLOR = '#0f172a';
+const WALKWAY_BASE_COLOR = 'rgba(224,242,254,0.18)';
+const WALKWAY_EDGE_COLOR = 'rgba(14,165,233,0.35)';
+const WALKWAY_GUIDE_COLOR = 'rgba(255,255,255,0.45)';
+const FLOOR_EDGE_COLOR = 'rgba(15,118,110,0.25)';
 const COLUMN_MIN_RATIO = 0.18;
 
 export function PlayerView({
@@ -310,14 +313,47 @@ function createBoundaryEnvironment(size: number): RaycasterEnvironment {
 }
 
 function clearScene(context: CanvasRenderingContext2D): void {
-  const { width, height } = context.canvas;
-  const gradient = context.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, SKY_GRADIENT_TOP);
-  gradient.addColorStop(0.6, SKY_GRADIENT_BOTTOM);
-  gradient.addColorStop(1, FLOOR_COLOR);
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
+  const horizon = Math.round(context.canvas.height * 0.45);
+  drawSkyAndFloor(context, horizon);
+  drawWalkwayGuides(context, horizon);
   context.canvas.dataset.lastRayIntensity = '';
+}
+
+function drawSkyAndFloor(context: CanvasRenderingContext2D, horizon: number): void {
+  const { width, height } = context.canvas;
+  context.fillStyle = SKY_COLOR;
+  context.fillRect(0, 0, width, horizon);
+  context.fillStyle = FLOOR_BASE_COLOR;
+  context.fillRect(0, horizon, width, height - horizon);
+}
+
+function drawWalkwayGuides(context: CanvasRenderingContext2D, horizon: number): void {
+  const { width, height } = context.canvas;
+  const walkwayWidth = Math.max(width * 0.32, 60);
+  const walkwayX = (width - walkwayWidth) / 2;
+  const walkwayHeight = height - horizon;
+
+  context.fillStyle = WALKWAY_BASE_COLOR;
+  context.fillRect(walkwayX, horizon, walkwayWidth, walkwayHeight);
+
+  const edgeWidth = Math.max(2, width * 0.02);
+  context.fillStyle = FLOOR_EDGE_COLOR;
+  context.fillRect(walkwayX - edgeWidth * 1.2, horizon, edgeWidth, walkwayHeight);
+  context.fillRect(walkwayX + walkwayWidth + edgeWidth * 0.2, horizon, edgeWidth, walkwayHeight);
+
+  const guideWidth = Math.max(1, width * 0.006);
+  context.fillStyle = WALKWAY_EDGE_COLOR;
+  context.fillRect(walkwayX + walkwayWidth * 0.25, horizon, guideWidth, walkwayHeight);
+  context.fillRect(walkwayX + walkwayWidth * 0.75, horizon, guideWidth, walkwayHeight);
+
+  const centerGuideWidth = Math.max(1, width * 0.004);
+  context.fillStyle = WALKWAY_GUIDE_COLOR;
+  context.fillRect(
+    walkwayX + walkwayWidth * 0.5 - centerGuideWidth / 2,
+    horizon,
+    centerGuideWidth,
+    walkwayHeight,
+  );
 }
 
 function renderRaycastScene(
@@ -326,9 +362,12 @@ function renderRaycastScene(
   viewRange: number,
 ): void {
   const { width, height } = context.canvas;
+  const horizon = Math.round(height * 0.45);
 
-  context.fillStyle = DEFAULT_BACKGROUND;
+  context.fillStyle = BACKGROUND_COLOR;
   context.fillRect(0, 0, width, height);
+  drawSkyAndFloor(context, horizon);
+  drawWalkwayGuides(context, horizon);
 
   if (hits.length === 0) {
     context.canvas.dataset.lastRayIntensity = '';

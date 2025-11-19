@@ -348,6 +348,8 @@
 ## 24. 表示改善フィードバック（2025-05-24）
 - [x] プレイヤープレビュー画像で壁/通路コントラストを強調  
   - DoD: `client/tests/PlayerViewPreview.test.tsx` の新規テストで床グリッド非表示と通路ハイライトの強調を検証
+- [x] 探索フェーズのプレイヤービューで空/床/通路ハイライトをリアルタイム生成  
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で空色・床色・通路ハイライトの描画を検証
 
 ---
 
