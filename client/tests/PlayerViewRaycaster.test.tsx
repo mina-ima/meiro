@@ -181,14 +181,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(config.resolution).toBeLessThanOrEqual(PLAYER_MAX_RAY_COUNT);
   });
 
-  it('4マス目のヒットを減光して描画する', () => {
-    const nearHit: RayHit = {
-      tile: { x: 2, y: 2 },
-      distance: 1,
-      angle: 0,
-      intensity: 1,
-    };
-
+  it('レイキャストの強度をデータ属性に記録する', () => {
     const farHit: RayHit = {
       tile: { x: 5, y: 2 },
       distance: PLAYER_VIEW_RANGE,
@@ -196,7 +189,7 @@ describe('PlayerView レイキャスト仕様', () => {
       intensity: 0.5,
     };
 
-    castRaysMock.mockImplementation(() => [nearHit, farHit]);
+    castRaysMock.mockImplementation(() => [farHit]);
 
     render(
       <PlayerView
@@ -211,25 +204,12 @@ describe('PlayerView レイキャスト仕様', () => {
     flushAnimationFrame(rafCallbacks, 0);
     flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
 
-    const columnOperations = fakeContext.operations.filter((op) => op.y !== 0 || op.height !== 0);
-
-    expect(columnOperations.length).toBeGreaterThanOrEqual(2);
-
-    const expectedColor = expectedColorForIntensity(farHit.intensity);
-    const farColumn = columnOperations.find(
-      (operation) => operation.fillStyle === expectedColor,
-    );
-
-    expect(farColumn).toBeTruthy();
+    const datasetValue = fakeContext.canvas.dataset.lastRayIntensity;
+    expect(datasetValue).toBe(farHit.intensity.toFixed(2));
   });
 
   it('ASCII スタイルのワイヤーフレームを描画する', () => {
-    const hits: RayHit[] = [
-      { tile: { x: 2, y: 2 }, distance: 1.5, angle: 0, intensity: 0.9 },
-      { tile: { x: 5, y: 2 }, distance: 3.2, angle: 0.1, intensity: 0.6 },
-    ];
-
-    castRaysMock.mockReturnValue(hits);
+    castRaysMock.mockReturnValue([]);
 
     render(
       <PlayerView
@@ -249,13 +229,17 @@ describe('PlayerView レイキャスト仕様', () => {
       .filter((style): style is string => typeof style === 'string');
 
     expect(fillStyles).toContain('#000000');
-    expect(fillStyles).toContain('#7dd3fc');
+    expect(fillStyles).toContain('#ef4444');
+    expect(new Set(fillStyles)).toEqual(new Set(['#000000', '#ef4444']));
     const strokeStyles = fakeContext.strokes
       .map((stroke) => stroke.strokeStyle)
       .filter((style): style is string => typeof style === 'string');
 
-    expect(strokeStyles).toContain('#ef4444');
-    expect(strokeStyles).toContain('#f97316');
+    expect(strokeStyles.length).toBeGreaterThan(0);
+    strokeStyles.forEach((style) => {
+      expect(style).toBe('#ef4444');
+    });
+    expect(fakeContext.strokes.some((stroke) => stroke.kind === 'rect')).toBe(true);
   });
 
   it('境界の壁に命中した中央レイは距離4で減光する', async () => {
@@ -299,16 +283,6 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(centerHit.intensity).toBeCloseTo(0.5, 6);
   });
 });
-
-function expectedColorForIntensity(intensity: number): string {
-  const clamped = Math.max(0, Math.min(1, intensity));
-  const near = { r: 226, g: 232, b: 240 };
-  const far = { r: 15, g: 23, b: 42 };
-  const r = Math.round(far.r + (near.r - far.r) * clamped);
-  const g = Math.round(far.g + (near.g - far.g) * clamped);
-  const b = Math.round(far.b + (near.b - far.b) * clamped);
-  return `rgb(${r}, ${g}, ${b})`;
-}
 
 interface SessionStateOverrides {
   playerPosition?: { x: number; y: number };

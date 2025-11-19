@@ -349,7 +349,7 @@
 - [x] プレイヤープレビュー画像で壁/通路コントラストを強調  
   - DoD: `client/tests/PlayerViewPreview.test.tsx` の新規テストで床グリッド非表示と通路ハイライトの強調を検証
 - [x] 探索フェーズのプレイヤービューをASCIIスタイルのワイヤーフレームに刷新  
-  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤縁・中心ガイド・シアングリッドの描画を検証
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤線／赤ドットのみの描画と中心ガイド・開口部表現を検証
 
 ---
 

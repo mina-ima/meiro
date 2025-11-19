@@ -52,12 +52,7 @@ export interface PlayerViewProps {
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 const BACKGROUND_COLOR = '#000000';
-const EDGE_LINE_COLOR = '#ef4444';
-const GRID_LINE_COLOR = '#38bdf8';
-const CENTER_LINE_COLOR = '#f97316';
-const DOOR_LINE_COLOR = '#e2e8f0';
-const GRID_DOT_COLOR = '#7dd3fc';
-const COLUMN_MIN_RATIO = 0.18;
+const LINE_COLOR = '#ef4444';
 
 export function PlayerView({
   points,
@@ -160,7 +155,7 @@ export function PlayerView({
       environmentRef.current,
     );
 
-    renderRaycastScene(context, hits, PLAYER_VIEW_RANGE);
+    renderRaycastScene(context, hits);
   });
 
   useEffect(() => {
@@ -335,17 +330,17 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
 
   applyLineDash(context, []);
   context.lineWidth = Math.max(1, width * 0.003);
-  context.strokeStyle = EDGE_LINE_COLOR;
+  context.strokeStyle = LINE_COLOR;
   drawLine(context, leftNearX, bottomY, leftFarX, topY);
   drawLine(context, rightNearX, bottomY, rightFarX, topY);
   drawLine(context, leftNearX, bottomY, rightNearX, bottomY);
 
-  context.strokeStyle = CENTER_LINE_COLOR;
+  context.strokeStyle = LINE_COLOR;
   applyLineDash(context, [8, 6]);
   drawLine(context, centerX, bottomY, centerX, topY);
   applyLineDash(context, []);
 
-  context.strokeStyle = GRID_LINE_COLOR;
+  context.strokeStyle = LINE_COLOR;
   context.lineWidth = Math.max(1, width * 0.002);
   applyLineDash(context, [4, 8]);
   for (let i = 1; i <= 5; i += 1) {
@@ -357,7 +352,7 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
   }
   applyLineDash(context, []);
 
-  context.strokeStyle = GRID_LINE_COLOR;
+  context.strokeStyle = LINE_COLOR;
   applyLineDash(context, [2, 6]);
   const verticalLines = 3;
   for (let i = 1; i <= verticalLines; i += 1) {
@@ -376,10 +371,40 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
 
   const doorWidth = Math.max(16, width * 0.08);
   const doorHeight = Math.max(12, height * 0.08);
-  context.strokeStyle = DOOR_LINE_COLOR;
+  context.strokeStyle = LINE_COLOR;
   context.lineWidth = Math.max(1, width * 0.0025);
   applyLineDash(context, []);
   strokeRectSafe(context, centerX - doorWidth / 2, topY - doorHeight / 2, doorWidth, doorHeight);
+
+  const doorDepth = doorHeight * 0.8;
+  drawLine(
+    context,
+    centerX - doorWidth / 2,
+    topY - doorHeight / 2,
+    centerX - doorWidth / 3,
+    topY - doorDepth,
+  );
+  drawLine(
+    context,
+    centerX + doorWidth / 2,
+    topY - doorHeight / 2,
+    centerX + doorWidth / 3,
+    topY - doorDepth,
+  );
+  drawLine(
+    context,
+    centerX - doorWidth / 2,
+    topY + doorHeight / 2,
+    centerX - doorWidth / 3,
+    topY + doorDepth * 0.15,
+  );
+  drawLine(
+    context,
+    centerX + doorWidth / 2,
+    topY + doorHeight / 2,
+    centerX + doorWidth / 3,
+    topY + doorDepth * 0.15,
+  );
 }
 
 function drawWallDots(
@@ -404,7 +429,7 @@ function drawWallDots(
       const denominator = Math.max(1, columns - 1);
       const t = col / denominator;
       const x = isLeft ? lerp(startX, endX, t) : lerp(endX, startX, t);
-      context.fillStyle = GRID_DOT_COLOR;
+      context.fillStyle = LINE_COLOR;
       context.fillRect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
     }
   }
@@ -451,60 +476,14 @@ function strokeRectSafe(
   drawLine(context, x, y + height, x, y);
 }
 
-function renderRaycastScene(
-  context: CanvasRenderingContext2D,
-  hits: RayHit[],
-  viewRange: number,
-): void {
-  const { width, height } = context.canvas;
+function renderRaycastScene(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   drawWireframeBase(context);
 
-  if (hits.length === 0) {
-    drawWireframeCorridor(context);
-    context.canvas.dataset.lastRayIntensity = '';
-    return;
-  }
-
-  const columnWidth = width / hits.length;
-
-  hits.forEach((hit, index) => {
-    const columnHeight = computeColumnHeight(hit.distance, viewRange, height);
-    const x = Math.floor(index * columnWidth);
-    const y = Math.floor((height - columnHeight) / 2);
-    const w = Math.max(1, Math.ceil(columnWidth));
-
-    context.fillStyle = intensityToColor(hit.intensity);
-    context.fillRect(x, y, w, columnHeight);
-  });
-
-  drawWireframeCorridor(context);
   const lastIntensity = hits[hits.length - 1]?.intensity;
   context.canvas.dataset.lastRayIntensity =
     lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
-}
 
-function computeColumnHeight(distance: number, viewRange: number, canvasHeight: number): number {
-  if (!Number.isFinite(distance) || distance <= 0) {
-    return canvasHeight;
-  }
-
-  const clampedDistance = Math.min(Math.max(distance, 0), Math.max(viewRange, 0.0001));
-  const normalized = 1 - clampedDistance / Math.max(viewRange, 0.0001);
-  const minHeight = canvasHeight * COLUMN_MIN_RATIO;
-  const variableHeight = normalized * (canvasHeight * (1 - COLUMN_MIN_RATIO));
-  return Math.max(minHeight, variableHeight + minHeight);
-}
-
-function intensityToColor(intensity: number): string {
-  const clamped = Math.max(0, Math.min(1, intensity));
-  const near = { r: 226, g: 232, b: 240 };
-  const far = { r: 15, g: 23, b: 42 };
-
-  const r = Math.round(far.r + (near.r - far.r) * clamped);
-  const g = Math.round(far.g + (near.g - far.g) * clamped);
-  const b = Math.round(far.b + (near.b - far.b) * clamped);
-
-  return `rgb(${r}, ${g}, ${b})`;
+  drawWireframeCorridor(context);
 }
 
 function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly PreviewClip[] {
