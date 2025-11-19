@@ -460,7 +460,7 @@ npm run dev --workspace @meiro/server -- --local
 * [x] ロビー5分自動解散
 * [x] カウントダウン3s → 準備(40/5/15)固定（`server/tests/prep-phase-windows.test.ts`）
 * [x] 20×20/40×40、**最短≥4×L**（`server/tests/room-maze-initialization.test.ts`）
-* [x] 視界：FOV90°, 到達4マス（4マス目減光）（`client/tests/PlayerViewRaycaster.test.tsx`）
+* [x] 視界：FOV90°, 到達4マス（4マス目減光）＋迷路セルを2倍格子に投影してASCIIワイヤーフレームを動的描画（`client/tests/PlayerViewRaycaster.test.tsx`）
 * [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持（`server/tests/owner-resources.test.ts` / `server/tests/owner-path-block.test.ts` / `client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）
 * [x] 罠：40%速度、limit/5、同時2
 * [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）

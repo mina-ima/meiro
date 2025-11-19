@@ -53,6 +53,7 @@ export interface PlayerViewProps {
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 const BACKGROUND_COLOR = '#000000';
 const LINE_COLOR = '#ef4444';
+const RAYCAST_GRID_SCALE = 2;
 
 export function PlayerView({
   points,
@@ -64,7 +65,8 @@ export function PlayerView({
   pauseSecondsRemaining,
   compensationBonus,
 }: PlayerViewProps) {
-  const clips = usePreviewClips();
+  const maze = useSessionStore((state) => state.maze);
+  const clips = usePreviewClips(maze);
   const [clipIndex, setClipIndex] = useState(0);
   const [secondsUntilNextClip, setSecondsUntilNextClip] = useState(PREVIEW_INTERVAL_MS / 1000);
   const initialCompensation = Number.isFinite(compensationBonus)
@@ -83,20 +85,20 @@ export function PlayerView({
   const mazeSize = useSessionStore((state) => state.mazeSize);
 
   const rayStateRef = useRef<RaycasterState>({
-    position: { ...playerPosition },
+    position: scaleVector(playerPosition),
     angle: playerAngle,
   });
 
-  const environmentRef = useRef<RaycasterEnvironment>(createBoundaryEnvironment(mazeSize));
+  const environmentRef = useRef<RaycasterEnvironment>(createMazeEnvironment(maze, mazeSize));
   const exploringRef = useRef(phase === 'explore');
 
   useEffect(() => {
-    environmentRef.current = createBoundaryEnvironment(mazeSize);
-  }, [mazeSize]);
+    environmentRef.current = createMazeEnvironment(maze, mazeSize);
+  }, [maze, mazeSize]);
 
   useEffect(() => {
     rayStateRef.current = {
-      position: { ...playerPosition },
+      position: scaleVector(playerPosition),
       angle: playerAngle,
     };
   }, [playerPosition, playerAngle]);
@@ -149,7 +151,7 @@ export function PlayerView({
       rayStateRef.current,
       {
         fov: PLAYER_FOV_RADIANS,
-        range: PLAYER_VIEW_RANGE,
+        range: PLAYER_VIEW_RANGE * RAYCAST_GRID_SCALE,
         resolution,
       },
       environmentRef.current,
@@ -283,13 +285,63 @@ export function PlayerView({
   );
 }
 
-function usePreviewClips(): readonly PreviewClip[] {
-  const maze = useSessionStore((state) => state.maze);
+function usePreviewClips(maze?: ServerMazeState | null): readonly PreviewClip[] {
   return useMemo(() => createPreviewClipsFromMaze(maze), [maze]);
 }
 
-function createBoundaryEnvironment(size: number): RaycasterEnvironment {
-  const limit = Math.max(0, size);
+function createMazeEnvironment(
+  maze: ServerMazeState | null | undefined,
+  mazeSize: number,
+): RaycasterEnvironment {
+  if (!maze || !Array.isArray(maze.cells) || maze.cells.length === 0) {
+    return createBoundaryEnvironment(mazeSize);
+  }
+
+  const gridSize = Math.max(1, mazeSize * RAYCAST_GRID_SCALE + 1);
+  const grid = new Uint8Array(gridSize * gridSize).fill(1);
+
+  maze.cells.forEach((cell) => {
+    const cx = cell.x * RAYCAST_GRID_SCALE + 1;
+    const cy = cell.y * RAYCAST_GRID_SCALE + 1;
+    carveCell(grid, gridSize, cx, cy);
+    if (!cell.walls.top) {
+      carveCell(grid, gridSize, cx, cy - 1);
+    }
+    if (!cell.walls.bottom) {
+      carveCell(grid, gridSize, cx, cy + 1);
+    }
+    if (!cell.walls.left) {
+      carveCell(grid, gridSize, cx - 1, cy);
+    }
+    if (!cell.walls.right) {
+      carveCell(grid, gridSize, cx + 1, cy);
+    }
+  });
+
+  return {
+    isWall(tileX: number, tileY: number) {
+      if (!Number.isFinite(tileX) || !Number.isFinite(tileY)) {
+        return true;
+      }
+      const x = Math.floor(tileX);
+      const y = Math.floor(tileY);
+      if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) {
+        return true;
+      }
+      return grid[y * gridSize + x] === 1;
+    },
+  };
+}
+
+function carveCell(grid: Uint8Array, size: number, x: number, y: number): void {
+  if (x < 0 || y < 0 || x >= size || y >= size) {
+    return;
+  }
+  grid[y * size + x] = 0;
+}
+
+function createBoundaryEnvironment(baseSize: number): RaycasterEnvironment {
+  const limit = Math.max(1, baseSize * RAYCAST_GRID_SCALE + 1);
   return {
     isWall(tileX: number, tileY: number) {
       if (!Number.isFinite(tileX) || !Number.isFinite(tileY)) {
@@ -310,6 +362,7 @@ function clearScene(context: CanvasRenderingContext2D): void {
   drawWireframeBase(context);
   drawWireframeCorridor(context);
   context.canvas.dataset.lastRayIntensity = '';
+  context.canvas.dataset.lastRayDistances = '';
 }
 
 function drawWireframeBase(context: CanvasRenderingContext2D): void {
@@ -479,11 +532,67 @@ function strokeRectSafe(
 function renderRaycastScene(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   drawWireframeBase(context);
 
+  if (hits.length === 0) {
+    context.canvas.dataset.lastRayIntensity = '';
+    context.canvas.dataset.lastRayDistances = '';
+    drawWireframeCorridor(context);
+    return;
+  }
+
+  drawRayColumns(context, hits);
+
   const lastIntensity = hits[hits.length - 1]?.intensity;
   context.canvas.dataset.lastRayIntensity =
     lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
+  context.canvas.dataset.lastRayDistances = hits.map((hit) => hit.distance.toFixed(2)).join(',');
 
   drawWireframeCorridor(context);
+}
+
+function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void {
+  const { width, height } = context.canvas;
+  const horizon = Math.round(height * 0.18);
+  const ground = Math.round(height * 0.98);
+  const viewHeight = Math.max(1, ground - horizon);
+  const spacing = width / hits.length;
+  const minHeight = height * 0.08;
+
+  hits.forEach((hit, index) => {
+    const normalizedDistance = clamp(hit.distance / PLAYER_VIEW_RANGE, 0, 1);
+    const columnHeight = Math.max(minHeight, viewHeight * (1 - normalizedDistance));
+    const columnWidth = Math.max(2, spacing * 0.35);
+    const left = index * spacing + spacing / 2 - columnWidth / 2;
+    const top = ground - columnHeight;
+    const alpha = clamp(0.35 + hit.intensity * 0.5, 0.35, 0.95);
+
+    context.fillStyle = toRgba(LINE_COLOR, alpha);
+    context.fillRect(left, top, columnWidth, columnHeight);
+
+    const sparkWidth = Math.max(2, columnWidth * 0.6);
+    const sparkHeight = Math.max(1.5, columnWidth * 0.4);
+    context.fillRect(
+      left + columnWidth / 2 - sparkWidth / 2,
+      top - sparkHeight,
+      sparkWidth,
+      sparkHeight,
+    );
+  });
+}
+
+function scaleVector(vector: { x: number; y: number }): { x: number; y: number } {
+  return {
+    x: vector.x * RAYCAST_GRID_SCALE,
+    y: vector.y * RAYCAST_GRID_SCALE,
+  };
+}
+
+function toRgba(hex: string, alpha: number): string {
+  const sanitized = hex.replace('#', '');
+  const r = Number.parseInt(sanitized.slice(0, 2), 16);
+  const g = Number.parseInt(sanitized.slice(2, 4), 16);
+  const b = Number.parseInt(sanitized.slice(4, 6), 16);
+  const clampedAlpha = clamp(alpha, 0, 1);
+  return `rgba(${r}, ${g}, ${b}, ${clampedAlpha.toFixed(3)})`;
 }
 
 function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly PreviewClip[] {

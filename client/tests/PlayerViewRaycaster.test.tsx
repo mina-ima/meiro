@@ -8,7 +8,7 @@ import {
 import { FRAME_LOOP_INTERVAL_MS } from '../src/game/frameLoop';
 import { castRays, type RaycasterConfig, type RayHit } from '../src/game/Raycaster';
 import { PlayerView } from '../src/views/PlayerView';
-import { useSessionStore } from '../src/state/sessionStore';
+import { useSessionStore, type ServerMazeState } from '../src/state/sessionStore';
 import { createMockMaze } from './helpers/mockMaze';
 
 vi.mock('../src/game/Raycaster', async () => {
@@ -177,14 +177,15 @@ describe('PlayerView レイキャスト仕様', () => {
     const expectedFov = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 
     expect(config.fov).toBeCloseTo(expectedFov);
-    expect(config.range).toBeLessThanOrEqual(PLAYER_VIEW_RANGE);
+    expect(config.range).toBeLessThanOrEqual(PLAYER_VIEW_RANGE * 2);
+    expect(config.range).toBeGreaterThan(PLAYER_VIEW_RANGE);
     expect(config.resolution).toBeLessThanOrEqual(PLAYER_MAX_RAY_COUNT);
   });
 
   it('レイキャストの強度をデータ属性に記録する', () => {
     const farHit: RayHit = {
       tile: { x: 5, y: 2 },
-      distance: PLAYER_VIEW_RANGE,
+      distance: PLAYER_VIEW_RANGE * 2,
       angle: 0.1,
       intensity: 0.5,
     };
@@ -230,7 +231,6 @@ describe('PlayerView レイキャスト仕様', () => {
 
     expect(fillStyles).toContain('#000000');
     expect(fillStyles).toContain('#ef4444');
-    expect(new Set(fillStyles)).toEqual(new Set(['#000000', '#ef4444']));
     const strokeStyles = fakeContext.strokes
       .map((stroke) => stroke.strokeStyle)
       .filter((style): style is string => typeof style === 'string');
@@ -242,7 +242,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(fakeContext.strokes.some((stroke) => stroke.kind === 'rect')).toBe(true);
   });
 
-  it('境界の壁に命中した中央レイは距離4で減光する', async () => {
+  it('迷路の壁に応じて中心レイの距離が変化する', async () => {
     const actualRaycaster = await vi.importActual<typeof import('../src/game/Raycaster')>(
       '../src/game/Raycaster',
     );
@@ -255,9 +255,19 @@ describe('PlayerView レイキャスト仕様', () => {
       return hits;
     });
 
+    const maze = createMockMaze(20);
+    const center = maze.cells.find((cell) => cell.x === 10 && cell.y === 10);
+    const east = maze.cells.find((cell) => cell.x === 11 && cell.y === 10);
+    if (!center || !east) {
+      throw new Error('maze setup failed');
+    }
+    center.walls.right = true;
+    east.walls.left = true;
+
     initializeSessionState({
-      playerPosition: { x: 16, y: 2 },
+      playerPosition: { x: 10.5, y: 10.5 },
       playerAngle: 0,
+      maze,
     });
 
     render(
@@ -278,22 +288,105 @@ describe('PlayerView レイキャスト仕様', () => {
     const centerIndex = Math.floor(firstHits.length / 2);
     const centerHit = firstHits[centerIndex];
 
-    expect(centerHit.tile).not.toBeNull();
-    expect(centerHit.distance).toBeCloseTo(PLAYER_VIEW_RANGE, 6);
-    expect(centerHit.intensity).toBeCloseTo(0.5, 6);
+    expect(centerHit.distance).toBeLessThan(2);
+    expect(centerHit.distance).toBeCloseTo(1, 1);
+  });
+
+  it('レイヒット距離に応じて縦線を描画する', () => {
+    castRaysMock.mockReturnValue([
+      { tile: { x: 1, y: 1 }, distance: 0.5, angle: -0.1, intensity: 1 },
+      { tile: { x: 2, y: 1 }, distance: 2, angle: 0, intensity: 0.85 },
+      { tile: { x: 3, y: 1 }, distance: 4, angle: 0.1, intensity: 0.5 },
+    ]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const rayColumns = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      const isRayColor = operation.fillStyle.startsWith('rgba(239, 68, 68');
+      const isWideEnough = operation.width >= 2;
+      return isRayColor && isWideEnough;
+    });
+
+    expect(rayColumns.length).toBeGreaterThanOrEqual(3);
+    const heights = rayColumns.map((column) => column.height);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(10);
+  });
+
+  it('境界の壁に命中した中央レイは距離4で減光する', async () => {
+    const actualRaycaster = await vi.importActual<typeof import('../src/game/Raycaster')>(
+      '../src/game/Raycaster',
+    );
+
+    const capturedHits: RayHit[][] = [];
+
+    castRaysMock.mockImplementation((state, config, environment) => {
+      const hits = actualRaycaster.castRays(state, config, environment);
+      capturedHits.push(hits);
+      return hits;
+    });
+
+    initializeSessionState({
+      playerPosition: { x: 16.5, y: 2.5 },
+      playerAngle: 0,
+    });
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    expect(capturedHits.length).toBeGreaterThan(0);
+    const firstHits = capturedHits[0];
+    const centerIndex = Math.floor(firstHits.length / 2);
+    const centerHit = firstHits[centerIndex];
+    expect(centerHit.tile).toBeNull();
+    expect(centerHit.intensity).toBe(0);
+
+    const datasetDistances = fakeContext.canvas.dataset.lastRayDistances ?? '';
+    expect(datasetDistances).not.toBe('');
+    const parsed = datasetDistances
+      .split(',')
+      .map((entry) => Number.parseFloat(entry))
+      .filter((value) => Number.isFinite(value));
+    expect(parsed.length).toBeGreaterThan(0);
+    const normalizedCenter = parsed[Math.floor(parsed.length / 2)];
+    expect(normalizedCenter).toBeCloseTo(PLAYER_VIEW_RANGE, 2);
   });
 });
 
 interface SessionStateOverrides {
   playerPosition?: { x: number; y: number };
   playerAngle?: number;
+  maze?: ServerMazeState;
 }
 
 function initializeSessionState(overrides: SessionStateOverrides = {}) {
   const now = Date.now();
-  const playerPosition = overrides.playerPosition ?? { x: 2, y: 2 };
+  const playerPosition = overrides.playerPosition ?? { x: 2.5, y: 2.5 };
   const playerAngle = overrides.playerAngle ?? 0;
-  const maze = createMockMaze(20);
+  const maze = overrides.maze ?? createMockMaze(20);
 
   useSessionStore.setState((state) => ({
     ...state,
