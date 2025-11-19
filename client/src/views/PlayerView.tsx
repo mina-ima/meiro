@@ -51,13 +51,12 @@ export interface PlayerViewProps {
 }
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
-const BACKGROUND_COLOR = '#020617';
-const SKY_COLOR = '#dbeafe';
-const FLOOR_BASE_COLOR = '#0f172a';
-const WALKWAY_BASE_COLOR = 'rgba(224,242,254,0.18)';
-const WALKWAY_EDGE_COLOR = 'rgba(14,165,233,0.35)';
-const WALKWAY_GUIDE_COLOR = 'rgba(255,255,255,0.45)';
-const FLOOR_EDGE_COLOR = 'rgba(15,118,110,0.25)';
+const BACKGROUND_COLOR = '#000000';
+const EDGE_LINE_COLOR = '#ef4444';
+const GRID_LINE_COLOR = '#38bdf8';
+const CENTER_LINE_COLOR = '#f97316';
+const DOOR_LINE_COLOR = '#e2e8f0';
+const GRID_DOT_COLOR = '#7dd3fc';
 const COLUMN_MIN_RATIO = 0.18;
 
 export function PlayerView({
@@ -313,47 +312,143 @@ function createBoundaryEnvironment(size: number): RaycasterEnvironment {
 }
 
 function clearScene(context: CanvasRenderingContext2D): void {
-  const horizon = Math.round(context.canvas.height * 0.45);
-  drawSkyAndFloor(context, horizon);
-  drawWalkwayGuides(context, horizon);
+  drawWireframeBase(context);
+  drawWireframeCorridor(context);
   context.canvas.dataset.lastRayIntensity = '';
 }
 
-function drawSkyAndFloor(context: CanvasRenderingContext2D, horizon: number): void {
+function drawWireframeBase(context: CanvasRenderingContext2D): void {
   const { width, height } = context.canvas;
-  context.fillStyle = SKY_COLOR;
-  context.fillRect(0, 0, width, horizon);
-  context.fillStyle = FLOOR_BASE_COLOR;
-  context.fillRect(0, horizon, width, height - horizon);
+  context.fillStyle = BACKGROUND_COLOR;
+  context.fillRect(0, 0, width, height);
 }
 
-function drawWalkwayGuides(context: CanvasRenderingContext2D, horizon: number): void {
+function drawWireframeCorridor(context: CanvasRenderingContext2D): void {
   const { width, height } = context.canvas;
-  const walkwayWidth = Math.max(width * 0.32, 60);
-  const walkwayX = (width - walkwayWidth) / 2;
-  const walkwayHeight = height - horizon;
+  const topY = Math.round(height * 0.2);
+  const bottomY = Math.round(height * 0.96);
+  const leftNearX = Math.round(width * 0.1);
+  const rightNearX = width - leftNearX;
+  const leftFarX = Math.round(width * 0.32);
+  const rightFarX = width - leftFarX;
+  const centerX = width / 2;
 
-  context.fillStyle = WALKWAY_BASE_COLOR;
-  context.fillRect(walkwayX, horizon, walkwayWidth, walkwayHeight);
+  applyLineDash(context, []);
+  context.lineWidth = Math.max(1, width * 0.003);
+  context.strokeStyle = EDGE_LINE_COLOR;
+  drawLine(context, leftNearX, bottomY, leftFarX, topY);
+  drawLine(context, rightNearX, bottomY, rightFarX, topY);
+  drawLine(context, leftNearX, bottomY, rightNearX, bottomY);
 
-  const edgeWidth = Math.max(2, width * 0.02);
-  context.fillStyle = FLOOR_EDGE_COLOR;
-  context.fillRect(walkwayX - edgeWidth * 1.2, horizon, edgeWidth, walkwayHeight);
-  context.fillRect(walkwayX + walkwayWidth + edgeWidth * 0.2, horizon, edgeWidth, walkwayHeight);
+  context.strokeStyle = CENTER_LINE_COLOR;
+  applyLineDash(context, [8, 6]);
+  drawLine(context, centerX, bottomY, centerX, topY);
+  applyLineDash(context, []);
 
-  const guideWidth = Math.max(1, width * 0.006);
-  context.fillStyle = WALKWAY_EDGE_COLOR;
-  context.fillRect(walkwayX + walkwayWidth * 0.25, horizon, guideWidth, walkwayHeight);
-  context.fillRect(walkwayX + walkwayWidth * 0.75, horizon, guideWidth, walkwayHeight);
+  context.strokeStyle = GRID_LINE_COLOR;
+  context.lineWidth = Math.max(1, width * 0.002);
+  applyLineDash(context, [4, 8]);
+  for (let i = 1; i <= 5; i += 1) {
+    const t = i / 6;
+    const y = bottomY - (bottomY - topY) * t;
+    const leftX = lerp(leftNearX, leftFarX, t);
+    const rightX = lerp(rightNearX, rightFarX, t);
+    drawLine(context, leftX, y, rightX, y);
+  }
+  applyLineDash(context, []);
 
-  const centerGuideWidth = Math.max(1, width * 0.004);
-  context.fillStyle = WALKWAY_GUIDE_COLOR;
-  context.fillRect(
-    walkwayX + walkwayWidth * 0.5 - centerGuideWidth / 2,
-    horizon,
-    centerGuideWidth,
-    walkwayHeight,
-  );
+  context.strokeStyle = GRID_LINE_COLOR;
+  applyLineDash(context, [2, 6]);
+  const verticalLines = 3;
+  for (let i = 1; i <= verticalLines; i += 1) {
+    const t = i / (verticalLines + 1);
+    const leftStartX = lerp(leftNearX, centerX - width * 0.05, t * 0.5);
+    const leftEndX = lerp(leftFarX, centerX - width * 0.03, t * 0.35);
+    drawLine(context, leftStartX, bottomY, leftEndX, topY);
+    const rightStartX = lerp(rightNearX, centerX + width * 0.05, t * 0.5);
+    const rightEndX = lerp(rightFarX, centerX + width * 0.03, t * 0.35);
+    drawLine(context, rightStartX, bottomY, rightEndX, topY);
+  }
+  applyLineDash(context, []);
+
+  drawWallDots(context, leftNearX, leftFarX, centerX - width * 0.06, topY, bottomY, true);
+  drawWallDots(context, rightNearX, rightFarX, centerX + width * 0.06, topY, bottomY, false);
+
+  const doorWidth = Math.max(16, width * 0.08);
+  const doorHeight = Math.max(12, height * 0.08);
+  context.strokeStyle = DOOR_LINE_COLOR;
+  context.lineWidth = Math.max(1, width * 0.0025);
+  applyLineDash(context, []);
+  strokeRectSafe(context, centerX - doorWidth / 2, topY - doorHeight / 2, doorWidth, doorHeight);
+}
+
+function drawWallDots(
+  context: CanvasRenderingContext2D,
+  nearX: number,
+  farX: number,
+  innerX: number,
+  topY: number,
+  bottomY: number,
+  isLeft: boolean,
+): void {
+  const rows = 5;
+  const columns = 4;
+  const dotSize = Math.max(1, context.canvas.width * 0.004);
+
+  for (let row = 0; row < rows; row += 1) {
+    const ratio = row / (rows - 1);
+    const y = bottomY - (bottomY - topY) * ratio;
+    const startX = lerp(nearX, farX, ratio);
+    const endX = lerp(startX, innerX, 0.65);
+    for (let col = 0; col < columns; col += 1) {
+      const denominator = Math.max(1, columns - 1);
+      const t = col / denominator;
+      const x = isLeft ? lerp(startX, endX, t) : lerp(endX, startX, t);
+      context.fillStyle = GRID_DOT_COLOR;
+      context.fillRect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
+    }
+  }
+}
+
+function drawLine(
+  context: CanvasRenderingContext2D,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): void {
+  context.beginPath();
+  context.moveTo(startX, startY);
+  context.lineTo(endX, endY);
+  context.stroke();
+}
+
+function lerp(start: number, end: number, t: number): number {
+  return start + (end - start) * t;
+}
+
+function applyLineDash(context: CanvasRenderingContext2D, segments: number[]): void {
+  if (typeof context.setLineDash === 'function') {
+    context.setLineDash(segments);
+  }
+}
+
+function strokeRectSafe(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  if (typeof context.strokeRect === 'function') {
+    context.strokeRect(x, y, width, height);
+    return;
+  }
+
+  drawLine(context, x, y, x + width, y);
+  drawLine(context, x + width, y, x + width, y + height);
+  drawLine(context, x + width, y + height, x, y + height);
+  drawLine(context, x, y + height, x, y);
 }
 
 function renderRaycastScene(
@@ -362,14 +457,10 @@ function renderRaycastScene(
   viewRange: number,
 ): void {
   const { width, height } = context.canvas;
-  const horizon = Math.round(height * 0.45);
-
-  context.fillStyle = BACKGROUND_COLOR;
-  context.fillRect(0, 0, width, height);
-  drawSkyAndFloor(context, horizon);
-  drawWalkwayGuides(context, horizon);
+  drawWireframeBase(context);
 
   if (hits.length === 0) {
+    drawWireframeCorridor(context);
     context.canvas.dataset.lastRayIntensity = '';
     return;
   }
@@ -386,6 +477,7 @@ function renderRaycastScene(
     context.fillRect(x, y, w, columnHeight);
   });
 
+  drawWireframeCorridor(context);
   const lastIntensity = hits[hits.length - 1]?.intensity;
   context.canvas.dataset.lastRayIntensity =
     lastIntensity === undefined ? '' : lastIntensity.toFixed(2);
@@ -587,19 +679,6 @@ function createPerspectivePreviewSvg(
   const hasRight = openDirections.includes('east');
   const hasBack = openDirections.includes('south');
 
-  const forwardPath = `<path d="M140 110 L180 110 L220 20 L100 20 Z" fill="${accent}" opacity="${
-    hasForward ? '0.55' : '0.12'
-  }" />`;
-  const leftPath = `<path d="M80 110 L140 110 L110 20 L40 20 Z" fill="${accent}" opacity="${
-    hasLeft ? '0.4' : '0.08'
-  }" />`;
-  const rightPath = `<path d="M180 110 L240 110 L280 20 L210 20 Z" fill="${accent}" opacity="${
-    hasRight ? '0.4' : '0.08'
-  }" />`;
-  const backHighlight = `<path d="M60 180 L260 180 L230 130 L90 130 Z" fill="${accent}" opacity="${
-    hasBack ? '0.25' : '0.08'
-  }" />`;
-
   const textureDefs = `
     <defs>
       <linearGradient id="ceilingGradient" x1="0" y1="0" x2="0" y2="1">
@@ -684,8 +763,6 @@ function createPerspectivePreviewSvg(
   const forwardElement = hasForward
     ? `<path d="M110 60 L210 60 L230 120 L90 120 Z" fill="url(#forwardGuide)" stroke="rgba(56,189,248,0.65)" stroke-width="2" />`
     : `<path d="M95 45 L225 45 L210 115 L110 115 Z" fill="rgba(2,8,23,0.95)" stroke="#041126" stroke-width="2" />`;
-=======
->>>>>>> theirs
 
   return createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">

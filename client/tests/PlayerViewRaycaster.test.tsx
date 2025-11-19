@@ -26,6 +26,8 @@ const castRaysMock = vi.mocked(castRays);
 class FakeContext2D implements Partial<CanvasRenderingContext2D> {
   canvas: HTMLCanvasElement;
   fillStyle: string | CanvasGradient | CanvasPattern = '#000000';
+  strokeStyle: string | CanvasGradient | CanvasPattern = '#000000';
+  lineWidth = 1;
   operations: Array<{
     fillStyle: string | CanvasGradient | CanvasPattern;
     x: number;
@@ -33,6 +35,15 @@ class FakeContext2D implements Partial<CanvasRenderingContext2D> {
     width: number;
     height: number;
   }> = [];
+  strokes: Array<{
+    strokeStyle: string | CanvasGradient | CanvasPattern;
+    lineWidth: number;
+    lineDash: number[];
+    kind: 'path' | 'rect';
+    rect?: { x: number; y: number; width: number; height: number };
+  }> = [];
+  private currentPath: Array<{ type: 'move' | 'line'; x: number; y: number }> = [];
+  private lineDash: number[] = [];
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -48,6 +59,42 @@ class FakeContext2D implements Partial<CanvasRenderingContext2D> {
       width,
       height,
     });
+  }
+
+  beginPath(): void {
+    this.currentPath = [];
+  }
+
+  moveTo(x: number, y: number): void {
+    this.currentPath.push({ type: 'move', x, y });
+  }
+
+  lineTo(x: number, y: number): void {
+    this.currentPath.push({ type: 'line', x, y });
+  }
+
+  stroke(): void {
+    this.strokes.push({
+      strokeStyle: this.strokeStyle,
+      lineWidth: this.lineWidth,
+      lineDash: [...this.lineDash],
+      kind: 'path',
+    });
+    this.currentPath = [];
+  }
+
+  strokeRect(x: number, y: number, width: number, height: number): void {
+    this.strokes.push({
+      strokeStyle: this.strokeStyle,
+      lineWidth: this.lineWidth,
+      lineDash: [...this.lineDash],
+      kind: 'rect',
+      rect: { x, y, width, height },
+    });
+  }
+
+  setLineDash(segments: number[]): void {
+    this.lineDash = [...segments];
   }
 
   createLinearGradient(): CanvasGradient {
@@ -168,13 +215,15 @@ describe('PlayerView レイキャスト仕様', () => {
 
     expect(columnOperations.length).toBeGreaterThanOrEqual(2);
 
-    const farColumn = columnOperations[columnOperations.length - 1];
     const expectedColor = expectedColorForIntensity(farHit.intensity);
+    const farColumn = columnOperations.find(
+      (operation) => operation.fillStyle === expectedColor,
+    );
 
-    expect(farColumn.fillStyle).toBe(expectedColor);
+    expect(farColumn).toBeTruthy();
   });
 
-  it('空と床と通路ハイライトを同時に描画する', () => {
+  it('ASCII スタイルのワイヤーフレームを描画する', () => {
     const hits: RayHit[] = [
       { tile: { x: 2, y: 2 }, distance: 1.5, angle: 0, intensity: 0.9 },
       { tile: { x: 5, y: 2 }, distance: 3.2, angle: 0.1, intensity: 0.6 },
@@ -199,9 +248,14 @@ describe('PlayerView レイキャスト仕様', () => {
       .map((operation) => operation.fillStyle)
       .filter((style): style is string => typeof style === 'string');
 
-    expect(fillStyles).toContain('#dbeafe');
-    expect(fillStyles).toContain('#0f172a');
-    expect(fillStyles).toContain('rgba(224,242,254,0.18)');
+    expect(fillStyles).toContain('#000000');
+    expect(fillStyles).toContain('#7dd3fc');
+    const strokeStyles = fakeContext.strokes
+      .map((stroke) => stroke.strokeStyle)
+      .filter((style): style is string => typeof style === 'string');
+
+    expect(strokeStyles).toContain('#ef4444');
+    expect(strokeStyles).toContain('#f97316');
   });
 
   it('境界の壁に命中した中央レイは距離4で減光する', async () => {
