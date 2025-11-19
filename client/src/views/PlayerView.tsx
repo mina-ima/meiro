@@ -52,7 +52,10 @@ export interface PlayerViewProps {
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 const BACKGROUND_COLOR = '#000000';
-const LINE_COLOR = '#ef4444';
+const BRICK_NEAR_COLOR = '#8c1c1c';
+const BRICK_FAR_COLOR = '#2d0505';
+const BRICK_LINE_COLOR = '#f0f0f0';
+const CEILING_TINT_COLOR = '#120404';
 const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
@@ -426,8 +429,7 @@ function createBoundaryEnvironment(baseSize: number): RaycasterEnvironment {
 
 function clearScene(context: CanvasRenderingContext2D): void {
   drawWireframeBase(context);
-  drawPerspectiveBackdrop(context);
-  drawWireframeCorridor(context);
+  drawBrickBackdrop(context);
   resetRayDataset(context.canvas);
 }
 
@@ -447,218 +449,131 @@ function drawWireframeBase(context: CanvasRenderingContext2D): void {
   context.fillRect(0, 0, width, height);
 }
 
-function drawPerspectiveBackdrop(context: CanvasRenderingContext2D): void {
+function drawBrickBackdrop(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
+  const dims = computeCorridorDimensions(context.canvas, profile);
+  drawBrickCeiling(context, dims);
+  drawBrickFloor(context, dims);
   context.canvas.dataset.viewFogStart = '1.00';
 }
 
-function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
-  const dims = computeCorridorDimensions(context.canvas, profile);
-  const { width, height } = context.canvas;
-  const focusRatio = profile ? clamp(profile.focusDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5;
+interface CorridorQuad {
+  topLeft: { x: number; y: number };
+  topRight: { x: number; y: number };
+  bottomRight: { x: number; y: number };
+  bottomLeft: { x: number; y: number };
+}
 
-  applyLineDash(context, []);
-  context.lineWidth = Math.max(1, width * 0.003);
-  context.strokeStyle = LINE_COLOR;
-  applyLineDash(context, profile?.leftOpen ? [12, 10] : []);
-  drawLine(context, dims.leftNearX, dims.bottomY, dims.leftFarX, dims.topY);
-  applyLineDash(context, profile?.rightOpen ? [12, 10] : []);
-  drawLine(context, dims.rightNearX, dims.bottomY, dims.rightFarX, dims.topY);
-  applyLineDash(context, []);
-  drawLine(context, dims.leftNearX, dims.bottomY, dims.rightNearX, dims.bottomY);
+function drawBrickCeiling(context: CanvasRenderingContext2D, dims: CorridorDimensions): void {
+  const layers = 6;
+  for (let i = 0; i < layers; i += 1) {
+    const startRatio = i / layers;
+    const endRatio = (i + 1) / layers;
+    const yStart = dims.topY * startRatio;
+    const yEnd = dims.topY * endRatio;
+    const color = mixHexColors(BRICK_NEAR_COLOR, CEILING_TINT_COLOR, endRatio);
+    context.fillStyle = color;
+    context.fillRect(0, yStart, context.canvas.width, Math.max(1, yEnd - yStart));
 
-  context.strokeStyle = LINE_COLOR;
-  applyLineDash(context, [8, 6]);
-  const centerLineTop = lerp(
-    dims.bottomY,
-    dims.topY,
-    profile ? clamp(profile.centerDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5,
-  );
-  drawLine(context, dims.centerX, dims.bottomY, dims.centerX, centerLineTop);
-  applyLineDash(context, []);
-
-  context.strokeStyle = LINE_COLOR;
-  context.lineWidth = Math.max(1, width * 0.002);
-  applyLineDash(context, [4, 8]);
-  for (let i = 1; i <= 5; i += 1) {
-    const t = i / 6;
-    const eased = Math.pow(t, 0.75 + (1 - focusRatio) * 0.2);
-    const y = lerp(dims.bottomY, dims.topY, eased);
-    const leftX = lerp(dims.leftNearX, dims.leftFarX, eased);
-    const rightX = lerp(dims.rightNearX, dims.rightFarX, eased);
-    drawLine(context, leftX, y, rightX, y);
-  }
-  applyLineDash(context, []);
-
-  context.strokeStyle = LINE_COLOR;
-  applyLineDash(context, [2, 6]);
-  const verticalLines = 3;
-  for (let i = 1; i <= verticalLines; i += 1) {
-    const t = i / (verticalLines + 1);
-    const leftStartX = lerp(dims.leftNearX, dims.centerX - width * 0.05, t * 0.5);
-    const leftEndX = lerp(dims.leftFarX, dims.centerX - width * 0.03, t * 0.35);
-    drawLine(context, leftStartX, dims.bottomY, leftEndX, dims.topY);
-    const rightStartX = lerp(dims.rightNearX, dims.centerX + width * 0.05, t * 0.5);
-    const rightEndX = lerp(dims.rightFarX, dims.centerX + width * 0.03, t * 0.35);
-    drawLine(context, rightStartX, dims.bottomY, rightEndX, dims.topY);
-  }
-  applyLineDash(context, []);
-
-  if (!profile?.leftOpen) {
-    drawWallDots(
-      context,
-      dims.leftNearX,
-      dims.leftFarX,
-      dims.centerX - width * 0.06,
-      dims.topY,
-      dims.bottomY,
-      true,
-    );
-  } else {
-    drawCornerGuide(context, 'left', dims.leftNearX, dims.leftFarX, dims.topY, dims.bottomY);
-  }
-  if (!profile?.rightOpen) {
-    drawWallDots(
-      context,
-      dims.rightNearX,
-      dims.rightFarX,
-      dims.centerX + width * 0.06,
-      dims.topY,
-      dims.bottomY,
-      false,
-    );
-  } else {
-    drawCornerGuide(context, 'right', dims.rightNearX, dims.rightFarX, dims.topY, dims.bottomY);
-  }
-
-  const showFrontPanel = !profile || profile.frontBlocked;
-  if (showFrontPanel) {
-    drawFrontPanel(context, dims.centerX, dims.topY, width, height);
-  } else if (profile.silhouette === 'junction') {
-    drawJunctionPanels(context, dims.centerX, dims.topY, width, height);
+    context.strokeStyle = BRICK_LINE_COLOR;
+    context.lineWidth = Math.max(1, context.canvas.height * 0.002);
+    drawLine(context, 0, yStart, context.canvas.width, yStart);
   }
 }
 
-function drawCornerGuide(
-  context: CanvasRenderingContext2D,
-  side: 'left' | 'right',
-  nearX: number,
-  farX: number,
-  topY: number,
-  bottomY: number,
-): void {
-  const direction = side === 'left' ? -1 : 1;
-  const elbowX = lerp(nearX, farX, 0.45);
-  const elbowY = lerp(bottomY, topY, 0.4);
-  const tipX = elbowX + direction * context.canvas.width * 0.05;
-  const tipY = elbowY - context.canvas.height * 0.05;
-  context.lineWidth = Math.max(1, context.canvas.width * 0.002);
-  applyLineDash(context, [4, 6]);
-  drawLine(context, nearX, bottomY, elbowX, elbowY);
-  applyLineDash(context, []);
-  drawLine(context, elbowX, elbowY, tipX, tipY);
-  drawLine(context, tipX, tipY, elbowX, elbowY - context.canvas.height * 0.035);
-}
-
-function drawFrontPanel(
-  context: CanvasRenderingContext2D,
-  centerX: number,
-  topY: number,
-  width: number,
-  height: number,
-): void {
-  const doorWidth = Math.max(16, width * 0.08);
-  const doorHeight = Math.max(12, height * 0.08);
-  context.strokeStyle = LINE_COLOR;
-  context.lineWidth = Math.max(1, width * 0.0025);
-  applyLineDash(context, [2, 4]);
-  strokeRectSafe(context, centerX - doorWidth / 2, topY - doorHeight / 2, doorWidth, doorHeight);
-  applyLineDash(context, []);
-
-  const doorDepth = doorHeight * 0.8;
-  drawLine(
-    context,
-    centerX - doorWidth / 2,
-    topY - doorHeight / 2,
-    centerX - doorWidth / 3,
-    topY - doorDepth,
-  );
-  drawLine(
-    context,
-    centerX + doorWidth / 2,
-    topY - doorHeight / 2,
-    centerX + doorWidth / 3,
-    topY - doorDepth,
-  );
-  drawLine(
-    context,
-    centerX - doorWidth / 2,
-    topY + doorHeight / 2,
-    centerX - doorWidth / 3,
-    topY + doorDepth * 0.15,
-  );
-  drawLine(
-    context,
-    centerX + doorWidth / 2,
-    topY + doorHeight / 2,
-    centerX + doorWidth / 3,
-    topY + doorDepth * 0.15,
-  );
-}
-
-function drawJunctionPanels(
-  context: CanvasRenderingContext2D,
-  centerX: number,
-  topY: number,
-  width: number,
-  height: number,
-): void {
-  context.lineWidth = Math.max(1, width * 0.0025);
-  context.strokeStyle = LINE_COLOR;
-  const panelWidth = Math.max(12, width * 0.05);
-  const panelHeight = Math.max(12, height * 0.07);
-  const offset = width * 0.14;
-  strokeRectSafe(
-    context,
-    centerX - offset - panelWidth / 2,
-    topY - panelHeight / 2,
-    panelWidth,
-    panelHeight,
-  );
-  strokeRectSafe(
-    context,
-    centerX + offset - panelWidth / 2,
-    topY - panelHeight / 2,
-    panelWidth,
-    panelHeight,
-  );
-}
-
-function drawWallDots(
-  context: CanvasRenderingContext2D,
-  nearX: number,
-  farX: number,
-  innerX: number,
-  topY: number,
-  bottomY: number,
-  isLeft: boolean,
-): void {
-  const rows = 5;
-  const columns = 4;
-  const dotSize = Math.max(1, context.canvas.width * 0.004);
-
-  for (let row = 0; row < rows; row += 1) {
-    const ratio = row / (rows - 1);
-    const y = bottomY - (bottomY - topY) * ratio;
-    const startX = lerp(nearX, farX, ratio);
-    const endX = lerp(startX, innerX, 0.65);
-    for (let col = 0; col < columns; col += 1) {
-      const denominator = Math.max(1, columns - 1);
-      const t = col / denominator;
-      const x = isLeft ? lerp(startX, endX, t) : lerp(endX, startX, t);
-      context.fillStyle = LINE_COLOR;
-      context.fillRect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
-    }
+function drawBrickFloor(context: CanvasRenderingContext2D, dims: CorridorDimensions): void {
+  const rows = 18;
+  for (let i = 0; i < rows; i += 1) {
+    const startRatio = i / rows;
+    const endRatio = (i + 1) / rows;
+    const quad = createFloorQuad(dims, startRatio, endRatio);
+    const shadeRatio = endRatio;
+    const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, shadeRatio);
+    fillQuad(context, quad, color);
+    drawFloorMortar(context, quad, i);
   }
+}
+
+function createFloorQuad(
+  dims: CorridorDimensions,
+  startRatio: number,
+  endRatio: number,
+): CorridorQuad {
+  const bottomY = lerp(dims.bottomY, dims.topY, startRatio);
+  const topY = lerp(dims.bottomY, dims.topY, endRatio);
+  const bottomLeft = {
+    x: lerp(dims.leftNearX, dims.leftFarX, startRatio),
+    y: bottomY,
+  };
+  const bottomRight = {
+    x: lerp(dims.rightNearX, dims.rightFarX, startRatio),
+    y: bottomY,
+  };
+  const topLeft = {
+    x: lerp(dims.leftNearX, dims.leftFarX, endRatio),
+    y: topY,
+  };
+  const topRight = {
+    x: lerp(dims.rightNearX, dims.rightFarX, endRatio),
+    y: topY,
+  };
+  return {
+    topLeft,
+    topRight,
+    bottomRight,
+    bottomLeft,
+  };
+}
+
+function fillQuad(context: CanvasRenderingContext2D, quad: CorridorQuad, color: string): void {
+  context.beginPath();
+  context.moveTo(quad.bottomLeft.x, quad.bottomLeft.y);
+  context.lineTo(quad.bottomRight.x, quad.bottomRight.y);
+  context.lineTo(quad.topRight.x, quad.topRight.y);
+  context.lineTo(quad.topLeft.x, quad.topLeft.y);
+  context.closePath();
+  context.fillStyle = color;
+  context.fill();
+}
+
+function drawFloorMortar(
+  context: CanvasRenderingContext2D,
+  quad: CorridorQuad,
+  rowIndex: number,
+): void {
+  context.strokeStyle = BRICK_LINE_COLOR;
+  context.lineWidth = Math.max(1, context.canvas.height * 0.0018);
+
+  const horizontalLines = Math.max(1, Math.round((quad.bottomLeft.y - quad.topLeft.y) / 6));
+  for (let i = 1; i < horizontalLines; i += 1) {
+    const ratio = i / horizontalLines;
+    const leftPoint = interpolatePoint(quad.bottomLeft, quad.topLeft, ratio);
+    const rightPoint = interpolatePoint(quad.bottomRight, quad.topRight, ratio);
+    drawLine(context, leftPoint.x, leftPoint.y, rightPoint.x, rightPoint.y);
+  }
+
+  const averageWidth =
+    (quad.bottomRight.x - quad.bottomLeft.x + quad.topRight.x - quad.topLeft.x) / 2;
+  const bricksPerRow = Math.max(2, Math.round(Math.abs(averageWidth) / 26));
+  const offsetRatio = (rowIndex % 2) * (0.5 / bricksPerRow);
+
+  for (let i = 0; i <= bricksPerRow; i += 1) {
+    let ratio = i / bricksPerRow + offsetRatio;
+    ratio -= Math.floor(ratio);
+    const bottomPoint = interpolatePoint(quad.bottomLeft, quad.bottomRight, ratio);
+    const topPoint = interpolatePoint(quad.topLeft, quad.topRight, ratio);
+    drawLine(context, bottomPoint.x, bottomPoint.y, topPoint.x, topPoint.y);
+  }
+}
+
+function interpolatePoint(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  t: number,
+): { x: number; y: number } {
+  return {
+    x: lerp(start.x, end.x, t),
+    y: lerp(start.y, end.y, t),
+  };
 }
 
 function drawLine(
@@ -678,43 +593,17 @@ function lerp(start: number, end: number, t: number): number {
   return start + (end - start) * t;
 }
 
-function applyLineDash(context: CanvasRenderingContext2D, segments: number[]): void {
-  if (typeof context.setLineDash === 'function') {
-    context.setLineDash(segments);
-  }
-}
-
-function strokeRectSafe(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  if (typeof context.strokeRect === 'function') {
-    context.strokeRect(x, y, width, height);
-    return;
-  }
-
-  drawLine(context, x, y, x + width, y);
-  drawLine(context, x + width, y, x + width, y + height);
-  drawLine(context, x + width, y + height, x, y + height);
-  drawLine(context, x, y + height, x, y);
-}
-
 function renderRaycastScene(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   drawWireframeBase(context);
   const profile = hits.length > 0 ? analyzeViewProfile(hits) : undefined;
-  drawPerspectiveBackdrop(context);
+  drawBrickBackdrop(context, profile);
 
   if (!profile) {
     resetRayDataset(context.canvas);
-    drawWireframeCorridor(context);
     return;
   }
 
-  drawRayColumns(context, hits, profile);
-  drawWireframeCorridor(context, profile);
+  drawRayColumns(context, hits);
   updateRayDataset(context.canvas, hits, profile);
 }
 
@@ -728,20 +617,13 @@ function updateRayDataset(canvas: HTMLCanvasElement, hits: RayHit[], profile: Vi
   canvas.dataset.viewRightDepth = profile.rightDistance.toFixed(2);
 }
 
-function drawRayColumns(
-  context: CanvasRenderingContext2D,
-  hits: RayHit[],
-  profile: ViewProfile,
-): void {
+function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   const { width, height } = context.canvas;
   const horizon = Math.round(height * 0.18);
   const ground = Math.round(height * 0.98);
   const viewHeight = Math.max(1, ground - horizon);
-  const spacing = width / hits.length;
+  const spacing = hits.length > 0 ? width / hits.length : width;
   const minHeight = height * 0.08;
-
-  const topPoints: Array<{ x: number; y: number }> = [];
-  const bottomPoints: Array<{ x: number; y: number }> = [];
 
   hits.forEach((hit, index) => {
     if (!hit.tile) {
@@ -750,49 +632,47 @@ function drawRayColumns(
     const normalizedDistance = clamp(hit.distance / PLAYER_VIEW_RANGE, 0, 1);
     const depthFactor = 1 - normalizedDistance ** 0.85;
     const columnHeight = Math.max(minHeight, viewHeight * depthFactor);
-    const columnWidth = Math.max(2, spacing * (0.45 + depthFactor * 0.4));
+    const columnWidth = Math.max(2, spacing * (0.4 + depthFactor * 0.3));
     const left = index * spacing + spacing / 2 - columnWidth / 2;
     const top = ground - columnHeight;
-    const alpha = clamp(0.35 + hit.intensity * 0.5 + depthFactor * 0.1, 0.35, 0.98);
-
-    context.fillStyle = toRgba(LINE_COLOR, alpha);
-    context.fillRect(left, top, columnWidth, columnHeight);
-
-    const sparkWidth = Math.max(2, columnWidth * 0.45);
-    const sparkHeight = Math.max(1.5, columnWidth * 0.45);
-    context.fillRect(
-      left + columnWidth / 2 - sparkWidth / 2,
-      top - sparkHeight * 0.6,
-      sparkWidth,
-      sparkHeight,
-    );
-
-    const centerX = left + columnWidth / 2;
-    topPoints.push({ x: centerX, y: top });
-    bottomPoints.push({ x: centerX, y: ground });
+    drawBrickColumn(context, left, top, columnWidth, columnHeight, normalizedDistance);
   });
+}
 
-  if (topPoints.length > 1) {
-    context.strokeStyle = LINE_COLOR;
-    context.lineWidth = Math.max(1, width * 0.0015);
-    applyLineDash(context, [6, 10]);
-    for (let i = 1; i < topPoints.length; i += 1) {
-      const prevTop = topPoints[i - 1];
-      const currentTop = topPoints[i];
-      drawLine(context, prevTop.x, prevTop.y, currentTop.x, currentTop.y);
-      const prevBottom = bottomPoints[i - 1];
-      const currentBottom = bottomPoints[i];
-      drawLine(context, prevBottom.x, prevBottom.y, currentBottom.x, currentBottom.y);
-    }
-    applyLineDash(context, []);
+function drawBrickColumn(
+  context: CanvasRenderingContext2D,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  distanceRatio: number,
+): void {
+  const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, distanceRatio);
+  context.fillStyle = color;
+  context.fillRect(left, top, width, height);
+
+  context.strokeStyle = BRICK_LINE_COLOR;
+  const rowCount = Math.max(2, Math.round(height / 8));
+  const brickHeight = height / rowCount;
+  context.lineWidth = Math.max(1, height * 0.003);
+
+  for (let row = 1; row < rowCount; row += 1) {
+    const y = Math.round(top + row * brickHeight);
+    drawLine(context, left, y, left + width, y);
   }
 
-  const centerIndex = Math.floor(topPoints.length / 2);
-  const centerTop = topPoints[centerIndex];
-  const centerBottom = bottomPoints[centerIndex];
-  if (centerTop && centerBottom) {
-    context.lineWidth = Math.max(profile.frontBlocked ? 2 : 1.5, width * 0.0025);
-    drawLine(context, centerTop.x, centerTop.y, centerBottom.x, centerBottom.y);
+  const bricksPerRow = Math.max(2, Math.round(width / 8));
+  for (let row = 0; row < rowCount; row += 1) {
+    const offset = (row % 2) * (width / bricksPerRow / 2);
+    const startY = top + row * brickHeight;
+    const endY = startY + brickHeight;
+    for (let column = 1; column < bricksPerRow; column += 1) {
+      const x = left + offset + (width / bricksPerRow) * column;
+      if (x <= left || x >= left + width) {
+        continue;
+      }
+      drawLine(context, x, startY, x, endY);
+    }
   }
 }
 
@@ -867,13 +747,22 @@ function scaleVector(vector: { x: number; y: number }): { x: number; y: number }
   };
 }
 
-function toRgba(hex: string, alpha: number): string {
+function mixHexColors(colorA: string, colorB: string, t: number): string {
+  const a = hexToRgb(colorA);
+  const b = hexToRgb(colorB);
+  const ratio = clamp(t, 0, 1);
+  const r = Math.round(lerp(a.r, b.r, ratio));
+  const g = Math.round(lerp(a.g, b.g, ratio));
+  const bl = Math.round(lerp(a.b, b.b, ratio));
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const sanitized = hex.replace('#', '');
   const r = Number.parseInt(sanitized.slice(0, 2), 16);
   const g = Number.parseInt(sanitized.slice(2, 4), 16);
   const b = Number.parseInt(sanitized.slice(4, 6), 16);
-  const clampedAlpha = clamp(alpha, 0, 1);
-  return `rgba(${r}, ${g}, ${b}, ${clampedAlpha.toFixed(3)})`;
+  return { r, g, b };
 }
 
 function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly PreviewClip[] {
@@ -1044,46 +933,21 @@ function createPerspectivePreviewSvg(
   variant: MazePreviewVariant,
 ): string {
   const view = deriveViewParameters(cell, openDirections, variant);
-  const horizontalLines = buildHorizontalWireLines(view.dims, 5);
-  const verticalLines = buildVerticalWireLines(view.dims, 3);
-  const dotRows = buildDotRows(view.dims, 4, 5);
-  const door = buildDoorSvg(view.dims, variant, openDirections.includes('north'));
-  const directionOverlay = buildDirectionOverlay(openDirections, view.dims);
-
-  const outerWalls = [
-    createWirePath(
-      [
-        { x: view.dims.leftNearX, y: view.dims.bottomY },
-        { x: view.dims.leftFarX, y: view.dims.topY },
-      ],
-      { width: 2.4 },
-    ),
-    createWirePath(
-      [
-        { x: view.dims.rightNearX, y: view.dims.bottomY },
-        { x: view.dims.rightFarX, y: view.dims.topY },
-      ],
-      { width: 2.4 },
-    ),
-    createWirePath(
-      [
-        { x: view.dims.leftNearX, y: view.dims.bottomY },
-        { x: view.dims.rightNearX, y: view.dims.bottomY },
-      ],
-      { width: 2.4 },
-    ),
-  ];
+  const leftWall = buildWallSvg(view.dims, 'left', openDirections.includes('west'));
+  const rightWall = buildWallSvg(view.dims, 'right', openDirections.includes('east'));
+  const floor = buildFloorSvg(view.dims);
+  const farWall = buildFarWallSvg(view.dims, openDirections.includes('north'), variant);
+  const ceiling = `<rect width="${view.dims.width}" height="${view.dims.topY - 4}" fill="${CEILING_TINT_COLOR}" opacity="0.9" />`;
 
   return createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${view.dims.width} ${view.dims.height}">
       <rect width="${view.dims.width}" height="${view.dims.height}" fill="${BACKGROUND_COLOR}" />
       <g data-view-tilt="${view.tilt.toFixed(2)}">
-        ${outerWalls.join('\n')}
-        ${horizontalLines}
-        ${verticalLines}
-        ${dotRows}
-        ${door}
-        ${directionOverlay}
+        ${ceiling}
+        ${leftWall}
+        ${rightWall}
+        ${floor}
+        ${farWall}
       </g>
     </svg>
   `);
@@ -1147,212 +1011,134 @@ function deriveViewParameters(
   return { dims, tilt: clampedTilt };
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function createWirePath(
-  points: Array<{ x: number; y: number }>,
-  options?: { width?: number; dash?: string },
-): string {
-  const d = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`)
-    .join(' ');
-  const dash = options?.dash ? ` stroke-dasharray="${options.dash}"` : '';
-  const width = options?.width ?? 2;
-  return `<path d="${d}" fill="none" stroke="${LINE_COLOR}" stroke-width="${width}" stroke-linecap="round"${dash} />`;
-}
-
-function buildHorizontalWireLines(dims: WireframeDimensions, count: number): string {
-  const lines: string[] = [];
-  for (let i = 1; i <= count; i += 1) {
-    const t = i / (count + 1);
-    const y = dims.bottomY - (dims.bottomY - dims.topY) * t;
+function buildFloorSvg(dims: WireframeDimensions): string {
+  const quad = [
+    { x: dims.leftNearX, y: dims.bottomY },
+    { x: dims.rightNearX, y: dims.bottomY },
+    { x: dims.rightFarX, y: dims.topY },
+    { x: dims.leftFarX, y: dims.topY },
+  ];
+  const baseColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.35);
+  const lines: string[] = [`<polygon points="${polygonPoints(quad)}" fill="${baseColor}" />`];
+  const rows = 6;
+  for (let i = 1; i < rows; i += 1) {
+    const t = i / rows;
+    const y = lerp(dims.bottomY, dims.topY, t);
     const leftX = lerp(dims.leftNearX, dims.leftFarX, t);
     const rightX = lerp(dims.rightNearX, dims.rightFarX, t);
     lines.push(
-      createWirePath(
-        [
-          { x: leftX, y },
-          { x: rightX, y },
-        ],
-        { dash: '6 12', width: 1.4 },
-      ),
+      `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="1.2" stroke-linecap="round" opacity="0.85" />`,
+    );
+  }
+  const columns = 4;
+  for (let i = 1; i < columns; i += 1) {
+    const t = i / columns;
+    const bottom = { x: lerp(dims.leftNearX, dims.rightNearX, t), y: dims.bottomY };
+    const top = { x: lerp(dims.leftFarX, dims.rightFarX, t), y: dims.topY };
+    lines.push(
+      `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.7" />`,
     );
   }
   return lines.join('\n');
 }
 
-function buildVerticalWireLines(dims: WireframeDimensions, count: number): string {
-  const lines: string[] = [];
-  for (let i = 1; i <= count; i += 1) {
-    const t = i / (count + 1);
-    const leftStart = lerp(dims.leftNearX, dims.centerX - dims.width * 0.04, t * 0.5);
-    const leftEnd = lerp(dims.leftFarX, dims.centerX - dims.width * 0.02, t * 0.35);
-    lines.push(
-      createWirePath(
-        [
-          { x: leftStart, y: dims.bottomY },
-          { x: leftEnd, y: dims.topY },
-        ],
-        { dash: '2 8', width: 1.2 },
-      ),
-    );
-    const rightStart = lerp(dims.rightNearX, dims.centerX + dims.width * 0.04, t * 0.5);
-    const rightEnd = lerp(dims.rightFarX, dims.centerX + dims.width * 0.02, t * 0.35);
-    lines.push(
-      createWirePath(
-        [
-          { x: rightStart, y: dims.bottomY },
-          { x: rightEnd, y: dims.topY },
-        ],
-        { dash: '2 8', width: 1.2 },
-      ),
-    );
-  }
-  return lines.join('\n');
-}
-
-function buildDotRows(dims: WireframeDimensions, columns: number, rows: number): string {
-  const dots: string[] = [];
-  const dotSize = 1.8;
-  for (let row = 0; row < rows; row += 1) {
-    const ratio = row / (rows - 1);
-    const y = dims.bottomY - (dims.bottomY - dims.topY) * ratio;
-    const leftStart = lerp(dims.leftNearX, dims.leftFarX, ratio);
-    const leftEnd = lerp(leftStart, dims.centerX - dims.width * 0.06, 0.65);
-    const rightStart = lerp(dims.rightNearX, dims.rightFarX, ratio);
-    const rightEnd = lerp(rightStart, dims.centerX + dims.width * 0.06, 0.65);
-    for (let col = 0; col < columns; col += 1) {
-      const denominator = Math.max(1, columns - 1);
-      const t = col / denominator;
-      const leftX = lerp(leftStart, leftEnd, t);
-      const rightX = lerp(rightStart, rightEnd, t);
-      dots.push(
-        `<rect x="${leftX - dotSize / 2}" y="${y - dotSize / 2}" width="${dotSize}" height="${dotSize}" fill="${LINE_COLOR}" />`,
-      );
-      dots.push(
-        `<rect x="${rightX - dotSize / 2}" y="${y - dotSize / 2}" width="${dotSize}" height="${dotSize}" fill="${LINE_COLOR}" />`,
-      );
-    }
-  }
-  return dots.join('\n');
-}
-
-function buildDoorSvg(
+function buildWallSvg(
   dims: WireframeDimensions,
-  variant: MazePreviewVariant,
-  forwardOpen: boolean,
+  side: 'left' | 'right',
+  hasOpening: boolean,
 ): string {
-  const baseWidth = variant === 'goal' ? 52 : variant === 'junction' ? 58 : 64;
-  const width = baseWidth;
-  const height = Math.max(18, width * 0.45);
-  const depth = height * 0.8;
-  const rectX = dims.centerX - width / 2;
-  const rectY = dims.topY - height / 2;
-
-  const doorRect = `<rect data-name="wireframe-door" x="${rectX}" y="${rectY}" width="${width}" height="${height}" fill="none" stroke="${LINE_COLOR}" stroke-width="2" />`;
-  const depthLines = [
-    createWirePath(
-      [
-        { x: dims.centerX - width / 2, y: rectY },
-        { x: dims.centerX - width / 3, y: dims.topY - depth },
-      ],
-      { width: 1.4 },
-    ),
-    createWirePath(
-      [
-        { x: dims.centerX + width / 2, y: rectY },
-        { x: dims.centerX + width / 3, y: dims.topY - depth },
-      ],
-      { width: 1.4 },
-    ),
-    createWirePath(
-      [
-        { x: dims.centerX - width / 2, y: rectY + height },
-        { x: dims.centerX - width / 3, y: dims.topY + depth * 0.15 },
-      ],
-      { width: 1.2 },
-    ),
-    createWirePath(
-      [
-        { x: dims.centerX + width / 2, y: rectY + height },
-        { x: dims.centerX + width / 3, y: dims.topY + depth * 0.15 },
-      ],
-      { width: 1.2 },
-    ),
+  const points =
+    side === 'left'
+      ? [
+          { x: 0, y: 0 },
+          { x: dims.leftFarX, y: dims.topY },
+          { x: dims.leftNearX, y: dims.bottomY },
+          { x: 0, y: dims.bottomY },
+        ]
+      : [
+          { x: dims.rightNearX, y: dims.bottomY },
+          { x: dims.rightFarX, y: dims.topY },
+          { x: dims.width, y: 0 },
+          { x: dims.width, y: dims.bottomY },
+        ];
+  const tintRatio = side === 'left' ? 0.45 : 0.55;
+  const wallColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, tintRatio);
+  const layers: string[] = [
+    `<polygon points="${polygonPoints(points)}" fill="${wallColor}" opacity="0.95" />`,
   ];
-  if (!forwardOpen) {
-    depthLines.push(
-      createWirePath(
-        [
-          { x: rectX, y: rectY },
-          { x: rectX + width, y: rectY + height },
-        ],
-        { width: 1.2 },
-      ),
-    );
-    depthLines.push(
-      createWirePath(
-        [
-          { x: rectX + width, y: rectY },
-          { x: rectX, y: rectY + height },
-        ],
-        { width: 1.2 },
-      ),
+  const rows = 5;
+  for (let i = 1; i < rows; i += 1) {
+    const ratio = i / rows;
+    const start =
+      side === 'left'
+        ? { x: lerp(0, dims.leftNearX, ratio), y: lerp(0, dims.bottomY, ratio) }
+        : { x: lerp(dims.rightNearX, dims.width, ratio), y: lerp(dims.bottomY, 0, ratio) };
+    const end =
+      side === 'left'
+        ? { x: lerp(0, dims.leftFarX, ratio), y: lerp(0, dims.topY, ratio) }
+        : { x: lerp(dims.rightFarX, dims.width, ratio), y: lerp(dims.topY, 0, ratio) };
+    layers.push(
+      `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.7" />`,
     );
   }
-  return [doorRect, ...depthLines].join('\n');
+  if (hasOpening) {
+    const doorWidth = 26;
+    const doorHeight = 32;
+    const offsetX =
+      side === 'left' ? Math.max(2, dims.leftNearX - doorWidth - 6) : dims.rightNearX + 6;
+    layers.push(
+      `<rect x="${offsetX}" y="${dims.bottomY - doorHeight - 12}" width="${doorWidth}" height="${doorHeight}" fill="${BACKGROUND_COLOR}" opacity="0.95" />`,
+    );
+  }
+  return layers.join('\n');
 }
 
-function buildDirectionOverlay(openDirections: Direction[], dims: WireframeDimensions): string {
-  const overlays: string[] = [];
-  if (openDirections.includes('north')) {
-    overlays.push(
-      createWirePath(
-        [
-          { x: dims.centerX, y: dims.bottomY - 20 },
-          { x: dims.centerX, y: dims.topY - 20 },
-        ],
-        { dash: '4 10', width: 1.6 },
-      ),
+function buildFarWallSvg(
+  dims: WireframeDimensions,
+  forwardOpen: boolean,
+  variant: MazePreviewVariant,
+): string {
+  const wallWidth = dims.rightFarX - dims.leftFarX;
+  const wallHeight = Math.max(18, wallWidth * 0.35);
+  const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.65);
+  const parts: string[] = [
+    `<rect x="${dims.leftFarX}" y="${dims.topY - wallHeight / 2}" width="${wallWidth}" height="${wallHeight}" fill="${color}" opacity="0.95" />`,
+  ];
+  const mortarRows = 3;
+  for (let i = 1; i < mortarRows; i += 1) {
+    const y = dims.topY - wallHeight / 2 + (wallHeight / mortarRows) * i;
+    parts.push(
+      `<line x1="${dims.leftFarX}" y1="${y}" x2="${dims.rightFarX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.7" opacity="0.7" />`,
     );
   }
-  if (openDirections.includes('south')) {
-    overlays.push(
-      createWirePath(
-        [
-          { x: dims.centerX - 12, y: dims.bottomY },
-          { x: dims.centerX - 4, y: dims.bottomY + 12 },
-          { x: dims.centerX + 12, y: dims.bottomY + 12 },
-        ],
-        { width: 1.4 },
-      ),
+  const bricks = 4;
+  for (let i = 1; i < bricks; i += 1) {
+    const x = dims.leftFarX + (wallWidth / bricks) * i;
+    parts.push(
+      `<line x1="${x}" y1="${dims.topY - wallHeight / 2}" x2="${x}" y2="${dims.topY + wallHeight / 2}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.7" opacity="0.5" />`,
     );
   }
-  if (openDirections.includes('west')) {
-    overlays.push(
-      createWirePath(
-        [
-          { x: dims.leftNearX + 6, y: dims.bottomY - 10 },
-          { x: dims.leftFarX - 8, y: dims.topY + 6 },
-        ],
-        { width: 1.2 },
-      ),
+  if (forwardOpen) {
+    const doorWidth = variant === 'goal' ? wallWidth * 0.4 : wallWidth * 0.3;
+    const doorHeight = wallHeight * 0.7;
+    const doorX = dims.centerX - doorWidth / 2;
+    const doorY = dims.topY - doorHeight / 2;
+    parts.push(
+      `<rect x="${doorX}" y="${doorY}" width="${doorWidth}" height="${doorHeight}" fill="${BACKGROUND_COLOR}" opacity="0.98" />`,
+    );
+    parts.push(
+      `<rect x="${doorX}" y="${doorY}" width="${doorWidth}" height="${doorHeight}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="1.3" opacity="0.8" />`,
     );
   }
-  if (openDirections.includes('east')) {
-    overlays.push(
-      createWirePath(
-        [
-          { x: dims.rightNearX - 6, y: dims.bottomY - 10 },
-          { x: dims.rightFarX + 8, y: dims.topY + 6 },
-        ],
-        { width: 1.2 },
-      ),
-    );
-  }
-  return overlays.join('\n');
+  return parts.join('\n');
+}
+
+function polygonPoints(points: Array<{ x: number; y: number }>): string {
+  return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function createDefaultPreviewClips(): readonly PreviewClip[] {
