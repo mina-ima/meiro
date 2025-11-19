@@ -67,7 +67,7 @@ describe('PlayerView 準備プレビュー', () => {
     expect(screen.queryByRole('group', { name: '準備中プレビュー' })).not.toBeInTheDocument();
   });
 
-  it('プレビュー画像は床グリッドを排し、前方の通路ハイライトを強調する', () => {
+  it('プレビュー画像は赤線ワイヤーフレームで傾き情報を含む', () => {
     const maze = prepareMaze({
       start: { x: 3, y: 2 },
       goal: { x: 16, y: 14 },
@@ -77,18 +77,51 @@ describe('PlayerView 準備プレビュー', () => {
     render(<PlayerView {...baseProps} phase="prep" />);
 
     const image = screen.getByAltText('スタート地点プレビュー映像') as HTMLImageElement;
-    const src = image.getAttribute('src') ?? '';
-
-    expect(src).toContain('data:image/svg+xml;utf8,');
-
-    const [, encodedSvg] = src.split(',', 2);
-    const decodedSvg = decodeURIComponent(encodedSvg ?? '');
+    const decodedSvg = decodeSvgDataUri(image.getAttribute('src'));
 
     expect(decodedSvg).toContain('#ef4444');
     expect(decodedSvg).toContain('wireframe-door');
+    expect(decodedSvg).toContain('data-view-tilt');
     expect(decodedSvg).not.toContain('#0f172a');
   });
+
+  it('プレビューの各クリップで傾きが異なる', () => {
+    const maze = prepareMaze({
+      start: { x: 2, y: 1 },
+      goal: { x: 19, y: 18 },
+    });
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    const image = screen.getByRole('img') as HTMLImageElement;
+    const firstTilt = extractTilt(image.getAttribute('src'));
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const secondTilt = extractTilt(image.getAttribute('src'));
+    expect(firstTilt).not.toBe(secondTilt);
+  });
 });
+
+function decodeSvgDataUri(src: string | null): string {
+  if (!src) {
+    return '';
+  }
+  const [, encodedSvg] = src.split(',', 2);
+  return decodeURIComponent(encodedSvg ?? '');
+}
+
+function extractTilt(src: string | null): string {
+  const decoded = decodeSvgDataUri(src);
+  const match = decoded.match(/data-view-tilt="([^"]+)"/);
+  if (!match) {
+    return '';
+  }
+  return match[1];
+}
 
 function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
   act(() => {

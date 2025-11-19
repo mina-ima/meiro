@@ -517,7 +517,7 @@ function createStartClip(cell: ServerMazeCell): PreviewClip {
     title: 'スタート地点プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(openDirections, 'start'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'start'),
     previewAlt: 'スタート地点プレビュー映像',
   };
 }
@@ -532,7 +532,7 @@ function createCorridorClip(cell: ServerMazeCell): PreviewClip {
     title: '迷路分岐プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(openDirections, 'junction'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'junction'),
     previewAlt: '迷路分岐プレビュー映像',
   };
 }
@@ -550,7 +550,7 @@ function createGoalClip(cell: ServerMazeCell): PreviewClip {
     title: 'ゴール直前プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(openDirections, 'goal'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'goal'),
     previewAlt: 'ゴールプレビュー映像',
   };
 }
@@ -649,60 +649,52 @@ function selectCorridorCell(
 type MazePreviewVariant = 'start' | 'junction' | 'goal';
 
 function createPerspectivePreviewSvg(
+  cell: ServerMazeCell,
   openDirections: Direction[],
   variant: MazePreviewVariant,
 ): string {
-  const dims = {
-    width: 320,
-    height: 180,
-    topY: 38,
-    bottomY: 170,
-    leftNearX: 38,
-    rightNearX: 282,
-    leftFarX: 120,
-    rightFarX: 200,
-    centerX: 160,
-  } as const;
-
-  const horizontalLines = buildHorizontalWireLines(dims, 5);
-  const verticalLines = buildVerticalWireLines(dims, 3);
-  const dotRows = buildDotRows(dims, 4, 5);
-  const door = buildDoorSvg(dims, variant);
-  const directionOverlay = buildDirectionOverlay(openDirections, dims);
+  const view = deriveViewParameters(cell, openDirections, variant);
+  const horizontalLines = buildHorizontalWireLines(view.dims, 5);
+  const verticalLines = buildVerticalWireLines(view.dims, 3);
+  const dotRows = buildDotRows(view.dims, 4, 5);
+  const door = buildDoorSvg(view.dims, variant, openDirections.includes('north'));
+  const directionOverlay = buildDirectionOverlay(openDirections, view.dims);
 
   const outerWalls = [
     createWirePath(
       [
-        { x: dims.leftNearX, y: dims.bottomY },
-        { x: dims.leftFarX, y: dims.topY },
+        { x: view.dims.leftNearX, y: view.dims.bottomY },
+        { x: view.dims.leftFarX, y: view.dims.topY },
       ],
       { width: 2.4 },
     ),
     createWirePath(
       [
-        { x: dims.rightNearX, y: dims.bottomY },
-        { x: dims.rightFarX, y: dims.topY },
+        { x: view.dims.rightNearX, y: view.dims.bottomY },
+        { x: view.dims.rightFarX, y: view.dims.topY },
       ],
       { width: 2.4 },
     ),
     createWirePath(
       [
-        { x: dims.leftNearX, y: dims.bottomY },
-        { x: dims.rightNearX, y: dims.bottomY },
+        { x: view.dims.leftNearX, y: view.dims.bottomY },
+        { x: view.dims.rightNearX, y: view.dims.bottomY },
       ],
       { width: 2.4 },
     ),
   ];
 
   return createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dims.width} ${dims.height}">
-      <rect width="${dims.width}" height="${dims.height}" fill="${BACKGROUND_COLOR}" />
-      ${outerWalls.join('\n')}
-      ${horizontalLines}
-      ${verticalLines}
-      ${dotRows}
-      ${door}
-      ${directionOverlay}
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${view.dims.width} ${view.dims.height}">
+      <rect width="${view.dims.width}" height="${view.dims.height}" fill="${BACKGROUND_COLOR}" />
+      <g data-view-tilt="${view.tilt.toFixed(2)}">
+        ${outerWalls.join('\n')}
+        ${horizontalLines}
+        ${verticalLines}
+        ${dotRows}
+        ${door}
+        ${directionOverlay}
+      </g>
     </svg>
   `);
 }
@@ -718,6 +710,56 @@ type WireframeDimensions = {
   rightFarX: number;
   centerX: number;
 };
+
+function deriveViewParameters(
+  cell: ServerMazeCell,
+  openDirections: Direction[],
+  variant: MazePreviewVariant,
+): { dims: WireframeDimensions; tilt: number } {
+  const baseDims: WireframeDimensions = {
+    width: 320,
+    height: 180,
+    topY: 38,
+    bottomY: 170,
+    leftNearX: 38,
+    rightNearX: 282,
+    leftFarX: 120,
+    rightFarX: 200,
+    centerX: 160,
+  };
+  const seed = `${cell.x},${cell.y},${variant}`;
+  const rng = createSeededRandom(seed);
+  let tilt = (rng() - 0.5) * 0.4;
+  if (openDirections.includes('east') && !openDirections.includes('west')) {
+    tilt += 0.18;
+  }
+  if (openDirections.includes('west') && !openDirections.includes('east')) {
+    tilt -= 0.18;
+  }
+  const clampedTilt = clamp(tilt, -0.35, 0.35);
+  const horizonShift =
+    (variant === 'goal' ? -6 : variant === 'junction' ? -2 : 3) +
+    (openDirections.includes('north') ? -4 : 3);
+  const farShift = clampedTilt * 36;
+  const centerShift = clampedTilt * 20;
+
+  const dims: WireframeDimensions = {
+    width: baseDims.width,
+    height: baseDims.height,
+    topY: baseDims.topY + horizonShift,
+    bottomY: baseDims.bottomY,
+    leftNearX: baseDims.leftNearX,
+    rightNearX: baseDims.rightNearX,
+    leftFarX: baseDims.leftFarX + farShift,
+    rightFarX: baseDims.rightFarX + farShift,
+    centerX: baseDims.centerX + centerShift,
+  };
+  return { dims, tilt: clampedTilt };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 function createWirePath(
   points: Array<{ x: number; y: number }>,
@@ -807,7 +849,11 @@ function buildDotRows(dims: WireframeDimensions, columns: number, rows: number):
   return dots.join('\n');
 }
 
-function buildDoorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): string {
+function buildDoorSvg(
+  dims: WireframeDimensions,
+  variant: MazePreviewVariant,
+  forwardOpen: boolean,
+): string {
   const baseWidth = variant === 'goal' ? 52 : variant === 'junction' ? 58 : 64;
   const width = baseWidth;
   const height = Math.max(18, width * 0.45);
@@ -846,6 +892,26 @@ function buildDoorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): s
       { width: 1.2 },
     ),
   ];
+  if (!forwardOpen) {
+    depthLines.push(
+      createWirePath(
+        [
+          { x: rectX, y: rectY },
+          { x: rectX + width, y: rectY + height },
+        ],
+        { width: 1.2 },
+      ),
+    );
+    depthLines.push(
+      createWirePath(
+        [
+          { x: rectX + width, y: rectY },
+          { x: rectX, y: rectY + height },
+        ],
+        { width: 1.2 },
+      ),
+    );
+  }
   return [doorRect, ...depthLines].join('\n');
 }
 
@@ -903,6 +969,9 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
   const startDirections: Direction[] = ['north', 'east'];
   const junctionDirections: Direction[] = ['north', 'west', 'east'];
   const goalDirections: Direction[] = ['north'];
+  const dummyStart = createDummyCellForDirections(startDirections, 0);
+  const dummyJunction = createDummyCellForDirections(junctionDirections, 1);
+  const dummyGoal = createDummyCellForDirections(goalDirections, 2);
 
   return [
     {
@@ -910,7 +979,7 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: 'スタート地点プレビュー',
       description: `スタート近辺。${describeOpenDirections(startDirections)}`,
       hint: 'スタート直後の導線をイメージしておくと迷いません。',
-      previewImage: createPerspectivePreviewSvg(startDirections, 'start'),
+      previewImage: createPerspectivePreviewSvg(dummyStart, startDirections, 'start'),
       previewAlt: 'スタート地点プレビュー映像',
     },
     {
@@ -918,7 +987,7 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: '迷路分岐プレビュー',
       description: `複雑な分岐。${describeOpenDirections(junctionDirections)}`,
       hint: '二手目までの動きを決めて、角で減速しないようにしましょう。',
-      previewImage: createPerspectivePreviewSvg(junctionDirections, 'junction'),
+      previewImage: createPerspectivePreviewSvg(dummyJunction, junctionDirections, 'junction'),
       previewAlt: '迷路分岐プレビュー映像',
     },
     {
@@ -926,10 +995,24 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: 'ゴール直前プレビュー',
       description: `ゴール周辺。${describeOpenDirections(goalDirections)}光源を追いかけましょう。`,
       hint: '差し込む光を目印に、最後のコーナーで減速を抑えてください。',
-      previewImage: createPerspectivePreviewSvg(goalDirections, 'goal'),
+      previewImage: createPerspectivePreviewSvg(dummyGoal, goalDirections, 'goal'),
       previewAlt: 'ゴールプレビュー映像',
     },
   ] as const;
+}
+
+function createDummyCellForDirections(directions: Direction[], index: number): ServerMazeCell {
+  const walls = {
+    top: !directions.includes('north'),
+    right: !directions.includes('east'),
+    bottom: !directions.includes('south'),
+    left: !directions.includes('west'),
+  } as const;
+  return {
+    x: index * 3 + 1,
+    y: index * 5 + 2,
+    walls,
+  } as ServerMazeCell;
 }
 
 function createSeededRandom(seed: string): () => number {
