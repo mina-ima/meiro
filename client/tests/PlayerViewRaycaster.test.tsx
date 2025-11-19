@@ -326,7 +326,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(10);
   });
 
-  it('正面が抜けている場合は床の奥行きレイヤーを描き、壁列を減らす', () => {
+  it('正面が抜けていても赤い壁列は均一に描画される', () => {
     castRaysMock.mockReturnValue([
       { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 1 },
       { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0 },
@@ -352,16 +352,7 @@ describe('PlayerView レイキャスト仕様', () => {
       }
       return operation.fillStyle.startsWith('rgba(239, 68, 68');
     });
-    expect(wallColumns.length).toBe(2);
-
-    const floorLayers = fakeContext.operations.filter((operation) => {
-      if (typeof operation.fillStyle !== 'string') {
-        return false;
-      }
-      return operation.fillStyle.startsWith('rgba(56, 189, 248');
-    });
-
-    expect(floorLayers.length).toBeGreaterThan(0);
+    expect(wallColumns.length).toBeGreaterThanOrEqual(4);
   });
 
   it('境界の壁に命中した中央レイは距離4で減光する', async () => {
@@ -488,7 +479,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(fakeContext.canvas.dataset.viewRightDepth).toBe(PLAYER_VIEW_RANGE.toFixed(2));
   });
 
-  it('4マス先は黒フォグで覆い床グローが抑制される', () => {
+  it('追加のフォグや床グローを描かず線画に集中する', () => {
     castRaysMock.mockReturnValue([
       { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 0.9 },
       { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0 },
@@ -514,7 +505,7 @@ describe('PlayerView レイキャスト仕様', () => {
       }
       return operation.fillStyle.startsWith('rgba(0, 0, 0');
     });
-    expect(fogLayers.length).toBeGreaterThan(0);
+    expect(fogLayers.length).toBe(0);
 
     const glowLayers = fakeContext.operations.filter((operation) => {
       if (typeof operation.fillStyle !== 'string') {
@@ -522,13 +513,10 @@ describe('PlayerView レイキャスト仕様', () => {
       }
       return operation.fillStyle.startsWith('rgba(56, 189, 248');
     });
-    expect(glowLayers.length).toBeGreaterThan(0);
-    const highestGlow = Math.min(...glowLayers.map((layer) => layer.y));
-    const lowestFog = Math.min(...fogLayers.map((layer) => layer.y));
-    expect(lowestFog).toBeLessThan(highestGlow);
+    expect(glowLayers.length).toBe(0);
   });
 
-  it('閉じた壁面にはテクスチャストライプを描画する', () => {
+  it('閉じた壁面は赤いドットのみで構成される', () => {
     castRaysMock.mockReturnValue([
       { tile: { x: 1, y: 1 }, distance: 0.6, angle: -0.3, intensity: 1 },
       { tile: { x: 2, y: 1 }, distance: 0.7, angle: 0, intensity: 0.9 },
@@ -548,14 +536,100 @@ describe('PlayerView レイキャスト仕様', () => {
     flushAnimationFrame(rafCallbacks, 0);
     flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
 
-    const textureLayers = fakeContext.operations.filter((operation) => {
+    const dotLayers = fakeContext.operations.filter((operation) => {
       if (typeof operation.fillStyle !== 'string') {
         return false;
       }
-      return operation.fillStyle.startsWith('rgba(252, 165, 165');
+      const isRed =
+        operation.fillStyle === '#ef4444' || operation.fillStyle.startsWith('rgba(239, 68, 68');
+      const isSmall = operation.width <= 6 && operation.height <= 6;
+      return isRed && isSmall;
     });
 
-    expect(textureLayers.length).toBeGreaterThan(0);
+    expect(dotLayers.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it('黒背景と赤いラインのみで描画する', () => {
+    castRaysMock.mockReturnValue([]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const fillStyles = fakeContext.operations
+      .map((operation) => operation.fillStyle)
+      .filter((style): style is string => typeof style === 'string');
+
+    expect(fillStyles.length).toBeGreaterThan(0);
+    const allowed = fillStyles.every((style) => {
+      return (
+        style === '#000000' ||
+        style.startsWith('rgba(0, 0, 0') ||
+        style === '#ef4444' ||
+        style.startsWith('rgba(239, 68, 68')
+      );
+    });
+    expect(allowed).toBe(true);
+
+    const redDots = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      const isRed = operation.fillStyle.startsWith('rgba(239, 68, 68') || operation.fillStyle === '#ef4444';
+      const isSmall = operation.width <= 6 && operation.height <= 6;
+      return isRed && isSmall;
+    });
+    expect(redDots.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('中央の矩形開口部は破線で描かれる', () => {
+    castRaysMock.mockReturnValue([]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const portalRects = fakeContext.strokes.filter((stroke) => {
+      if (stroke.kind !== 'rect' || !stroke.rect) {
+        return false;
+      }
+      if (typeof stroke.strokeStyle !== 'string') {
+        return false;
+      }
+      const { width, height } = stroke.rect;
+      const isCentered =
+        Math.abs(stroke.rect.x + width / 2 - fakeContext.canvas.width / 2) <
+        fakeContext.canvas.width * 0.05;
+      return (
+        stroke.strokeStyle === '#ef4444' &&
+        width > 10 &&
+        height > 10 &&
+        width < fakeContext.canvas.width * 0.4 &&
+        height < fakeContext.canvas.height * 0.4 &&
+        isCentered &&
+        stroke.lineDash.join(',') === '2,4'
+      );
+    });
+
+    expect(portalRects.length).toBeGreaterThan(0);
   });
 });
 

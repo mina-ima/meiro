@@ -354,8 +354,8 @@
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の新規テストで迷路壁による距離変化と縦線描画の強弱を検証
 - [x] プレイヤービューで dead-end / corner / junction を判別して前方ワイヤーフレームと `dataset` に反映  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の視界シルエット3テストでデータ属性と描画切替を確認
-- [x] プレイヤービューで4マス先を黒フォグで遮光し、近距離の壁にテクスチャストライプを描画  
-  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` のフォグ/テクスチャ検証テストで床グローと黒フォグ、壁テクスチャの出力を確認
+- [x] プレイヤービューを黒背景＋赤ワイヤーフレーム＋ドットのASCII風スタイルへ刷新  
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の新規テストで床/フォグ/多色塗りを排除し、赤ドットの壁面グリッドと破線ポータルのみが描画されることを確認
 
 ---
 
