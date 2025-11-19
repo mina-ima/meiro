@@ -326,6 +326,44 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(10);
   });
 
+  it('正面が抜けている場合は床の奥行きレイヤーを描き、壁列を減らす', () => {
+    castRaysMock.mockReturnValue([
+      { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 1 },
+      { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0 },
+      { tile: { x: 3, y: 1 }, distance: 0.9, angle: 0.2, intensity: 0.9 },
+    ]);
+
+    render(
+      <PlayerView
+        points={0}
+        targetPoints={10}
+        predictionHits={0}
+        phase="explore"
+        timeRemaining={120}
+      />,
+    );
+
+    flushAnimationFrame(rafCallbacks, 0);
+    flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
+
+    const wallColumns = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      return operation.fillStyle.startsWith('rgba(239, 68, 68');
+    });
+    expect(wallColumns.length).toBe(2);
+
+    const floorLayers = fakeContext.operations.filter((operation) => {
+      if (typeof operation.fillStyle !== 'string') {
+        return false;
+      }
+      return operation.fillStyle.startsWith('rgba(56, 189, 248');
+    });
+
+    expect(floorLayers.length).toBeGreaterThan(0);
+  });
+
   it('境界の壁に命中した中央レイは距離4で減光する', async () => {
     const actualRaycaster = await vi.importActual<typeof import('../src/game/Raycaster')>(
       '../src/game/Raycaster',

@@ -348,8 +348,8 @@
 ## 24. 表示改善フィードバック（2025-05-24）
 - [x] プレイヤープレビュー画像で壁/通路コントラストを強調  
   - DoD: `client/tests/PlayerViewPreview.test.tsx` の新規テストで床グリッド非表示と通路ハイライトの強調を検証
-- [x] 探索フェーズのプレイヤービューをASCIIスタイルのワイヤーフレームに刷新  
-  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤線／赤ドットのみの描画と中心ガイド・開口部表現を検証
+- [x] 探索フェーズのプレイヤービューを1点透視のワイヤーフレーム＋床/側壁レイヤーで刷新  
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤線ガイドに加えて床グロー/側壁シルエットと開口部で壁列が抜ける挙動を検証
 - [x] プレイヤービューのレイキャストに迷路セルの壁情報を反映し、距離に応じて縦線の高さ/透明度を変化  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の新規テストで迷路壁による距離変化と縦線描画の強弱を検証
 - [x] プレイヤービューで dead-end / corner / junction を判別して前方ワイヤーフレームと `dataset` に反映  

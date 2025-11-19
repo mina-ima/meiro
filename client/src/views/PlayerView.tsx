@@ -53,6 +53,11 @@ export interface PlayerViewProps {
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 const BACKGROUND_COLOR = '#000000';
 const LINE_COLOR = '#ef4444';
+const CEILING_COLOR = '#030712';
+const FLOOR_GLOW_COLOR = '#38bdf8';
+const FLOOR_TRACK_COLOR = '#f87171';
+const SIDE_LEFT_COLOR = '#be185d';
+const SIDE_RIGHT_COLOR = '#fb7185';
 const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
@@ -75,6 +80,50 @@ interface ViewProfile {
   leftOpen: boolean;
   rightOpen: boolean;
   frontBlocked: boolean;
+}
+
+interface CorridorDimensions {
+  width: number;
+  height: number;
+  topY: number;
+  bottomY: number;
+  leftNearX: number;
+  rightNearX: number;
+  leftFarX: number;
+  rightFarX: number;
+  centerX: number;
+}
+
+function computeCorridorDimensions(
+  canvas: HTMLCanvasElement,
+  profile?: ViewProfile | null,
+): CorridorDimensions {
+  const { width, height } = canvas;
+  const baseTopY = Math.round(height * 0.18);
+  const bottomY = Math.round(height * 0.98);
+  const leftNearX = Math.round(width * 0.12);
+  const rightNearX = width - leftNearX;
+  const baseLeftFar = Math.round(width * 0.34);
+  const baseRightFar = width - baseLeftFar;
+  const centerX = width / 2;
+  const focusRatio = profile ? clamp(profile.focusDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.55;
+  const leftRatio = profile ? clamp(profile.leftDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.45;
+  const rightRatio = profile ? clamp(profile.rightDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.45;
+  const leftFarX = lerp(baseLeftFar, centerX - width * 0.09, leftRatio * 0.9);
+  const rightFarX = lerp(baseRightFar, centerX + width * 0.09, rightRatio * 0.9);
+  const topY = Math.max(4, Math.round(lerp(baseTopY, baseTopY - height * 0.08, 1 - focusRatio)));
+
+  return {
+    width,
+    height,
+    topY,
+    bottomY,
+    leftNearX,
+    rightNearX,
+    leftFarX,
+    rightFarX,
+    centerX,
+  };
 }
 
 export function PlayerView({
@@ -382,6 +431,7 @@ function createBoundaryEnvironment(baseSize: number): RaycasterEnvironment {
 
 function clearScene(context: CanvasRenderingContext2D): void {
   drawWireframeBase(context);
+  drawPerspectiveBackdrop(context);
   drawWireframeCorridor(context);
   resetRayDataset(context.canvas);
 }
@@ -401,40 +451,99 @@ function drawWireframeBase(context: CanvasRenderingContext2D): void {
   context.fillRect(0, 0, width, height);
 }
 
-function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
-  const { width, height } = context.canvas;
-  const topY = Math.round(height * 0.2);
-  const bottomY = Math.round(height * 0.96);
-  const leftNearX = Math.round(width * 0.1);
-  const rightNearX = width - leftNearX;
-  const leftFarBase = Math.round(width * 0.32);
-  const rightFarBase = width - leftFarBase;
-  const centerX = width / 2;
+function drawPerspectiveBackdrop(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
+  const dims = computeCorridorDimensions(context.canvas, profile);
+  drawCeilingLayers(context, dims);
+  drawSidewallLayers(context, dims, 'left', profile?.leftOpen ?? false);
+  drawSidewallLayers(context, dims, 'right', profile?.rightOpen ?? false);
+  drawFloorLayers(context, dims);
+}
 
-  const leftRatio = profile ? clamp(profile.leftDistance / PLAYER_VIEW_RANGE, 0, 1) : 0;
-  const rightRatio = profile ? clamp(profile.rightDistance / PLAYER_VIEW_RANGE, 0, 1) : 0;
+function drawCeilingLayers(context: CanvasRenderingContext2D, dims: CorridorDimensions): void {
+  const layers = 6;
+  for (let i = 0; i < layers; i += 1) {
+    const startRatio = i / layers;
+    const endRatio = (i + 1) / layers;
+    const yStart = dims.topY * startRatio;
+    const yEnd = dims.topY * endRatio;
+    const inset = lerp(0, dims.width * 0.12, endRatio);
+    const alpha = clamp(0.45 - endRatio * 0.35, 0.08, 0.45);
+    context.fillStyle = toRgba(CEILING_COLOR, alpha);
+    context.fillRect(inset, yStart, dims.width - inset * 2, Math.max(1, yEnd - yStart));
+  }
+}
+
+function drawSidewallLayers(
+  context: CanvasRenderingContext2D,
+  dims: CorridorDimensions,
+  side: 'left' | 'right',
+  open: boolean,
+): void {
+  const layers = 18;
+  for (let i = 0; i < layers; i += 1) {
+    const startRatio = i / layers;
+    const endRatio = (i + 1) / layers;
+    const yStart = lerp(dims.bottomY, dims.topY, startRatio);
+    const yEnd = lerp(dims.bottomY, dims.topY, endRatio);
+    const boundary =
+      side === 'left'
+        ? lerp(dims.leftNearX, dims.leftFarX, endRatio)
+        : lerp(dims.rightNearX, dims.rightFarX, endRatio);
+    const baseWidth = dims.width * 0.05 * (1 - endRatio * 0.9);
+    const width = Math.max(2, baseWidth * (open ? 0.3 : 1));
+    const x = side === 'left' ? boundary - width : boundary;
+    const color = side === 'left' ? SIDE_LEFT_COLOR : SIDE_RIGHT_COLOR;
+    const alphaBase = open ? 0.08 : 0.28;
+    const alpha = clamp(alphaBase + (1 - endRatio) * 0.15, alphaBase, 0.65);
+    context.fillStyle = toRgba(color, alpha);
+    context.fillRect(x, yEnd, width, Math.max(1, yStart - yEnd));
+  }
+}
+
+function drawFloorLayers(context: CanvasRenderingContext2D, dims: CorridorDimensions): void {
+  const layers = 24;
+  for (let i = 0; i < layers; i += 1) {
+    const startRatio = i / layers;
+    const endRatio = (i + 1) / layers;
+    const yStart = lerp(dims.bottomY, dims.topY, startRatio);
+    const yEnd = lerp(dims.bottomY, dims.topY, endRatio);
+    const left = lerp(dims.leftNearX, dims.leftFarX, endRatio);
+    const right = lerp(dims.rightNearX, dims.rightFarX, endRatio);
+    const width = Math.max(1, right - left);
+    const alpha = clamp(0.75 - endRatio * 0.6, 0.15, 0.75);
+    context.fillStyle = toRgba(FLOOR_GLOW_COLOR, alpha);
+    context.fillRect(left, yEnd, width, Math.max(1, yStart - yEnd));
+
+    const trackWidth = Math.max(2, width * 0.4);
+    const trackLeft = (left + right) / 2 - trackWidth / 2;
+    context.fillStyle = toRgba(FLOOR_TRACK_COLOR, clamp(alpha - 0.3, 0.08, 0.45));
+    context.fillRect(trackLeft, yEnd, trackWidth, Math.max(1, yStart - yEnd));
+  }
+}
+
+function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
+  const dims = computeCorridorDimensions(context.canvas, profile);
+  const { width, height } = context.canvas;
   const focusRatio = profile ? clamp(profile.focusDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5;
-  const leftFarX = lerp(leftFarBase, centerX - width * 0.08, leftRatio * 0.7);
-  const rightFarX = lerp(rightFarBase, centerX + width * 0.08, rightRatio * 0.7);
 
   applyLineDash(context, []);
   context.lineWidth = Math.max(1, width * 0.003);
   context.strokeStyle = LINE_COLOR;
   applyLineDash(context, profile?.leftOpen ? [12, 10] : []);
-  drawLine(context, leftNearX, bottomY, leftFarX, topY);
+  drawLine(context, dims.leftNearX, dims.bottomY, dims.leftFarX, dims.topY);
   applyLineDash(context, profile?.rightOpen ? [12, 10] : []);
-  drawLine(context, rightNearX, bottomY, rightFarX, topY);
+  drawLine(context, dims.rightNearX, dims.bottomY, dims.rightFarX, dims.topY);
   applyLineDash(context, []);
-  drawLine(context, leftNearX, bottomY, rightNearX, bottomY);
+  drawLine(context, dims.leftNearX, dims.bottomY, dims.rightNearX, dims.bottomY);
 
   context.strokeStyle = LINE_COLOR;
   applyLineDash(context, [8, 6]);
   const centerLineTop = lerp(
-    bottomY,
-    topY,
+    dims.bottomY,
+    dims.topY,
     profile ? clamp(profile.centerDistance / PLAYER_VIEW_RANGE, 0, 1) : 0.5,
   );
-  drawLine(context, centerX, bottomY, centerX, centerLineTop);
+  drawLine(context, dims.centerX, dims.bottomY, dims.centerX, centerLineTop);
   applyLineDash(context, []);
 
   context.strokeStyle = LINE_COLOR;
@@ -443,9 +552,9 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: View
   for (let i = 1; i <= 5; i += 1) {
     const t = i / 6;
     const eased = Math.pow(t, 0.75 + (1 - focusRatio) * 0.2);
-    const y = lerp(bottomY, topY, eased);
-    const leftX = lerp(leftNearX, leftFarX, eased);
-    const rightX = lerp(rightNearX, rightFarX, eased);
+    const y = lerp(dims.bottomY, dims.topY, eased);
+    const leftX = lerp(dims.leftNearX, dims.leftFarX, eased);
+    const rightX = lerp(dims.rightNearX, dims.rightFarX, eased);
     drawLine(context, leftX, y, rightX, y);
   }
   applyLineDash(context, []);
@@ -455,31 +564,47 @@ function drawWireframeCorridor(context: CanvasRenderingContext2D, profile?: View
   const verticalLines = 3;
   for (let i = 1; i <= verticalLines; i += 1) {
     const t = i / (verticalLines + 1);
-    const leftStartX = lerp(leftNearX, centerX - width * 0.05, t * 0.5);
-    const leftEndX = lerp(leftFarX, centerX - width * 0.03, t * 0.35);
-    drawLine(context, leftStartX, bottomY, leftEndX, topY);
-    const rightStartX = lerp(rightNearX, centerX + width * 0.05, t * 0.5);
-    const rightEndX = lerp(rightFarX, centerX + width * 0.03, t * 0.35);
-    drawLine(context, rightStartX, bottomY, rightEndX, topY);
+    const leftStartX = lerp(dims.leftNearX, dims.centerX - width * 0.05, t * 0.5);
+    const leftEndX = lerp(dims.leftFarX, dims.centerX - width * 0.03, t * 0.35);
+    drawLine(context, leftStartX, dims.bottomY, leftEndX, dims.topY);
+    const rightStartX = lerp(dims.rightNearX, dims.centerX + width * 0.05, t * 0.5);
+    const rightEndX = lerp(dims.rightFarX, dims.centerX + width * 0.03, t * 0.35);
+    drawLine(context, rightStartX, dims.bottomY, rightEndX, dims.topY);
   }
   applyLineDash(context, []);
 
   if (!profile?.leftOpen) {
-    drawWallDots(context, leftNearX, leftFarX, centerX - width * 0.06, topY, bottomY, true);
+    drawWallDots(
+      context,
+      dims.leftNearX,
+      dims.leftFarX,
+      dims.centerX - width * 0.06,
+      dims.topY,
+      dims.bottomY,
+      true,
+    );
   } else {
-    drawCornerGuide(context, 'left', leftNearX, leftFarX, topY, bottomY);
+    drawCornerGuide(context, 'left', dims.leftNearX, dims.leftFarX, dims.topY, dims.bottomY);
   }
   if (!profile?.rightOpen) {
-    drawWallDots(context, rightNearX, rightFarX, centerX + width * 0.06, topY, bottomY, false);
+    drawWallDots(
+      context,
+      dims.rightNearX,
+      dims.rightFarX,
+      dims.centerX + width * 0.06,
+      dims.topY,
+      dims.bottomY,
+      false,
+    );
   } else {
-    drawCornerGuide(context, 'right', rightNearX, rightFarX, topY, bottomY);
+    drawCornerGuide(context, 'right', dims.rightNearX, dims.rightFarX, dims.topY, dims.bottomY);
   }
 
   const showFrontPanel = !profile || profile.frontBlocked;
   if (showFrontPanel) {
-    drawFrontPanel(context, centerX, topY, width, height);
+    drawFrontPanel(context, dims.centerX, dims.topY, width, height);
   } else if (profile.silhouette === 'junction') {
-    drawJunctionPanels(context, centerX, topY, width, height);
+    drawJunctionPanels(context, dims.centerX, dims.topY, width, height);
   }
 }
 
@@ -648,14 +773,15 @@ function strokeRectSafe(
 
 function renderRaycastScene(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   drawWireframeBase(context);
+  const profile = hits.length > 0 ? analyzeViewProfile(hits) : undefined;
+  drawPerspectiveBackdrop(context, profile);
 
-  if (hits.length === 0) {
+  if (!profile) {
     resetRayDataset(context.canvas);
     drawWireframeCorridor(context);
     return;
   }
 
-  const profile = analyzeViewProfile(hits);
   drawRayColumns(context, hits, profile);
   drawWireframeCorridor(context, profile);
   updateRayDataset(context.canvas, hits, profile);
@@ -687,6 +813,9 @@ function drawRayColumns(
   const bottomPoints: Array<{ x: number; y: number }> = [];
 
   hits.forEach((hit, index) => {
+    if (!hit.tile) {
+      return;
+    }
     const normalizedDistance = clamp(hit.distance / PLAYER_VIEW_RANGE, 0, 1);
     const depthFactor = 1 - normalizedDistance ** 0.85;
     const columnHeight = Math.max(minHeight, viewHeight * depthFactor);
