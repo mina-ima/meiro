@@ -84,7 +84,7 @@ describe('PlayerView 準備プレビュー', () => {
     expect(decodedSvg).not.toContain('wireframe-door');
   });
 
-  it('プレビューの各クリップで傾きが異なる', () => {
+  it('プレビューの傾きは常に0で正面を維持する', () => {
     const maze = prepareMaze({
       start: { x: 2, y: 1 },
       goal: { x: 19, y: 18 },
@@ -101,7 +101,8 @@ describe('PlayerView 準備プレビュー', () => {
     });
 
     const secondTilt = extractTilt(image.getAttribute('src'));
-    expect(firstTilt).not.toBe(secondTilt);
+    expect(firstTilt).toBe('0.00');
+    expect(secondTilt).toBe('0.00');
   });
 
   it('分岐クリップでは左右の開口部がSVGに含まれる', () => {
