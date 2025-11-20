@@ -60,9 +60,7 @@ const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
 const JUNCTION_FRONT_THRESHOLD = PLAYER_VIEW_RANGE * 0.65;
-const SIDE_OPENING_DEPTH = 0.58;
-const SIDE_OPENING_LENGTH_RATIO = 0.24;
-const REAR_EXIT_DEPTH_RATIO = 0.12;
+const SIDE_OPENING_DEPTH = 0.5;
 
 type ViewSilhouette =
   | 'dead-end'
@@ -1171,8 +1169,7 @@ function createSideOpeningGeometry(
   dims: WireframeDimensions,
   side: 'left' | 'right',
 ): SideOpeningGeometry {
-  const depthRatio = clamp(SIDE_OPENING_DEPTH, 0.25, 0.8);
-  const nextDepthRatio = clamp(depthRatio + 0.13, 0, 0.95);
+  const depthRatio = clamp(SIDE_OPENING_DEPTH, 0.35, 0.7);
   const direction = side === 'left' ? -1 : 1;
   const nearEdgeX = side === 'left' ? dims.leftNearX : dims.rightNearX;
   const farEdgeX = side === 'left' ? dims.leftFarX : dims.rightFarX;
@@ -1180,34 +1177,48 @@ function createSideOpeningGeometry(
     x: lerp(nearEdgeX, farEdgeX, depthRatio),
     y: lerp(dims.bottomY, dims.topY, depthRatio),
   };
-  const innerBack = {
-    x: lerp(nearEdgeX, farEdgeX, nextDepthRatio),
-    y: lerp(dims.bottomY, dims.topY, nextDepthRatio),
-  };
-  const corridorWidthNear = dims.width * (SIDE_OPENING_LENGTH_RATIO * 1.1);
-  const corridorWidthFar = corridorWidthNear * 0.65;
-  const floorRiseNear = dims.height * 0.02;
-  const floorRiseFar = dims.height * 0.065;
-  const outerFront = {
-    x: innerFront.x + direction * corridorWidthNear,
-    y: innerFront.y - floorRiseNear,
-  };
-  const outerBack = {
-    x: innerBack.x + direction * corridorWidthFar,
-    y: innerBack.y - floorRiseFar,
-  };
-  const doorWidth = clamp(dims.width * 0.06, 12, 26);
-  const doorHeight = clamp(dims.height * 0.28, 28, 54);
-  const doorX = side === 'left' ? innerFront.x - doorWidth : innerFront.x;
+  const wallTopY = getWallTopY(dims);
+  const visibleWallHeight = dims.bottomY - wallTopY;
+  const doorWidth = clamp(dims.width * 0.09, 18, 36);
+  const doorHeight = clamp(visibleWallHeight * 0.55, 28, 64);
   const doorBottomY = innerFront.y;
-  const doorY = Math.max(4, doorBottomY - doorHeight);
-  const farWallWidth = corridorWidthFar * 0.4;
-  const farWallHeight = Math.max(16, doorHeight * 0.55);
+  const doorX = side === 'left' ? innerFront.x - doorWidth : innerFront.x;
+  const doorY = Math.max(wallTopY + 4, doorBottomY - doorHeight);
+
+  const baseLeftX = Math.min(doorX, doorX + doorWidth);
+  const baseRightX = Math.max(doorX, doorX + doorWidth);
+  const farFloorY = lerp(doorBottomY, doorY + doorHeight * 0.28, 0.65);
+  const corridorWidth = (baseRightX - baseLeftX) * 0.5;
+  const centerShift = direction * (baseRightX - baseLeftX) * 0.15;
+  const farCenter = clamp(
+    (baseLeftX + baseRightX) / 2 + centerShift,
+    baseLeftX + corridorWidth / 2,
+    baseRightX - corridorWidth / 2,
+  );
+  const farLeftX = farCenter - corridorWidth / 2;
+  const farRightX = farCenter + corridorWidth / 2;
+
+  const floorPoints: SideOpeningGeometry['corridor']['floor'] = [
+    { x: baseLeftX, y: doorBottomY },
+    { x: baseRightX, y: doorBottomY },
+    { x: farRightX, y: farFloorY },
+    { x: farLeftX, y: farFloorY },
+  ];
+
+  const farWallHeight = doorHeight * 0.35;
+  const farWallWidth = corridorWidth * 0.75;
+  const farWallCenter = clamp(
+    farCenter + direction * (baseRightX - baseLeftX) * 0.05,
+    baseLeftX + farWallWidth / 2,
+    baseRightX - farWallWidth / 2,
+  );
+  const farWallBottomY = farFloorY - farWallHeight * 0.05;
+  const farWallTopY = farWallBottomY - farWallHeight;
   const farWallPoints: SideOpeningGeometry['corridor']['farWall'] = [
-    { x: outerBack.x, y: outerBack.y },
-    { x: outerBack.x + direction * farWallWidth, y: outerBack.y - floorRiseFar * 0.2 },
-    { x: outerBack.x + direction * farWallWidth, y: outerBack.y - farWallHeight },
-    { x: outerBack.x, y: outerBack.y - farWallHeight * 1.05 },
+    { x: farWallCenter - farWallWidth / 2, y: farWallBottomY },
+    { x: farWallCenter + farWallWidth / 2, y: farWallBottomY },
+    { x: farWallCenter + farWallWidth / 2, y: farWallTopY },
+    { x: farWallCenter - farWallWidth / 2, y: farWallTopY },
   ];
 
   return {
@@ -1219,7 +1230,7 @@ function createSideOpeningGeometry(
       height: doorHeight,
     },
     corridor: {
-      floor: [innerFront, outerFront, outerBack, innerBack],
+      floor: floorPoints,
       farWall: farWallPoints,
     },
   };
@@ -1227,12 +1238,12 @@ function createSideOpeningGeometry(
 
 function buildDoorwayBackground(opening: SideOpeningGeometry): string {
   const { x, y, width, height } = opening.door;
-  return `<rect data-doorway="${opening.side}" x="${x}" y="${y}" width="${width}" height="${height}" fill="${BACKGROUND_COLOR}" opacity="0.97" />`;
+  return `<rect data-doorway="${opening.side}" x="${x}" y="${y}" width="${width}" height="${height}" fill="#050101" opacity="0.85" />`;
 }
 
 function buildDoorwayFrame(opening: SideOpeningGeometry): string {
   const { x, y, width, height } = opening.door;
-  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="1.2" opacity="0.85" />`;
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" opacity="0.9" />`;
 }
 
 function buildSideCorridorSvg(opening: SideOpeningGeometry): string {
@@ -1240,18 +1251,41 @@ function buildSideCorridorSvg(opening: SideOpeningGeometry): string {
     corridor: { floor, farWall },
     side,
   } = opening;
-  const [innerFront, outerFront, outerBack, innerBack] = floor;
+  const [nearLeft, nearRight, farRight, farLeft] = floor;
   const floorFill = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.35);
-  const wallFill = mixHexColors(BRICK_FAR_COLOR, '#000000', 0.4);
-  const stroke = mixHexColors(BRICK_LINE_COLOR, BRICK_NEAR_COLOR, 0.35);
+  const wallFill = mixHexColors(BRICK_FAR_COLOR, '#050505', 0.6);
+  const mortar = mixHexColors(BRICK_LINE_COLOR, BRICK_NEAR_COLOR, 0.35);
+  const rows = 3;
+  const cols = 2;
+  const lines: string[] = [];
+  for (let i = 1; i <= rows; i += 1) {
+    const t = i / (rows + 1);
+    const y = lerp(nearLeft.y, farLeft.y, t);
+    const leftX = lerp(nearLeft.x, farLeft.x, t);
+    const rightX = lerp(nearRight.x, farRight.x, t);
+    lines.push(
+      `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${mortar}" stroke-width="0.6" opacity="0.75" />`,
+    );
+  }
+  for (let i = 1; i <= cols; i += 1) {
+    const offset = i / (cols + 1);
+    const start = {
+      x: lerp(nearLeft.x, nearRight.x, offset),
+      y: nearLeft.y,
+    };
+    const end = {
+      x: lerp(farLeft.x, farRight.x, offset),
+      y: farLeft.y,
+    };
+    lines.push(
+      `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${mortar}" stroke-width="0.55" opacity="0.65" />`,
+    );
+  }
   return `
     <g data-side-corridor="${side}">
-      <polygon points="${polygonPoints(floor)}" fill="${floorFill}" opacity="0.94" />
+      <polygon points="${polygonPoints(floor)}" fill="${floorFill}" opacity="0.95" />
       <polygon points="${polygonPoints(farWall)}" fill="${wallFill}" opacity="0.95" />
-      <line x1="${innerFront.x}" y1="${innerFront.y}" x2="${innerBack.x}" y2="${innerBack.y}" stroke="${stroke}" stroke-width="0.8" opacity="0.8" />
-      <line x1="${outerFront.x}" y1="${outerFront.y}" x2="${outerBack.x}" y2="${outerBack.y}" stroke="${stroke}" stroke-width="0.8" opacity="0.65" />
-      <line x1="${innerFront.x}" y1="${innerFront.y}" x2="${outerFront.x}" y2="${outerFront.y}" stroke="${stroke}" stroke-width="0.8" opacity="0.65" />
-      <line x1="${innerBack.x}" y1="${innerBack.y}" x2="${outerBack.x}" y2="${outerBack.y}" stroke="${stroke}" stroke-width="0.8" opacity="0.65" />
+      ${lines.join('\n')}
     </g>
   `;
 }
@@ -1260,19 +1294,20 @@ function buildRearExitSvg(dims: WireframeDimensions, backwardOpen: boolean): str
   if (!backwardOpen) {
     return '';
   }
-  const width = dims.width * 0.16;
-  const bottomY = dims.bottomY - 2;
-  const topY = lerp(dims.bottomY, dims.topY, REAR_EXIT_DEPTH_RATIO * 0.6);
+  const width = dims.width * 0.1;
+  const height = Math.max(6, (dims.bottomY - dims.topY) * 0.05);
+  const bottomY = dims.bottomY - 1;
+  const topY = bottomY - height;
   const left = dims.centerX - width / 2;
   const right = dims.centerX + width / 2;
   const points = [
-    { x: left + width * 0.15, y: topY },
-    { x: right - width * 0.15, y: topY },
+    { x: left + width * 0.2, y: topY },
+    { x: right - width * 0.2, y: topY },
     { x: right, y: bottomY },
     { x: left, y: bottomY },
   ];
-  const fill = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.22);
-  return `<polygon data-backward-passage="true" points="${polygonPoints(points)}" fill="${fill}" opacity="0.6" />`;
+  const fill = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.2);
+  return `<polygon data-backward-passage="true" points="${polygonPoints(points)}" fill="${fill}" opacity="0.35" />`;
 }
 
 type WireframeDimensions = {
@@ -1321,18 +1356,17 @@ function deriveViewParameters(
   const width = 320;
   const height = 180;
   const centerX = width / 2;
-  const baseTop = Math.round(height * 0.42);
+  const baseTop = Math.round(height * 0.38);
   const bottomY = Math.round(height * 0.97);
-  const forwardBias = openDirections.includes('north') ? -4 : 4;
-  const variantShift = variant === 'goal' ? -6 : variant === 'junction' ? -2 : 2;
+  const openOffset = openDirections.includes('north') ? -2 : 2;
+  const variantOffset = variant === 'goal' ? -2 : variant === 'junction' ? -1 : 0;
   const topY = clamp(
-    baseTop + forwardBias + variantShift,
+    baseTop + openOffset + variantOffset,
     Math.round(height * 0.34),
-    Math.round(height * 0.48),
+    Math.round(height * 0.42),
   );
   const corridorNearWidth = width * 0.62;
-  const forwardOpen = openDirections.includes('north');
-  const corridorFarWidth = corridorNearWidth * (forwardOpen ? 0.34 : 0.28);
+  const corridorFarWidth = corridorNearWidth * 0.3;
 
   const dims: WireframeDimensions = {
     width,
@@ -1355,99 +1389,119 @@ function buildFloorSvg(dims: WireframeDimensions): string {
     { x: dims.rightFarX, y: dims.topY },
     { x: dims.leftFarX, y: dims.topY },
   ];
-  const baseColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.32);
-  const lines: string[] = [`<polygon points="${polygonPoints(quad)}" fill="${baseColor}" />`];
-  const rows = 8;
-  for (let i = 1; i <= rows; i += 1) {
-    const t = i / (rows + 1);
+  const baseColor = BRICK_NEAR_COLOR;
+  const shadingColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.35);
+  const lines: string[] = [
+    `<polygon points="${polygonPoints(quad)}" fill="${baseColor}" />`,
+    `<polygon points="${polygonPoints(quad)}" fill="${shadingColor}" opacity="0.25" />`,
+  ];
+  const rowCount = 9;
+  const rowRatios: number[] = [];
+  for (let i = 0; i <= rowCount; i += 1) {
+    const t = i / rowCount;
     const perspective = 1 - (1 - t) * (1 - t);
+    rowRatios.push(perspective);
+    if (i === 0 || i === rowCount) {
+      continue;
+    }
     const y = lerp(dims.bottomY, dims.topY, perspective);
     const leftX = lerp(dims.leftNearX, dims.leftFarX, perspective);
     const rightX = lerp(dims.rightNearX, dims.rightFarX, perspective);
     lines.push(
-      `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="1" stroke-linecap="round" opacity="0.7" />`,
+      `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.75" />`,
     );
   }
-  const columns = 6;
-  for (let i = 1; i <= columns; i += 1) {
-    const t = i / (columns + 1);
-    const bottom = { x: lerp(dims.leftNearX, dims.rightNearX, t), y: dims.bottomY };
-    const top = { x: lerp(dims.leftFarX, dims.rightFarX, t), y: dims.topY };
-    lines.push(
-      `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.65" />`,
-    );
+
+  for (let row = 0; row < rowCount; row += 1) {
+    const startRatio = rowRatios[row];
+    const endRatio = rowRatios[row + 1];
+    const brickCount = 4 + Math.round((rowCount - row) / 1.4);
+    const offset = row % 2 === 0 ? 0 : 0.5;
+    for (let c = 1; c < brickCount; c += 1) {
+      const normalized = (c + offset) / brickCount;
+      if (normalized >= 1) {
+        continue;
+      }
+      const bottom = {
+        x: lerp(
+          lerp(dims.leftNearX, dims.leftFarX, startRatio),
+          lerp(dims.rightNearX, dims.rightFarX, startRatio),
+          normalized,
+        ),
+        y: lerp(dims.bottomY, dims.topY, startRatio),
+      };
+      const top = {
+        x: lerp(
+          lerp(dims.leftNearX, dims.leftFarX, endRatio),
+          lerp(dims.rightNearX, dims.rightFarX, endRatio),
+          normalized,
+        ),
+        y: lerp(dims.bottomY, dims.topY, endRatio),
+      };
+      lines.push(
+        `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.75" stroke-linecap="round" opacity="0.65" />`,
+      );
+    }
   }
-  const vanishX = dims.centerX;
-  lines.push(
-    `<line x1="${dims.leftNearX}" y1="${dims.bottomY}" x2="${vanishX}" y2="${dims.topY}" stroke="${BRICK_NEAR_COLOR}" stroke-width="1.1" opacity="0.25" />`,
-  );
-  lines.push(
-    `<line x1="${dims.rightNearX}" y1="${dims.bottomY}" x2="${vanishX}" y2="${dims.topY}" stroke="${BRICK_NEAR_COLOR}" stroke-width="1.1" opacity="0.25" />`,
-  );
   return lines.join('\n');
+}
+
+function getWallTopY(dims: WireframeDimensions): number {
+  const wallHeight = dims.bottomY - dims.topY;
+  return Math.max(6, Math.round(dims.topY - wallHeight * 0.6));
 }
 
 function buildWallSvg(dims: WireframeDimensions, side: 'left' | 'right'): string {
   const nearX = side === 'left' ? dims.leftNearX : dims.rightNearX;
   const farX = side === 'left' ? dims.leftFarX : dims.rightFarX;
-  const wallHeight = dims.bottomY - dims.topY;
-  const ceilingNearY = Math.max(8, dims.topY - wallHeight * 0.55);
-  const ceilingFarY = Math.max(4, dims.topY - wallHeight * 0.22);
+  const ceilingY = getWallTopY(dims);
   const points =
     side === 'left'
       ? [
           { x: nearX, y: dims.bottomY },
-          { x: nearX, y: ceilingNearY },
-          { x: farX, y: ceilingFarY },
+          { x: nearX, y: ceilingY },
+          { x: farX, y: ceilingY },
           { x: farX, y: dims.topY },
         ]
       : [
           { x: farX, y: dims.topY },
-          { x: farX, y: ceilingFarY },
-          { x: nearX, y: ceilingNearY },
+          { x: farX, y: ceilingY },
+          { x: nearX, y: ceilingY },
           { x: nearX, y: dims.bottomY },
         ];
-  const tintRatio = side === 'left' ? 0.5 : 0.58;
+  const tintRatio = side === 'left' ? 0.48 : 0.58;
   const wallColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, tintRatio);
   const layers: string[] = [
-    `<polygon points="${polygonPoints(points)}" fill="${wallColor}" opacity="0.96" />`,
+    `<polygon points="${polygonPoints(points)}" fill="${wallColor}" opacity="0.98" />`,
   ];
-  const mortarRows = 6;
+  const mortarRows = 8;
   for (let i = 1; i < mortarRows; i += 1) {
     const ratio = i / mortarRows;
     const start = {
       x: nearX,
-      y: lerp(dims.bottomY, ceilingNearY, ratio),
+      y: lerp(dims.bottomY, ceilingY, ratio),
     };
     const end = {
       x: farX,
-      y: lerp(dims.topY, ceilingFarY, ratio),
+      y: lerp(dims.topY, ceilingY, ratio),
     };
     layers.push(
-      `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.55" />`,
+      `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.8" stroke-linecap="round" opacity="0.5" />`,
     );
   }
-  const mortarCols = 3;
-  const bottomEdge = {
-    start: { x: nearX, y: dims.bottomY },
-    end: { x: farX, y: dims.topY },
-  };
-  const topEdge = {
-    start: { x: nearX, y: ceilingNearY },
-    end: { x: farX, y: ceilingFarY },
-  };
-  for (let i = 1; i <= mortarCols; i += 1) {
-    const ratio = i / (mortarCols + 1);
-    const start = {
-      x: lerp(bottomEdge.start.x, bottomEdge.end.x, ratio),
-      y: lerp(bottomEdge.start.y, bottomEdge.end.y, ratio),
+  const mortarColumns = 3;
+  for (let i = 1; i <= mortarColumns; i += 1) {
+    const ratio = i / (mortarColumns + 1);
+    const bottom = {
+      x: lerp(nearX, farX, ratio),
+      y: lerp(dims.bottomY, dims.topY, ratio),
     };
-    const end = {
-      x: lerp(topEdge.start.x, topEdge.end.x, ratio),
-      y: lerp(topEdge.start.y, topEdge.end.y, ratio),
+    const top = {
+      x: lerp(nearX, farX, ratio),
+      y: ceilingY,
     };
     layers.push(
-      `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.8" stroke-linecap="round" opacity="0.45" />`,
+      `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.75" stroke-linecap="round" opacity="0.4" />`,
     );
   }
   return layers.join('\n');
@@ -1459,57 +1513,94 @@ function buildFarWallSvg(
   variant: MazePreviewVariant,
 ): string {
   const wallState = forwardOpen ? 'open' : 'closed';
-  const wallWidth = dims.rightFarX - dims.leftFarX;
-  const wallHeight = Math.max(26, wallWidth * 0.32);
-  const wallTop = dims.topY - wallHeight;
-  const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.65);
   const parts: string[] = [`<g data-front-wall="${wallState}">`];
+  const wallWidth = dims.rightFarX - dims.leftFarX;
+  const depth = dims.bottomY - dims.topY;
   if (!forwardOpen) {
+    const wallHeight = Math.max(32, depth * 0.45);
+    const wallTop = Math.max(6, dims.topY - wallHeight);
+    const tintShift = variant === 'goal' ? -0.05 : variant === 'junction' ? -0.02 : 0;
+    const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.6 + tintShift);
     parts.push(
-      `<rect x="${dims.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${color}" opacity="0.96" />`,
+      `<rect data-front-wall-fill="true" x="${dims.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${color}" opacity="0.98" />`,
     );
-    const mortarRows = 4;
+    const mortarRows = 5;
     for (let i = 1; i < mortarRows; i += 1) {
       const y = wallTop + (wallHeight / mortarRows) * i;
       parts.push(
-        `<line x1="${dims.leftFarX}" y1="${y}" x2="${dims.rightFarX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.8" opacity="0.65" />`,
+        `<line x1="${dims.leftFarX}" y1="${y}" x2="${dims.rightFarX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.75" opacity="0.7" />`,
       );
     }
-    const bricks = 5;
+    const bricks = 6;
     for (let i = 1; i < bricks; i += 1) {
       const x = dims.leftFarX + (wallWidth / bricks) * i;
       parts.push(
-        `<line x1="${x}" y1="${wallTop}" x2="${x}" y2="${wallTop + wallHeight}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.7" opacity="0.45" />`,
+        `<line x1="${x}" y1="${wallTop}" x2="${x}" y2="${wallTop + wallHeight}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.65" opacity="0.45" />`,
       );
     }
   } else {
-    const stepInset = wallWidth * 0.12;
-    const stepHeight = wallHeight * 0.45;
-    const stepTop = dims.topY - stepHeight;
-    const stepPoints = [
+    const extensionTopY = Math.max(4, dims.topY - depth * 0.18);
+    const nextWidth = wallWidth * 0.6;
+    const nextLeftX = dims.centerX - nextWidth / 2;
+    const nextRightX = dims.centerX + nextWidth / 2;
+    const floorColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.35);
+    const extensionFloor = [
       { x: dims.leftFarX, y: dims.topY },
       { x: dims.rightFarX, y: dims.topY },
-      { x: dims.rightFarX - stepInset, y: stepTop },
-      { x: dims.leftFarX + stepInset, y: stepTop },
+      { x: nextRightX, y: extensionTopY },
+      { x: nextLeftX, y: extensionTopY },
     ];
     parts.push(
-      `<polygon points="${polygonPoints(stepPoints)}" fill="${mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.3)}" opacity="0.95" />`,
+      `<polygon points="${polygonPoints(extensionFloor)}" fill="${floorColor}" opacity="0.92" />`,
     );
-    const doorWidth = (variant === 'goal' ? 0.45 : 0.36) * wallWidth;
-    const doorHeight = wallHeight * 0.85;
-    const doorX = dims.centerX - doorWidth / 2;
-    const doorY = stepTop - doorHeight + 6;
+    for (let i = 1; i <= 2; i += 1) {
+      const t = i / 3;
+      const y = lerp(dims.topY, extensionTopY, t);
+      const leftX = lerp(dims.leftFarX, nextLeftX, t);
+      const rightX = lerp(dims.rightFarX, nextRightX, t);
+      parts.push(
+        `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.65" opacity="0.7" />`,
+      );
+    }
+    for (let i = 1; i <= 2; i += 1) {
+      const offset = i / 3;
+      const start = {
+        x: lerp(dims.leftFarX, dims.rightFarX, offset),
+        y: dims.topY,
+      };
+      const end = {
+        x: lerp(nextLeftX, nextRightX, offset),
+        y: extensionTopY,
+      };
+      parts.push(
+        `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.6" opacity="0.6" />`,
+      );
+    }
+    const extensionCeiling = Math.max(2, extensionTopY - depth * 0.22);
+    const sideShade = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.55);
+    const farShade = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.62);
+    const leftWall = [
+      { x: dims.leftFarX, y: dims.topY },
+      { x: dims.leftFarX, y: extensionCeiling },
+      { x: nextLeftX, y: extensionCeiling },
+      { x: nextLeftX, y: extensionTopY },
+    ];
+    const rightWall = [
+      { x: dims.rightFarX, y: dims.topY },
+      { x: dims.rightFarX, y: extensionCeiling },
+      { x: nextRightX, y: extensionCeiling },
+      { x: nextRightX, y: extensionTopY },
+    ];
+    parts.push(`<polygon points="${polygonPoints(leftWall)}" fill="${sideShade}" opacity="0.9" />`);
+    parts.push(`<polygon points="${polygonPoints(rightWall)}" fill="${farShade}" opacity="0.9" />`);
+    const distantWallHeight = Math.max(16, depth * 0.12);
+    const distantWallWidth = nextWidth * 0.65;
+    const distantBottomY = extensionTopY - distantWallHeight * 0.15;
+    const distantTopY = distantBottomY - distantWallHeight;
+    const distantLeft = dims.centerX - distantWallWidth / 2;
+    const distantColor = mixHexColors(BRICK_FAR_COLOR, '#050505', 0.6);
     parts.push(
-      `<rect x="${doorX}" y="${doorY}" width="${doorWidth}" height="${doorHeight}" fill="#050505" opacity="0.96" />`,
-    );
-    parts.push(
-      `<rect x="${doorX}" y="${doorY}" width="${doorWidth}" height="${doorHeight}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="1.2" opacity="0.75" />`,
-    );
-    const glowWidth = doorWidth * 0.65;
-    const glowX = dims.centerX - glowWidth / 2;
-    const glowHeight = doorHeight * 0.6;
-    parts.push(
-      `<rect x="${glowX}" y="${doorY + doorHeight * 0.15}" width="${glowWidth}" height="${glowHeight}" fill="#ffd8a6" opacity="0.15" />`,
+      `<rect x="${distantLeft}" y="${distantTopY}" width="${distantWallWidth}" height="${distantWallHeight}" fill="${distantColor}" opacity="0.7" />`,
     );
   }
   parts.push('</g>');

@@ -355,7 +355,7 @@
 - [x] プレイヤービューで dead-end / corner / junction を判別して前方ワイヤーフレームと `dataset` に反映  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の視界シルエット3テストでデータ属性と描画切替を確認
 - [x] プレイヤービューと準備プレビューを迷路に沿ったレンガ調一人称ビューへ刷新  
-  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` でレンガ床/壁カラム描画とヒット数に応じた開口部表現を検証し、`client/tests/PlayerViewPreview.test.tsx` でSVGプレビューにレンガ配色と傾き情報が含まれることを確認
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` でレンガ床/壁カラム描画とヒット数に応じた開口部表現を検証し、`client/tests/PlayerViewPreview.test.tsx` でSVGプレビューにレンガ配色と傾き情報が含まれることを確認。クラシックな回廊表現として、床は左右対称の台形グリッド、壁は垂直レンガ面＋矩形の側道開口、前方開口は通路延長で描く。
 
 ---
 
