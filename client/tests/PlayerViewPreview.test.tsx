@@ -211,6 +211,70 @@ describe('PlayerView 準備プレビュー', () => {
     expect(frontWallGroup).not.toMatch(/data-front-wall-fill/);
     expect(frontWallGroup).not.toMatch(/<rect[^>]*>/);
   });
+
+  it('スタートクリップは奥壁を描かず暗く消えていく', () => {
+    const maze = createDarkStartMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    const image = screen.getByAltText('スタート地点プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const frontWallGroup = extractFrontWallGroup(svg);
+
+    expect(frontWallGroup).toContain('data-front-wall="open"');
+    expect(frontWallGroup).not.toMatch(/data-front-wall-fill/);
+    expect(svg).toMatch(/data-depth-fade="start"/);
+  });
+
+  it('分岐クリップでは開いている側の壁が角で途切れる', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const door = extractDoorRect(svg, 'left');
+    const wall = extractWallPolygon(svg, 'left');
+
+    expect(door).not.toBeNull();
+    expect(wall).not.toBeNull();
+    if (!door || !wall) {
+      return;
+    }
+
+    const doorEdgeX = door.x;
+    const doorBottomY = door.y + door.height;
+    const matchingCorner = wall.points.find(
+      (point) => Math.abs(point.x - doorEdgeX) < 1 && point.y >= doorBottomY - 1,
+    );
+
+    expect(matchingCorner).toBeDefined();
+    expect(wall.points.some((point) => point.y <= door.y)).toBe(true);
+  });
+
+  it('ゴールクリップには青空のようなポータルが描かれる', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    const image = screen.getByAltText('ゴールプレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+
+    expect(svg).toMatch(/data-goal-portal="true"/);
+    expect(svg).toMatch(/#6ec3ff/i);
+    expect(svg).toMatch(/#ffffff/i);
+  });
 });
 
 function decodeSvgDataUri(src: string | null): string {
@@ -271,6 +335,24 @@ function extractFrontWallGroup(svg: string): string {
   return match ? match[0] : '';
 }
 
+function extractWallPolygon(svg: string, side: 'left' | 'right') {
+  const match = svg.match(new RegExp(`<polygon[^>]*data-wall-side="${side}"[^>]*>`));
+  if (!match) {
+    return null;
+  }
+  const pointsMatch = match[0].match(/points="([^"]+)"/);
+  if (!pointsMatch) {
+    return null;
+  }
+  const points = pointsMatch[1]
+    .trim()
+    .split(/\s+/)
+    .map((pair) => pair.split(',').map((value) => Number.parseFloat(value)))
+    .filter((coords) => coords.length === 2 && coords.every((value) => Number.isFinite(value)))
+    .map(([x, y]) => ({ x, y }));
+  return { points };
+}
+
 function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
   act(() => {
     useSessionStore.setState((state) => ({
@@ -306,6 +388,16 @@ function createJunctionPreviewMaze(): ServerMazeState {
     start: { x: start.x, y: start.y },
     goal: { x: east.x, y: east.y },
     cells: [start, junction, east, north, south],
+  };
+}
+
+function createDarkStartMaze(): ServerMazeState {
+  const start = createCell(5, 5, { top: true, right: true, bottom: true, left: true });
+  return {
+    seed: 'dark-start',
+    start: { x: start.x, y: start.y },
+    goal: { x: start.x, y: start.y },
+    cells: [start],
   };
 }
 
