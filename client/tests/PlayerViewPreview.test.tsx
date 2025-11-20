@@ -160,6 +160,57 @@ describe('PlayerView 準備プレビュー', () => {
     expect(svg).not.toContain('data-side-corridor="left"');
     expect(svg).not.toContain('data-side-corridor="right"');
   });
+
+  it('分岐クリップの側面ドアは通路中盤に配置される', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const door = extractDoorRect(svg, 'left');
+    const floor = extractBaseFloorQuad(svg);
+
+    expect(door).not.toBeNull();
+    expect(floor).not.toBeNull();
+    if (!door || !floor) {
+      return;
+    }
+
+    const floorBottom = Math.max(...floor.map((point) => point.y));
+    const floorTop = Math.min(...floor.map((point) => point.y));
+    const doorBottom = door.y + door.height;
+    const depthRatio = (floorBottom - doorBottom) / (floorBottom - floorTop);
+
+    expect(depthRatio).toBeGreaterThan(0.55);
+    expect(depthRatio).toBeLessThan(0.7);
+  });
+
+  it('分岐クリップで前方が開いている場合は奥壁が描かれない', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const frontWallGroup = extractFrontWallGroup(svg);
+
+    expect(frontWallGroup).toContain('data-front-wall="open"');
+    expect(frontWallGroup).toContain('data-forward-extension="true"');
+    expect(frontWallGroup).toContain('data-forward-fade="true"');
+    expect(frontWallGroup).not.toMatch(/data-front-wall-fill/);
+    expect(frontWallGroup).not.toMatch(/<rect[^>]*>/);
+  });
 });
 
 function decodeSvgDataUri(src: string | null): string {
@@ -177,6 +228,47 @@ function extractTilt(src: string | null): string {
     return '';
   }
   return match[1];
+}
+
+function extractDoorRect(svg: string, side: 'left' | 'right') {
+  const match = svg.match(new RegExp(`<rect[^>]*data-doorway="${side}"[^>]*>`));
+  if (!match) {
+    return null;
+  }
+  const attributes = Object.fromEntries(
+    Array.from(match[0].matchAll(/([a-zA-Z-]+)="([^"]+)"/g)).map(([, key, value]) => [key, value]),
+  );
+  const parse = (value?: string) => (value ? Number.parseFloat(value) : NaN);
+  const x = parse(attributes.x);
+  const y = parse(attributes.y);
+  const width = parse(attributes.width);
+  const height = parse(attributes.height);
+  if ([x, y, width, height].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+function extractBaseFloorQuad(svg: string) {
+  const match = svg.match(/<polygon[^>]*points="([^"]+)"[^>]*fill="#8c1c1c"[^>]*>/);
+  if (!match) {
+    return null;
+  }
+  const [, pointsText] = match;
+  const coords = pointsText
+    .trim()
+    .split(/\s+/)
+    .map((point) => point.split(',').map((value) => Number.parseFloat(value)))
+    .filter((pair) => pair.length === 2 && pair.every((value) => Number.isFinite(value)));
+  if (coords.length !== 4) {
+    return null;
+  }
+  return coords.map(([x, y]) => ({ x, y }));
+}
+
+function extractFrontWallGroup(svg: string): string {
+  const match = svg.match(/<g[^>]*data-front-wall="open"[^>]*>[\s\S]*?<\/g>/);
+  return match ? match[0] : '';
 }
 
 function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
