@@ -60,6 +60,10 @@ const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
 const JUNCTION_FRONT_THRESHOLD = PLAYER_VIEW_RANGE * 0.65;
+const SIDE_OPENING_DEPTH = 0.58;
+const SIDE_OPENING_LENGTH_RATIO = 0.24;
+const SIDE_OPENING_HEIGHT_RATIO = 0.12;
+const REAR_EXIT_DEPTH_RATIO = 0.12;
 
 type ViewSilhouette =
   | 'dead-end'
@@ -777,14 +781,40 @@ function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly Pre
     return getDefaultPreviewClips();
   }
 
+  const lookup = createCellLookup(maze.cells);
   const rng = createSeededRandom(maze.seed);
   const corridorCell = selectCorridorCell(maze, startCell, goalCell, rng);
+  const startDirections = getOpenDirections(startCell);
+  const corridorDirections = getOpenDirections(corridorCell);
+  const goalDirections = getOpenDirections(goalCell);
+  const startOrientation = deriveStartOrientation(lookup, startCell, goalCell, startDirections);
+  const goalOrientation = deriveApproachOrientation(
+    lookup,
+    startCell,
+    goalCell,
+    goalDirections,
+    startOrientation,
+  );
+  const corridorOrientation = deriveApproachOrientation(
+    lookup,
+    startCell,
+    corridorCell,
+    corridorDirections,
+    startOrientation,
+  );
 
-  return [createStartClip(startCell), createCorridorClip(corridorCell), createGoalClip(goalCell)];
+  return [
+    createStartClip(startCell, startDirections, startOrientation),
+    createCorridorClip(corridorCell, corridorDirections, corridorOrientation),
+    createGoalClip(goalCell, goalDirections, goalOrientation),
+  ];
 }
 
-function createStartClip(cell: ServerMazeCell): PreviewClip {
-  const openDirections = getOpenDirections(cell);
+function createStartClip(
+  cell: ServerMazeCell,
+  openDirections: Direction[],
+  orientation: Direction,
+): PreviewClip {
   const description = `スタート近辺。${describeOpenDirections(openDirections)}`;
   const hint =
     openDirections.length > 0
@@ -796,13 +826,16 @@ function createStartClip(cell: ServerMazeCell): PreviewClip {
     title: 'スタート地点プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'start'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'start', orientation),
     previewAlt: 'スタート地点プレビュー映像',
   };
 }
 
-function createCorridorClip(cell: ServerMazeCell): PreviewClip {
-  const openDirections = getOpenDirections(cell);
+function createCorridorClip(
+  cell: ServerMazeCell,
+  openDirections: Direction[],
+  orientation: Direction,
+): PreviewClip {
   const description = `分岐ポイント。${describeOpenDirections(openDirections)}`;
   const hint = buildCorridorHint(openDirections);
 
@@ -811,13 +844,16 @@ function createCorridorClip(cell: ServerMazeCell): PreviewClip {
     title: '迷路分岐プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'junction'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'junction', orientation),
     previewAlt: '迷路分岐プレビュー映像',
   };
 }
 
-function createGoalClip(cell: ServerMazeCell): PreviewClip {
-  const openDirections = getOpenDirections(cell);
+function createGoalClip(
+  cell: ServerMazeCell,
+  openDirections: Direction[],
+  orientation: Direction,
+): PreviewClip {
   const description = `ゴール周辺。${describeOpenDirections(openDirections)}光源の位置を覚えましょう。`;
   const hint =
     openDirections.length > 0
@@ -829,7 +865,7 @@ function createGoalClip(cell: ServerMazeCell): PreviewClip {
     title: 'ゴール直前プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'goal'),
+    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'goal', orientation),
     previewAlt: 'ゴールプレビュー映像',
   };
 }
@@ -846,11 +882,33 @@ const DIRECTION_INFO: Record<
   west: { wall: 'left', label: '西側', short: '西' },
 };
 
+const DIRECTION_SEQUENCE: Direction[] = ['north', 'east', 'south', 'west'];
+
+const DIRECTION_VECTORS: Record<Direction, { dx: number; dy: number }> = {
+  north: { dx: 0, dy: -1 },
+  east: { dx: 1, dy: 0 },
+  south: { dx: 0, dy: 1 },
+  west: { dx: -1, dy: 0 },
+};
+
+function isDirectionOpen(cell: ServerMazeCell, direction: Direction): boolean {
+  const wallKey = DIRECTION_INFO[direction].wall;
+  return !cell.walls[wallKey];
+}
+
+function rotateDirection(direction: Direction, steps: number): Direction {
+  const index = DIRECTION_SEQUENCE.indexOf(direction);
+  if (index === -1) {
+    return direction;
+  }
+  const normalized = (index + steps + DIRECTION_SEQUENCE.length) % DIRECTION_SEQUENCE.length;
+  return DIRECTION_SEQUENCE[normalized] ?? direction;
+}
+
 function getOpenDirections(cell: ServerMazeCell): Direction[] {
   const directions: Direction[] = [];
   (Object.keys(DIRECTION_INFO) as Direction[]).forEach((direction) => {
-    const wallKey = DIRECTION_INFO[direction].wall;
-    if (!cell.walls[wallKey]) {
+    if (isDirectionOpen(cell, direction)) {
       directions.push(direction);
     }
   });
@@ -885,6 +943,120 @@ function buildCorridorHint(directions: Direction[]): string {
   }
 
   return '袋小路なので最短で折り返すルートを想定しましょう。';
+}
+
+type MazeCellLookup = Map<string, ServerMazeCell>;
+
+function createCellLookup(cells: ServerMazeCell[]): MazeCellLookup {
+  const lookup: MazeCellLookup = new Map();
+  cells.forEach((cell) => {
+    lookup.set(cellKey(cell.x, cell.y), cell);
+  });
+  return lookup;
+}
+
+function cellKey(x: number, y: number): string {
+  return `${x},${y}`;
+}
+
+function getNeighborCell(
+  cell: ServerMazeCell,
+  direction: Direction,
+  lookup: MazeCellLookup,
+): ServerMazeCell | undefined {
+  const vector = DIRECTION_VECTORS[direction];
+  const key = cellKey(cell.x + vector.dx, cell.y + vector.dy);
+  return lookup.get(key);
+}
+
+function findPathDirections(
+  lookup: MazeCellLookup,
+  start: ServerMazeCell,
+  target: ServerMazeCell,
+): Direction[] {
+  if (start.x === target.x && start.y === target.y) {
+    return [];
+  }
+
+  const startKey = cellKey(start.x, start.y);
+  const targetKey = cellKey(target.x, target.y);
+  const queue: ServerMazeCell[] = [start];
+  const visited = new Set<string>([startKey]);
+  const parents = new Map<string, { key: string; direction: Direction }>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      break;
+    }
+    const currentKey = cellKey(current.x, current.y);
+    if (currentKey === targetKey) {
+      break;
+    }
+    getOpenDirections(current).forEach((direction) => {
+      const neighbor = getNeighborCell(current, direction, lookup);
+      if (!neighbor) {
+        return;
+      }
+      const neighborKey = cellKey(neighbor.x, neighbor.y);
+      if (visited.has(neighborKey)) {
+        return;
+      }
+      visited.add(neighborKey);
+      parents.set(neighborKey, { key: currentKey, direction });
+      queue.push(neighbor);
+    });
+  }
+
+  if (!parents.has(targetKey)) {
+    return [];
+  }
+
+  const path: Direction[] = [];
+  let currentKey = targetKey;
+  while (currentKey !== startKey) {
+    const entry = parents.get(currentKey);
+    if (!entry) {
+      return [];
+    }
+    path.unshift(entry.direction);
+    currentKey = entry.key;
+  }
+  return path;
+}
+
+function fallbackOrientationFromDirections(directions: Direction[]): Direction {
+  return directions[0] ?? 'north';
+}
+
+function deriveStartOrientation(
+  lookup: MazeCellLookup,
+  start: ServerMazeCell,
+  goal: ServerMazeCell,
+  startDirections: Direction[],
+): Direction {
+  const path = findPathDirections(lookup, start, goal);
+  if (path.length > 0) {
+    return path[0];
+  }
+  return fallbackOrientationFromDirections(startDirections);
+}
+
+function deriveApproachOrientation(
+  lookup: MazeCellLookup,
+  start: ServerMazeCell,
+  target: ServerMazeCell,
+  targetDirections: Direction[],
+  fallback: Direction,
+): Direction {
+  const path = findPathDirections(lookup, start, target);
+  if (path.length > 0) {
+    return path[path.length - 1];
+  }
+  if (targetDirections.length > 0) {
+    return targetDirections[0];
+  }
+  return fallback;
 }
 
 function findCell(
@@ -931,26 +1103,159 @@ function createPerspectivePreviewSvg(
   cell: ServerMazeCell,
   openDirections: Direction[],
   variant: MazePreviewVariant,
+  orientation: Direction,
 ): string {
   const view = deriveViewParameters(cell, openDirections, variant);
-  const leftWall = buildWallSvg(view.dims, 'left', openDirections.includes('west'));
-  const rightWall = buildWallSvg(view.dims, 'right', openDirections.includes('east'));
+  const relativeOpenings = computeRelativeOpenings(cell, orientation);
   const floor = buildFloorSvg(view.dims);
-  const farWall = buildFarWallSvg(view.dims, openDirections.includes('north'), variant);
   const ceiling = `<rect width="${view.dims.width}" height="${view.dims.topY - 4}" fill="${CEILING_TINT_COLOR}" opacity="0.9" />`;
+  const farWall = buildFarWallSvg(view.dims, relativeOpenings.forward, variant);
+  const leftWall = buildWallSvg(view.dims, 'left');
+  const rightWall = buildWallSvg(view.dims, 'right');
+  const backExit = buildRearExitSvg(view.dims, relativeOpenings.backward);
+
+  const leftOpening = relativeOpenings.left ? createSideOpeningGeometry(view.dims, 'left') : null;
+  const rightOpening = relativeOpenings.right
+    ? createSideOpeningGeometry(view.dims, 'right')
+    : null;
+
+  const doorwayBackgrounds = [
+    leftOpening ? buildDoorwayBackground(leftOpening) : '',
+    rightOpening ? buildDoorwayBackground(rightOpening) : '',
+  ].join('\n');
+
+  const sideCorridors = [
+    leftOpening ? buildSideCorridorSvg(leftOpening) : '',
+    rightOpening ? buildSideCorridorSvg(rightOpening) : '',
+  ].join('\n');
+
+  const doorwayFrames = [
+    leftOpening ? buildDoorwayFrame(leftOpening) : '',
+    rightOpening ? buildDoorwayFrame(rightOpening) : '',
+  ].join('\n');
 
   return createSvgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${view.dims.width} ${view.dims.height}">
       <rect width="${view.dims.width}" height="${view.dims.height}" fill="${BACKGROUND_COLOR}" />
-      <g data-view-tilt="${view.tilt.toFixed(2)}">
+      <g
+        data-view-tilt="${view.tilt.toFixed(2)}"
+        data-facing="${orientation}"
+        data-forward-open="${relativeOpenings.forward}"
+        data-left-open="${relativeOpenings.left}"
+        data-right-open="${relativeOpenings.right}"
+        data-back-open="${relativeOpenings.backward}"
+      >
         ${ceiling}
+        ${floor}
+        ${backExit}
+        ${farWall}
         ${leftWall}
         ${rightWall}
-        ${floor}
-        ${farWall}
+        ${doorwayBackgrounds}
+        ${sideCorridors}
+        ${doorwayFrames}
       </g>
     </svg>
   `);
+}
+
+function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): RelativeOpenings {
+  return {
+    forward: isDirectionOpen(cell, facing),
+    right: isDirectionOpen(cell, rotateDirection(facing, 1)),
+    backward: isDirectionOpen(cell, rotateDirection(facing, 2)),
+    left: isDirectionOpen(cell, rotateDirection(facing, -1)),
+  };
+}
+
+function createSideOpeningGeometry(
+  dims: WireframeDimensions,
+  side: 'left' | 'right',
+): SideOpeningGeometry {
+  const depthRatio = SIDE_OPENING_DEPTH;
+  const pivotX =
+    side === 'left'
+      ? lerp(dims.leftNearX, dims.leftFarX, depthRatio)
+      : lerp(dims.rightNearX, dims.rightFarX, depthRatio);
+  const pivotY = lerp(dims.bottomY, dims.topY, depthRatio);
+  const doorWidth = clamp(dims.width * 0.08, 16, 34);
+  const doorHeight = clamp(dims.height * 0.26, 24, 48);
+  const offset = side === 'left' ? -doorWidth - 6 : 6;
+  const doorX = pivotX + offset;
+  const doorY = pivotY - doorHeight / 2;
+
+  const innerEdgeX = side === 'left' ? doorX + doorWidth - 3 : doorX + 3;
+  const innerTopY = doorY + doorHeight * 0.18;
+  const innerBottomY = doorY + doorHeight * 0.82;
+  const corridorLength = dims.width * SIDE_OPENING_LENGTH_RATIO;
+  const verticalDrop = dims.height * SIDE_OPENING_HEIGHT_RATIO;
+
+  const direction = side === 'left' ? -1 : 1;
+
+  return {
+    side,
+    door: {
+      x: doorX,
+      y: doorY,
+      width: doorWidth,
+      height: doorHeight,
+    },
+    corridor: {
+      innerTop: { x: innerEdgeX, y: innerTopY },
+      innerBottom: { x: innerEdgeX, y: innerBottomY },
+      outerTop: {
+        x: innerEdgeX + direction * corridorLength * 1.2,
+        y: innerTopY - verticalDrop * 1.1,
+      },
+      outerBottom: {
+        x: innerEdgeX + direction * corridorLength,
+        y: innerBottomY - verticalDrop * 0.4,
+      },
+    },
+  };
+}
+
+function buildDoorwayBackground(opening: SideOpeningGeometry): string {
+  const { x, y, width, height } = opening.door;
+  return `<rect data-doorway="${opening.side}" x="${x}" y="${y}" width="${width}" height="${height}" fill="${BACKGROUND_COLOR}" opacity="0.97" />`;
+}
+
+function buildDoorwayFrame(opening: SideOpeningGeometry): string {
+  const { x, y, width, height } = opening.door;
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="1.2" opacity="0.85" />`;
+}
+
+function buildSideCorridorSvg(opening: SideOpeningGeometry): string {
+  const { corridor, side } = opening;
+  const points = [corridor.innerTop, corridor.innerBottom, corridor.outerBottom, corridor.outerTop];
+  const fill = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.4);
+  const stroke = mixHexColors(BRICK_LINE_COLOR, BRICK_NEAR_COLOR, 0.2);
+  return `
+    <g data-side-corridor="${side}">
+      <polygon points="${polygonPoints(points)}" fill="${fill}" opacity="0.95" />
+      <line x1="${corridor.innerTop.x}" y1="${corridor.innerTop.y}" x2="${corridor.outerTop.x}" y2="${corridor.outerTop.y}" stroke="${stroke}" stroke-width="0.9" opacity="0.7" />
+      <line x1="${corridor.innerBottom.x}" y1="${corridor.innerBottom.y}" x2="${corridor.outerBottom.x}" y2="${corridor.outerBottom.y}" stroke="${stroke}" stroke-width="0.9" opacity="0.7" />
+    </g>
+  `;
+}
+
+function buildRearExitSvg(dims: WireframeDimensions, backwardOpen: boolean): string {
+  if (!backwardOpen) {
+    return '';
+  }
+  const width = dims.width * 0.28;
+  const bottomY = dims.bottomY;
+  const topY = lerp(dims.bottomY, dims.topY, REAR_EXIT_DEPTH_RATIO);
+  const left = dims.centerX - width / 2;
+  const right = dims.centerX + width / 2;
+  const points = [
+    { x: left + width * 0.08, y: topY },
+    { x: right - width * 0.08, y: topY },
+    { x: right, y: bottomY },
+    { x: left, y: bottomY },
+  ];
+  const fill = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.25);
+  return `<polygon data-backward-passage="true" points="${polygonPoints(points)}" fill="${fill}" opacity="0.9" />`;
 }
 
 type WireframeDimensions = {
@@ -964,6 +1269,24 @@ type WireframeDimensions = {
   rightFarX: number;
   centerX: number;
 };
+
+type RelativeOpenings = {
+  forward: boolean;
+  left: boolean;
+  right: boolean;
+  backward: boolean;
+};
+
+interface SideOpeningGeometry {
+  side: 'left' | 'right';
+  door: { x: number; y: number; width: number; height: number };
+  corridor: {
+    innerTop: { x: number; y: number };
+    innerBottom: { x: number; y: number };
+    outerTop: { x: number; y: number };
+    outerBottom: { x: number; y: number };
+  };
+}
 
 function deriveViewParameters(
   cell: ServerMazeCell,
@@ -1039,14 +1362,13 @@ function buildFloorSvg(dims: WireframeDimensions): string {
       `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.7" />`,
     );
   }
+  lines.push(
+    `<line x1="${dims.leftNearX}" y1="${dims.bottomY}" x2="${dims.rightNearX}" y2="${dims.bottomY}" stroke="${BRICK_NEAR_COLOR}" stroke-width="1.2" opacity="0.25" />`,
+  );
   return lines.join('\n');
 }
 
-function buildWallSvg(
-  dims: WireframeDimensions,
-  side: 'left' | 'right',
-  hasOpening: boolean,
-): string {
+function buildWallSvg(dims: WireframeDimensions, side: 'left' | 'right'): string {
   const points =
     side === 'left'
       ? [
@@ -1081,15 +1403,6 @@ function buildWallSvg(
       `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.9" stroke-linecap="round" opacity="0.7" />`,
     );
   }
-  if (hasOpening) {
-    const doorWidth = 26;
-    const doorHeight = 32;
-    const offsetX =
-      side === 'left' ? Math.max(2, dims.leftNearX - doorWidth - 6) : dims.rightNearX + 6;
-    layers.push(
-      `<rect x="${offsetX}" y="${dims.bottomY - doorHeight - 12}" width="${doorWidth}" height="${doorHeight}" fill="${BACKGROUND_COLOR}" opacity="0.95" />`,
-    );
-  }
   return layers.join('\n');
 }
 
@@ -1098,10 +1411,12 @@ function buildFarWallSvg(
   forwardOpen: boolean,
   variant: MazePreviewVariant,
 ): string {
+  const wallState = forwardOpen ? 'open' : 'closed';
   const wallWidth = dims.rightFarX - dims.leftFarX;
   const wallHeight = Math.max(18, wallWidth * 0.35);
   const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.65);
   const parts: string[] = [
+    `<g data-front-wall="${wallState}">`,
     `<rect x="${dims.leftFarX}" y="${dims.topY - wallHeight / 2}" width="${wallWidth}" height="${wallHeight}" fill="${color}" opacity="0.95" />`,
   ];
   const mortarRows = 3;
@@ -1130,6 +1445,7 @@ function buildFarWallSvg(
       `<rect x="${doorX}" y="${doorY}" width="${doorWidth}" height="${doorHeight}" fill="none" stroke="${BRICK_LINE_COLOR}" stroke-width="1.3" opacity="0.8" />`,
     );
   }
+  parts.push('</g>');
   return parts.join('\n');
 }
 
@@ -1155,7 +1471,12 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: 'スタート地点プレビュー',
       description: `スタート近辺。${describeOpenDirections(startDirections)}`,
       hint: 'スタート直後の導線をイメージしておくと迷いません。',
-      previewImage: createPerspectivePreviewSvg(dummyStart, startDirections, 'start'),
+      previewImage: createPerspectivePreviewSvg(
+        dummyStart,
+        startDirections,
+        'start',
+        fallbackOrientationFromDirections(startDirections),
+      ),
       previewAlt: 'スタート地点プレビュー映像',
     },
     {
@@ -1163,7 +1484,12 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: '迷路分岐プレビュー',
       description: `複雑な分岐。${describeOpenDirections(junctionDirections)}`,
       hint: '二手目までの動きを決めて、角で減速しないようにしましょう。',
-      previewImage: createPerspectivePreviewSvg(dummyJunction, junctionDirections, 'junction'),
+      previewImage: createPerspectivePreviewSvg(
+        dummyJunction,
+        junctionDirections,
+        'junction',
+        fallbackOrientationFromDirections(junctionDirections),
+      ),
       previewAlt: '迷路分岐プレビュー映像',
     },
     {
@@ -1171,7 +1497,12 @@ function createDefaultPreviewClips(): readonly PreviewClip[] {
       title: 'ゴール直前プレビュー',
       description: `ゴール周辺。${describeOpenDirections(goalDirections)}光源を追いかけましょう。`,
       hint: '差し込む光を目印に、最後のコーナーで減速を抑えてください。',
-      previewImage: createPerspectivePreviewSvg(dummyGoal, goalDirections, 'goal'),
+      previewImage: createPerspectivePreviewSvg(
+        dummyGoal,
+        goalDirections,
+        'goal',
+        fallbackOrientationFromDirections(goalDirections),
+      ),
       previewAlt: 'ゴールプレビュー映像',
     },
   ] as const;

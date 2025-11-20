@@ -247,7 +247,7 @@
 - [x] 準備中プレビューにゴール映像が含まれる
   - DoD: `client/tests/PlayerViewPreview.test.tsx` でゴールプレビュー映像の表示を確認
 - [x] 準備中プレビューが迷路固有の分岐情報を一人称視点風で表示する
-  - DoD: `client/tests/PlayerViewPreview.test.tsx` で方向ヒント付きスタート/ゴールクリップを検証
+  - DoD: `client/tests/PlayerViewPreview.test.tsx` でスタート→分岐→ゴールごとに進行方向を抽出し、分岐クリップで左右開口部と袋小路の前面閉塞を data 属性ベースで検証
 - [x] 規定到達で終了（到達未満なら継続）  
   - DoD: `server/tests/points-scoring.test.ts` でターゲット到達時の `RESULT` 通知と未達時継続を検証
 

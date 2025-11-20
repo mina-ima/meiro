@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { PlayerView } from '../src/views/PlayerView';
-import { useSessionStore } from '../src/state/sessionStore';
+import { useSessionStore, type ServerMazeState } from '../src/state/sessionStore';
 import { createMockMaze } from './helpers/mockMaze';
 
 const baseProps = {
@@ -103,6 +103,62 @@ describe('PlayerView 準備プレビュー', () => {
     const secondTilt = extractTilt(image.getAttribute('src'));
     expect(firstTilt).not.toBe(secondTilt);
   });
+
+  it('分岐クリップでは左右の開口部がSVGに含まれる', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+
+    expect(svg).toContain('data-forward-open="true"');
+    expect(svg).toContain('data-left-open="true"');
+    expect(svg).toContain('data-right-open="true"');
+    expect((svg.match(/data-side-corridor="left"/g) ?? []).length).toBeGreaterThan(0);
+    expect((svg.match(/data-side-corridor="right"/g) ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('袋小路のクリップでは前方が完全に閉じられる', () => {
+    const maze = createForwardBlockedPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+
+    expect(svg).toContain('data-forward-open="false"');
+    expect(svg).toContain('data-front-wall="closed"');
+  });
+
+  it('一直線の通路では左右の開口部が描かれない', () => {
+    const maze = createStraightPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+
+    expect(svg).toContain('data-left-open="false"');
+    expect(svg).toContain('data-right-open="false"');
+    expect(svg).not.toContain('data-side-corridor="left"');
+    expect(svg).not.toContain('data-side-corridor="right"');
+  });
 });
 
 function decodeSvgDataUri(src: string | null): string {
@@ -144,4 +200,51 @@ function prepareMaze(overrides: { start: { x: number; y: number }; goal: { x: nu
     start: { ...overrides.start },
     goal: { ...overrides.goal },
   };
+}
+
+function createJunctionPreviewMaze(): ServerMazeState {
+  const start = createCell(5, 5, { top: true, right: false, bottom: true, left: true });
+  const junction = createCell(6, 5, { top: false, right: false, bottom: false, left: false });
+  const east = createCell(7, 5, { top: true, right: true, bottom: true, left: false });
+  const north = createCell(6, 4, { top: true, right: true, bottom: false, left: true });
+  const south = createCell(6, 6, { top: false, right: true, bottom: true, left: true });
+  return {
+    seed: 'junction-maze',
+    start: { x: start.x, y: start.y },
+    goal: { x: east.x, y: east.y },
+    cells: [start, junction, east, north, south],
+  };
+}
+
+function createForwardBlockedPreviewMaze(): ServerMazeState {
+  const start = createCell(5, 5, { top: true, right: false, bottom: true, left: true });
+  const junction = createCell(6, 5, { top: false, right: true, bottom: false, left: false });
+  const north = createCell(6, 4, { top: true, right: true, bottom: false, left: true });
+  const south = createCell(6, 6, { top: false, right: true, bottom: true, left: true });
+  return {
+    seed: 'blocked-maze',
+    start: { x: start.x, y: start.y },
+    goal: { x: north.x, y: north.y },
+    cells: [start, junction, north, south],
+  };
+}
+
+function createStraightPreviewMaze(): ServerMazeState {
+  const start = createCell(5, 5, { top: true, right: false, bottom: true, left: true });
+  const corridor = createCell(6, 5, { top: true, right: false, bottom: true, left: false });
+  const east = createCell(7, 5, { top: true, right: true, bottom: true, left: false });
+  return {
+    seed: 'straight-maze',
+    start: { x: start.x, y: start.y },
+    goal: { x: east.x, y: east.y },
+    cells: [start, corridor, east],
+  };
+}
+
+function createCell(
+  x: number,
+  y: number,
+  walls: { top: boolean; right: boolean; bottom: boolean; left: boolean },
+): ServerMazeState['cells'][number] {
+  return { x, y, walls };
 }
