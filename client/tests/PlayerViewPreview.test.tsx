@@ -267,8 +267,8 @@ describe('PlayerView 準備プレビュー', () => {
         (point) => point.y >= size.height * 0.96 && point.x >= size.width * 0.95,
       ),
     ).toBe(true);
-    expect(fade.startRatio).toBeGreaterThan(0.48);
-    expect(fade.startRatio).toBeLessThan(0.7);
+    expect(fade.startRatio).toBeGreaterThan(0.55);
+    expect(fade.startRatio).toBeLessThan(0.78);
   });
 
   it('分岐クリップでは開いている側の壁が角で途切れる', () => {
@@ -381,6 +381,34 @@ describe('PlayerView 準備プレビュー', () => {
     expect(portal.width).toBeGreaterThan(frontWall.width * 0.8);
     expect(portal.height).toBeGreaterThan(frontWall.height * 0.7);
     expect(frontWall.fill).toMatch(/6ec3ff|goal-sky/i);
+  });
+
+  it('ゴール直前に分岐がある場合でも枝道を描きつつポータルを保つ', () => {
+    const maze = createGoalWithBranchBefore();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    const image = screen.getByAltText('ゴールプレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const portal = extractPortalRect(svg);
+    const frontWall = extractFrontWallFillRect(svg);
+    const sideFloor = extractSideCorridorFloor(svg, 'left');
+
+    expect(svg).toContain('data-left-open="true"');
+    expect(sideFloor).not.toBeNull();
+    expect(portal).not.toBeNull();
+    expect(frontWall).not.toBeNull();
+    if (!portal || !frontWall) {
+      return;
+    }
+
+    expect(portal.width).toBeGreaterThan(frontWall.width * 0.75);
+    expect(portal.height).toBeGreaterThan(frontWall.height * 0.65);
   });
 });
 
@@ -635,6 +663,19 @@ function createSkyGoalMaze(): ServerMazeState {
     start: { x: start.x, y: start.y },
     goal: { x: goal.x, y: goal.y },
     cells: [start, mid, goal],
+  };
+}
+
+function createGoalWithBranchBefore(): ServerMazeState {
+  const start = createCell(1, 1, { top: true, right: false, bottom: true, left: true });
+  const preGoal = createCell(2, 1, { top: false, right: false, bottom: true, left: false });
+  const branchNorth = createCell(2, 0, { top: true, right: true, bottom: false, left: true });
+  const goal = createCell(3, 1, { top: true, right: true, bottom: true, left: false });
+  return {
+    seed: 'branch-before-goal',
+    start: { x: start.x, y: start.y },
+    goal: { x: goal.x, y: goal.y },
+    cells: [start, preGoal, branchNorth, goal],
   };
 }
 

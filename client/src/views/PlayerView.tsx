@@ -764,7 +764,17 @@ function mixHexColors(colorA: string, colorB: string, t: number): string {
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const sanitized = hex.replace('#', '');
+  const sanitized = hex.trim().replace('#', '');
+  if (sanitized.startsWith('rgb')) {
+    const match = sanitized.match(/rgb\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)/i);
+    if (match) {
+      return {
+        r: Number.parseFloat(match[1]),
+        g: Number.parseFloat(match[2]),
+        b: Number.parseFloat(match[3]),
+      };
+    }
+  }
   const r = Number.parseInt(sanitized.slice(0, 2), 16);
   const g = Number.parseInt(sanitized.slice(2, 4), 16);
   const b = Number.parseInt(sanitized.slice(4, 6), 16);
@@ -808,7 +818,7 @@ function createPreviewClipsFromMaze(maze?: ServerMazeState | null): readonly Pre
   return [
     createStartClip(startCell, startDirections, startOrientation),
     createCorridorClip(corridorCell, corridorDirections, corridorOrientation),
-    createGoalClip(goalCell, goalDirections, goalOrientation),
+    createGoalClip(goalCell, goalDirections, goalOrientation, lookup),
   ];
 }
 
@@ -855,21 +865,43 @@ function createGoalClip(
   cell: ServerMazeCell,
   openDirections: Direction[],
   orientation: Direction,
+  lookup?: MazeCellLookup,
 ): PreviewClip {
   const description = `ゴール周辺。${describeOpenDirections(openDirections)}光源の位置を覚えましょう。`;
   const hint =
     openDirections.length > 0
       ? `${directionShortLabel(openDirections[0])}側から差し込む光を目印に、最後のコーナーで減速を抑えてください。`
       : '袋小路の光を見失わないよう、壁沿いに進んでください。';
+  const viewCell = deriveGoalViewCell(cell, orientation, lookup);
 
   return {
     id: 'goal',
     title: 'ゴール直前プレビュー',
     description,
     hint,
-    previewImage: createPerspectivePreviewSvg(cell, openDirections, 'goal', orientation),
+    previewImage: createPerspectivePreviewSvg(
+      viewCell,
+      getOpenDirections(viewCell),
+      'goal',
+      orientation,
+    ),
     previewAlt: 'ゴールプレビュー映像',
   };
+}
+
+function deriveGoalViewCell(
+  goalCell: ServerMazeCell,
+  orientation: Direction,
+  lookup?: MazeCellLookup,
+): ServerMazeCell {
+  if (!lookup) {
+    return goalCell;
+  }
+  const approachCell = getNeighborCell(goalCell, rotateDirection(orientation, 2), lookup);
+  if (approachCell && isDirectionOpen(approachCell, orientation)) {
+    return approachCell;
+  }
+  return goalCell;
 }
 
 type Direction = 'north' | 'east' | 'south' | 'west';
@@ -1191,12 +1223,15 @@ function createSideOpeningGeometry(
   );
   const wallMinX = Math.min(nearEdgeX, farEdgeX);
   const wallMaxX = Math.max(nearEdgeX, farEdgeX);
-  const unclampedDoorX = side === 'left' ? floorEdgeX : floorEdgeX - doorWidth;
-  const doorX = clamp(unclampedDoorX, wallMinX + 2, wallMaxX - doorWidth - 2);
+  const desiredEdgeX = clamp(floorEdgeX, wallMinX + 2, wallMaxX - 2);
+  const doorX =
+    side === 'left'
+      ? clamp(desiredEdgeX, wallMinX + doorWidth + 2, wallMaxX - doorWidth - 2)
+      : clamp(desiredEdgeX - doorWidth, wallMinX + 2, wallMaxX - doorWidth - 2);
   const doorY = clamp(doorBottomY - doorHeight, wallTopY + 4, doorBottomY - 4);
-
-  const baseLeftX = doorX;
-  const baseRightX = doorX + doorWidth;
+  const innerEdgeX = side === 'left' ? doorX : doorX + doorWidth;
+  const baseLeftX = side === 'left' ? doorX - doorWidth : doorX;
+  const baseRightX = side === 'left' ? innerEdgeX : doorX + doorWidth;
   const corridorShift = direction * doorWidth * 1.65;
   const depthRise = clamp(doorHeight * 0.26, 8, visibleWallHeight * 0.42);
   const farFloorY = clamp(doorBottomY - depthRise, wallTopY + 6, doorBottomY - 2);
@@ -1218,7 +1253,7 @@ function createSideOpeningGeometry(
     Math.min(farLeftX, farRightX) + farWallWidth / 2,
     Math.max(farLeftX, farRightX) - farWallWidth / 2,
   );
-  const farWallBottomY = farFloorY - farWallHeight * 0.05;
+  const farWallBottomY = farFloorY;
   const farWallTopY = farWallBottomY - farWallHeight;
   const farWallPoints: SideOpeningGeometry['corridor']['farWall'] = [
     { x: farWallCenter - farWallWidth / 2, y: farWallBottomY },
@@ -1375,13 +1410,13 @@ function deriveViewParameters(
   const isStart = variant === 'start';
   const isGoal = variant === 'goal';
   const bottomY = Math.round(height * (isStart ? 0.99 : isGoal ? 0.975 : 0.97));
-  const baseTop = Math.round(height * (isStart ? 0.46 : isGoal ? 0.39 : 0.4));
+  const baseTop = Math.round(height * (isStart ? 0.52 : isGoal ? 0.39 : 0.4));
   const openOffset = openDirections.includes('north') ? -2 : 2;
   const variantOffset = isGoal ? -1 : variant === 'junction' ? -1 : 0;
   const topY = clamp(
     baseTop + openOffset + variantOffset,
-    Math.round(height * (isStart ? 0.42 : isGoal ? 0.35 : 0.34)),
-    Math.round(height * (isStart ? 0.52 : isGoal ? 0.44 : 0.44)),
+    Math.round(height * (isStart ? 0.48 : isGoal ? 0.35 : 0.34)),
+    Math.round(height * (isStart ? 0.56 : isGoal ? 0.44 : 0.44)),
   );
   const corridorNearWidth = isStart ? width : isGoal ? width * 0.66 : width * 0.62;
   const corridorFarWidth = corridorNearWidth * (isStart ? 0.4 : isGoal ? 0.34 : 0.3);
@@ -1403,15 +1438,15 @@ function deriveViewParameters(
 function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): string {
   const nearLeft = variant === 'start' ? 0 : dims.leftNearX;
   const nearRight = variant === 'start' ? dims.width : dims.rightNearX;
-  const farY = variant === 'start' ? Math.min(dims.topY, dims.height * 0.54) : dims.topY;
+  const farY = dims.topY;
   const quad = [
     { x: nearLeft, y: dims.bottomY },
     { x: nearRight, y: dims.bottomY },
     { x: dims.rightFarX, y: farY },
     { x: dims.leftFarX, y: farY },
   ];
-  const fadeStart = variant === 'start' ? 0.42 : variant === 'goal' ? 0.7 : 1;
-  const fadeRange = variant === 'start' ? 0.4 : variant === 'goal' ? 0.3 : 1;
+  const fadeStart = variant === 'start' ? 0.52 : variant === 'goal' ? 0.7 : 1;
+  const fadeRange = variant === 'start' ? 0.32 : variant === 'goal' ? 0.3 : 1;
   const farTintTarget =
     variant === 'start'
       ? BACKGROUND_COLOR
@@ -1419,7 +1454,7 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
         ? mixHexColors(BRICK_FAR_COLOR, '#cfe7ff', 0.35)
         : BRICK_FAR_COLOR;
   const baseColor = BRICK_NEAR_COLOR;
-  const shadingMix = variant === 'start' ? 0.14 : variant === 'goal' ? 0.2 : 0.35;
+  const shadingMix = variant === 'start' ? 0.1 : variant === 'goal' ? 0.2 : 0.35;
   const shadingColor = mixHexColors(BRICK_NEAR_COLOR, farTintTarget, shadingMix);
   const lines: string[] = [
     `<polygon points="${polygonPoints(quad)}" fill="${baseColor}" />`,
@@ -1440,14 +1475,14 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
     const darknessBlend = clamp((perspective - fadeStart) / fadeRange, 0, 1);
     const lineColor =
       variant === 'start'
-        ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.45)
+        ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.25)
         : variant === 'goal'
           ? mixHexColors(BRICK_LINE_COLOR, '#eaf5ff', 0.25)
           : BRICK_LINE_COLOR;
-    const baseOpacity = variant === 'start' ? 0.82 : 0.75;
+    const baseOpacity = variant === 'start' ? 0.92 : 0.75;
     const opacity =
       variant === 'start'
-        ? baseOpacity * (1 - darknessBlend * 0.95)
+        ? baseOpacity * (1 - darknessBlend * 0.85)
         : baseOpacity + darknessBlend * 0.25;
     lines.push(
       `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${lineColor}" stroke-width="0.9" stroke-linecap="round" opacity="${opacity}" />`,
@@ -1484,14 +1519,14 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
       const darknessBlend = clamp((perspective - fadeStart) / fadeRange, 0, 1);
       const lineColor =
         variant === 'start'
-          ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.5)
+          ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.3)
           : variant === 'goal'
             ? mixHexColors(BRICK_LINE_COLOR, '#eaf5ff', 0.25)
             : BRICK_LINE_COLOR;
-      const baseOpacity = variant === 'start' ? 0.72 : 0.65;
+      const baseOpacity = variant === 'start' ? 0.85 : 0.65;
       const opacity =
         variant === 'start'
-          ? baseOpacity * (1 - darknessBlend * 0.9)
+          ? baseOpacity * (1 - darknessBlend * 0.78)
           : baseOpacity + darknessBlend * 0.25;
       lines.push(
         `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${lineColor}" stroke-width="0.75" stroke-linecap="round" opacity="${opacity}" />`,
@@ -1519,14 +1554,14 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
 
   if (variant === 'start') {
     const fadeId = `start-floor-fade-${dims.width}-${dims.height}`;
-    const fadeFrom = lerp(dims.bottomY, farY, 0.45);
-    const fadeTo = lerp(dims.bottomY, farY, 0.95);
+    const fadeFrom = lerp(dims.bottomY, farY, 0.55);
+    const fadeTo = lerp(dims.bottomY, farY, 0.98);
     lines.push(`
       <defs>
         <linearGradient id="${fadeId}" x1="0" y1="${fadeFrom}" x2="0" y2="${fadeTo}">
           <stop offset="0%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
-          <stop offset="40%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.2" />
-          <stop offset="75%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.65" />
+          <stop offset="50%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
+          <stop offset="75%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.55" />
           <stop offset="100%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.95" />
         </linearGradient>
       </defs>
@@ -1546,14 +1581,14 @@ function buildDepthFadeOverlay(dims: WireframeDimensions): string {
     { x: 0, y: dims.topY },
   ];
   const gradientId = `depth-fade-${dims.width}-${dims.height}`;
-  const fadeStart = lerp(dims.bottomY, dims.topY, 0.5);
+  const fadeStart = lerp(dims.bottomY, dims.topY, 0.58);
   const fadeEnd = dims.topY;
   return `
     <defs>
       <linearGradient id="${gradientId}" x1="0" y1="${fadeStart}" x2="0" y2="${fadeEnd}">
         <stop offset="0%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
-        <stop offset="45%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
-        <stop offset="75%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.78" />
+        <stop offset="55%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
+        <stop offset="82%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.82" />
         <stop offset="100%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.98" />
       </linearGradient>
     </defs>
@@ -1566,14 +1601,20 @@ function getWallTopY(dims: WireframeDimensions): number {
   return Math.max(6, Math.round(dims.topY - wallHeight * 0.6));
 }
 
+function getFloorEdgeX(dims: WireframeDimensions, side: 'left' | 'right', y: number): number {
+  const ratio = clamp((dims.bottomY - y) / (dims.bottomY - dims.topY), 0, 1);
+  return side === 'left'
+    ? lerp(dims.leftNearX, dims.leftFarX, ratio)
+    : lerp(dims.rightNearX, dims.rightFarX, ratio);
+}
+
 function buildWallSvg(
   dims: WireframeDimensions,
   side: 'left' | 'right',
   variant: MazePreviewVariant,
   opening?: SideOpeningGeometry | null,
 ): string {
-  const nearX = side === 'left' ? dims.leftNearX : dims.rightNearX;
-  const farX = side === 'left' ? dims.leftFarX : dims.rightFarX;
+  const nearX = getFloorEdgeX(dims, side, dims.bottomY);
   const ceilingY = getWallTopY(dims);
   const hasOpening = Boolean(opening);
   const tintRatio =
@@ -1586,8 +1627,7 @@ function buildWallSvg(
   if (hasOpening && variant === 'junction' && opening) {
     const doorBottom = opening.door.y + opening.door.height;
     const doorEdgeX = side === 'left' ? opening.door.x : opening.door.x + opening.door.width;
-    const depthRatio = clamp((dims.bottomY - doorBottom) / (dims.bottomY - dims.topY), 0, 1);
-    const cornerX = lerp(nearX, farX, depthRatio);
+    const cornerX = getFloorEdgeX(dims, side, doorBottom);
     const cornerY = doorBottom;
     const bottomEdgeStart = { x: nearX, y: dims.bottomY };
     const bottomEdgeEnd = { x: cornerX, y: cornerY };
@@ -1631,18 +1671,12 @@ function buildWallSvg(
       );
     }
   } else {
-    const endX =
-      opening && side === 'left'
+    const endY = opening ? opening.door.y + opening.door.height : dims.topY;
+    const endX = opening
+      ? side === 'left'
         ? opening.door.x
-        : opening && side === 'right'
-          ? opening.door.x + opening.door.width
-          : farX;
-    const endY =
-      opening && side === 'left'
-        ? opening.door.y + opening.door.height
-        : opening && side === 'right'
-          ? opening.door.y + opening.door.height
-          : dims.topY;
+        : opening.door.x + opening.door.width
+      : getFloorEdgeX(dims, side, endY);
     const points =
       side === 'left'
         ? [
