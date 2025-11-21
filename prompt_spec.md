@@ -464,7 +464,7 @@ npm run dev --workspace @meiro/server -- --local
 * [x] 20×20/40×40、**最短≥4×L**（`server/tests/room-maze-initialization.test.ts`）
 * [x] 視界：FOV90°, 到達4マス（4マス目減光）＋迷路セルを2倍格子に投影してASCIIワイヤーフレームと床/壁レイヤーを動的描画し、4マス以遠は黒フォグで遮光＆閉じた壁面にはテクスチャストライプを描く（`client/tests/PlayerViewRaycaster.test.tsx`）
 * [x] プレイヤービュー：正面方向のみのワイヤーフレームに奥行きを反映し、dead-end / corner / junction 判定を `dataset` と描画で提示（`client/tests/PlayerViewRaycaster.test.tsx` 追加テスト）
-* [x] プレビュー：スタートは奥壁なしで中盤以降を暗転させ、分岐は側壁が角で途切れ枝道が横に伸び、ゴールは青空グラデのポータルで終端を強調する（`client/tests/PlayerViewPreview.test.tsx`）
+* [x] プレビュー：スタートは入口直前で床と側壁を明るく映しつつ中盤以降を暗転させ、分岐は側壁が角で途切れ枝道が横に伸び、ゴールは奥面ほぼ全面を占める青空グラデのポータルで終端を強調する（`client/tests/PlayerViewPreview.test.tsx`）
 * [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持（`server/tests/owner-resources.test.ts` / `server/tests/owner-path-block.test.ts` / `client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）
 * [x] 罠：40%速度、limit/5、同時2
 * [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）

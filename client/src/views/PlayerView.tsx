@@ -1202,7 +1202,7 @@ function createSideOpeningGeometry(
   const baseRightX = doorX + doorWidth;
   const corridorShift = direction * doorWidth * 1.2;
   const depthRise = clamp(doorHeight * 0.18, 6, visibleWallHeight * 0.35);
-  const farFloorY = Math.max(wallTopY + 6, doorBottomY - depthRise);
+  const farFloorY = clamp(doorBottomY - depthRise, wallTopY + 6, doorBottomY - 2);
   const farLeftX = baseLeftX + corridorShift;
   const farRightX = baseRightX + corridorShift;
 
@@ -1374,17 +1374,19 @@ function deriveViewParameters(
   const width = 320;
   const height = 180;
   const centerX = width / 2;
-  const baseTop = Math.round(height * 0.38);
-  const bottomY = Math.round(height * 0.97);
+  const isStart = variant === 'start';
+  const isGoal = variant === 'goal';
+  const baseTop = Math.round(height * (isStart ? 0.36 : 0.38));
+  const bottomY = Math.round(height * (isStart ? 0.995 : 0.97));
   const openOffset = openDirections.includes('north') ? -2 : 2;
-  const variantOffset = variant === 'goal' ? -2 : variant === 'junction' ? -1 : 0;
+  const variantOffset = isGoal ? -2 : variant === 'junction' ? -1 : 0;
   const topY = clamp(
     baseTop + openOffset + variantOffset,
-    Math.round(height * 0.34),
-    Math.round(height * 0.42),
+    Math.round(height * (isStart ? 0.32 : 0.34)),
+    Math.round(height * (isStart ? 0.44 : 0.42)),
   );
-  const corridorNearWidth = width * 0.62;
-  const corridorFarWidth = corridorNearWidth * 0.3;
+  const corridorNearWidth = width * (isStart ? 0.88 : 0.62);
+  const corridorFarWidth = corridorNearWidth * (isStart ? 0.42 : isGoal ? 0.32 : 0.3);
 
   const dims: WireframeDimensions = {
     width,
@@ -1407,6 +1409,8 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
     { x: dims.rightFarX, y: dims.topY },
     { x: dims.leftFarX, y: dims.topY },
   ];
+  const fadeStart = variant === 'start' ? 0.52 : variant === 'goal' ? 0.7 : 1;
+  const fadeRange = variant === 'start' ? 0.35 : variant === 'goal' ? 0.3 : 1;
   const farTintTarget =
     variant === 'start'
       ? BACKGROUND_COLOR
@@ -1414,11 +1418,8 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
         ? mixHexColors(BRICK_FAR_COLOR, '#cfe7ff', 0.35)
         : BRICK_FAR_COLOR;
   const baseColor = BRICK_NEAR_COLOR;
-  const shadingColor = mixHexColors(
-    BRICK_NEAR_COLOR,
-    farTintTarget,
-    variant === 'goal' ? 0.2 : 0.35,
-  );
+  const shadingMix = variant === 'start' ? 0.18 : variant === 'goal' ? 0.2 : 0.35;
+  const shadingColor = mixHexColors(BRICK_NEAR_COLOR, farTintTarget, shadingMix);
   const lines: string[] = [
     `<polygon points="${polygonPoints(quad)}" fill="${baseColor}" />`,
     `<polygon points="${polygonPoints(quad)}" fill="${shadingColor}" opacity="0.25" />`,
@@ -1435,12 +1436,7 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
     const y = lerp(dims.bottomY, dims.topY, perspective);
     const leftX = lerp(dims.leftNearX, dims.leftFarX, perspective);
     const rightX = lerp(dims.rightNearX, dims.rightFarX, perspective);
-    const darknessBlend =
-      variant === 'start'
-        ? clamp((perspective - 0.45) / 0.55, 0, 1)
-        : variant === 'goal'
-          ? clamp((perspective - 0.7) / 0.3, 0, 1)
-          : 0;
+    const darknessBlend = clamp((perspective - fadeStart) / fadeRange, 0, 1);
     const lineColor =
       variant === 'start'
         ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.7)
@@ -1484,12 +1480,7 @@ function buildFloorSvg(dims: WireframeDimensions, variant: MazePreviewVariant): 
         y: lerp(dims.bottomY, dims.topY, endRatio),
       };
       const perspective = (startRatio + endRatio) / 2;
-      const darknessBlend =
-        variant === 'start'
-          ? clamp((perspective - 0.45) / 0.55, 0, 1)
-          : variant === 'goal'
-            ? clamp((perspective - 0.7) / 0.3, 0, 1)
-            : 0;
+      const darknessBlend = clamp((perspective - fadeStart) / fadeRange, 0, 1);
       const lineColor =
         variant === 'start'
           ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.7)
@@ -1535,14 +1526,14 @@ function buildDepthFadeOverlay(dims: WireframeDimensions): string {
     { x: 0, y: dims.topY },
   ];
   const gradientId = `depth-fade-${dims.width}-${dims.height}`;
-  const fadeStart = lerp(dims.bottomY, dims.topY, 0.45);
+  const fadeStart = lerp(dims.bottomY, dims.topY, 0.55);
   const fadeEnd = dims.topY;
   return `
     <defs>
       <linearGradient id="${gradientId}" x1="0" y1="${fadeStart}" x2="0" y2="${fadeEnd}">
         <stop offset="0%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0" />
-        <stop offset="55%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.55" />
-        <stop offset="100%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.92" />
+        <stop offset="50%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.45" />
+        <stop offset="100%" stop-color="${BACKGROUND_COLOR}" stop-opacity="0.96" />
       </linearGradient>
     </defs>
     <polygon data-depth-fade="start" points="${polygonPoints(quad)}" fill="url(#${gradientId})" opacity="1" />
@@ -1575,20 +1566,37 @@ function buildWallSvg(
       : opening && side === 'right'
         ? opening.door.y + opening.door.height
         : dims.topY;
+  const hasOpening = Boolean(opening);
   const points =
     side === 'left'
-      ? [
-          { x: nearX, y: dims.bottomY },
-          { x: nearX, y: ceilingY },
-          { x: endX, y: ceilingY },
-          { x: endX, y: endY },
-        ]
-      : [
-          { x: endX, y: endY },
-          { x: endX, y: ceilingY },
-          { x: nearX, y: ceilingY },
-          { x: nearX, y: dims.bottomY },
-        ];
+      ? hasOpening
+        ? [
+            { x: nearX, y: dims.bottomY },
+            { x: nearX, y: ceilingY },
+            { x: endX, y: ceilingY },
+            { x: endX, y: endY },
+            { x: nearX, y: endY },
+          ]
+        : [
+            { x: nearX, y: dims.bottomY },
+            { x: nearX, y: ceilingY },
+            { x: endX, y: ceilingY },
+            { x: endX, y: endY },
+          ]
+      : hasOpening
+        ? [
+            { x: endX, y: endY },
+            { x: endX, y: ceilingY },
+            { x: nearX, y: ceilingY },
+            { x: nearX, y: dims.bottomY },
+            { x: nearX, y: endY },
+          ]
+        : [
+            { x: endX, y: endY },
+            { x: endX, y: ceilingY },
+            { x: nearX, y: ceilingY },
+            { x: nearX, y: dims.bottomY },
+          ];
   const tintRatio =
     variant === 'start' ? 0.4 : side === 'left' ? 0.48 : variant === 'goal' ? 0.52 : 0.58;
   const wallColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, tintRatio);
@@ -1648,49 +1656,62 @@ function buildFarWallSvg(
   if (!effectiveForwardOpen) {
     const wallHeight = Math.max(32, depth * 0.45);
     const wallTop = Math.max(6, dims.topY - wallHeight);
-    const tintShift = variant === 'goal' ? -0.08 : variant === 'junction' ? -0.02 : 0;
-    const baseColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.6 + tintShift);
-    const color = variant === 'goal' ? mixHexColors(baseColor, '#d9ecff', 0.4) : baseColor;
-    parts.push(
-      `<rect data-front-wall-fill="true" x="${dims.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${color}" opacity="0.98" />`,
-    );
-    const mortarRows = 5;
-    for (let i = 1; i < mortarRows; i += 1) {
-      const y = wallTop + (wallHeight / mortarRows) * i;
-      parts.push(
-        `<line x1="${dims.leftFarX}" y1="${y}" x2="${dims.rightFarX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.75" opacity="0.7" />`,
-      );
-    }
-    const bricks = 6;
-    for (let i = 1; i < bricks; i += 1) {
-      const x = dims.leftFarX + (wallWidth / bricks) * i;
-      parts.push(
-        `<line x1="${x}" y1="${wallTop}" x2="${x}" y2="${wallTop + wallHeight}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.65" opacity="0.45" />`,
-      );
-    }
     if (variant === 'goal') {
-      const windowWidth = wallWidth * 0.32;
-      const windowHeight = wallHeight * 0.32;
-      const windowLeft = dims.centerX - windowWidth / 2;
-      const windowTop = wallTop + wallHeight * 0.28;
-      const glowId = `goal-window-${Math.round(wallWidth)}-${Math.round(wallHeight)}`;
+      const skyBaseId = `goal-sky-${Math.round(wallWidth)}-${Math.round(wallHeight)}`;
       const skyTop = '#6ec3ff';
       const skyBottom = '#ffffff';
       parts.push(`
         <defs>
-          <linearGradient id="${glowId}" x1="0" y1="${windowTop}" x2="0" y2="${windowTop + windowHeight}">
-            <stop offset="0%" stop-color="${skyTop}" stop-opacity="0.92" />
-            <stop offset="70%" stop-color="${skyTop}" stop-opacity="0.7" />
-            <stop offset="100%" stop-color="${skyBottom}" stop-opacity="0.65" />
+          <linearGradient id="${skyBaseId}" x1="0" y1="${wallTop}" x2="0" y2="${wallTop + wallHeight}">
+            <stop offset="0%" stop-color="${skyTop}" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="${skyBottom}" stop-opacity="0.92" />
           </linearGradient>
         </defs>
       `);
       parts.push(
-        `<rect data-goal-portal="true" x="${windowLeft}" y="${windowTop}" width="${windowWidth}" height="${windowHeight}" fill="url(#${glowId})" opacity="0.95" />`,
+        `<rect data-front-wall-fill="true" x="${dims.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="url(#${skyBaseId})" opacity="0.98" />`,
+      );
+      const portalWidth = wallWidth * 0.82;
+      const portalHeight = wallHeight * 0.72;
+      const portalLeft = dims.centerX - portalWidth / 2;
+      const portalTop = wallTop + wallHeight * 0.12;
+      const portalBottom = portalTop + portalHeight;
+      const glowId = `goal-window-${Math.round(wallWidth)}-${Math.round(wallHeight)}`;
+      parts.push(`
+        <defs>
+          <linearGradient id="${glowId}" x1="0" y1="${portalTop}" x2="0" y2="${portalBottom}">
+            <stop offset="0%" stop-color="${skyTop}" stop-opacity="0.95" />
+            <stop offset="60%" stop-color="${skyTop}" stop-opacity="0.78" />
+            <stop offset="100%" stop-color="${skyBottom}" stop-opacity="0.7" />
+          </linearGradient>
+        </defs>
+      `);
+      parts.push(
+        `<rect data-goal-portal="true" x="${portalLeft}" y="${portalTop}" width="${portalWidth}" height="${portalHeight}" fill="url(#${glowId})" opacity="0.98" />`,
       );
       parts.push(
-        `<rect x="${windowLeft + windowWidth * 0.16}" y="${windowTop + windowHeight * 0.18}" width="${windowWidth * 0.68}" height="${windowHeight * 0.48}" fill="${skyBottom}" opacity="0.82" />`,
+        `<rect data-goal-window="true" x="${portalLeft + portalWidth * 0.08}" y="${portalTop + portalHeight * 0.12}" width="${portalWidth * 0.84}" height="${portalHeight * 0.7}" fill="${skyBottom}" opacity="0.8" />`,
       );
+    } else {
+      const tintShift = variant === 'junction' ? -0.02 : 0;
+      const baseColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.6 + tintShift);
+      parts.push(
+        `<rect data-front-wall-fill="true" x="${dims.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${baseColor}" opacity="0.98" />`,
+      );
+      const mortarRows = 5;
+      for (let i = 1; i < mortarRows; i += 1) {
+        const y = wallTop + (wallHeight / mortarRows) * i;
+        parts.push(
+          `<line x1="${dims.leftFarX}" y1="${y}" x2="${dims.rightFarX}" y2="${y}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.75" opacity="0.7" />`,
+        );
+      }
+      const bricks = 6;
+      for (let i = 1; i < bricks; i += 1) {
+        const x = dims.leftFarX + (wallWidth / bricks) * i;
+        parts.push(
+          `<line x1="${x}" y1="${wallTop}" x2="${x}" y2="${wallTop + wallHeight}" stroke="${BRICK_LINE_COLOR}" stroke-width="0.65" opacity="0.45" />`,
+        );
+      }
     }
   } else if (variant === 'junction') {
     const extensionTopY = Math.max(4, dims.topY - depth * 0.18);
@@ -1814,7 +1835,7 @@ function buildFarWallSvg(
     const baseFloorColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.35);
     const floorColor =
       variant === 'goal'
-        ? mixHexColors(baseFloorColor, '#e0f0ff', 0.38)
+        ? mixHexColors(baseFloorColor, '#e0f4ff', 0.52)
         : variant === 'start'
           ? mixHexColors(baseFloorColor, BACKGROUND_COLOR, 0.6)
           : baseFloorColor;
@@ -1844,11 +1865,15 @@ function buildFarWallSvg(
     const sideShade =
       variant === 'start'
         ? mixHexColors(BRICK_NEAR_COLOR, BACKGROUND_COLOR, 0.65)
-        : mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.55);
+        : variant === 'goal'
+          ? mixHexColors(BRICK_NEAR_COLOR, '#d7eaff', 0.5)
+          : mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.55);
     const farShade =
       variant === 'start'
         ? mixHexColors(BRICK_NEAR_COLOR, BACKGROUND_COLOR, 0.72)
-        : mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.62);
+        : variant === 'goal'
+          ? mixHexColors(BRICK_FAR_COLOR, '#c9e5ff', 0.55)
+          : mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, 0.62);
     const leftWall = [
       { x: dims.leftFarX, y: dims.topY },
       { x: dims.leftFarX, y: extensionCeiling },
@@ -1864,9 +1889,9 @@ function buildFarWallSvg(
     parts.push(`<polygon points="${polygonPoints(leftWall)}" fill="${sideShade}" opacity="0.9" />`);
     parts.push(`<polygon points="${polygonPoints(rightWall)}" fill="${farShade}" opacity="0.9" />`);
     if (variant === 'goal') {
-      const portalWidth = nextWidth * 0.55;
-      const portalHeight = Math.max(14, depth * 0.2);
-      const portalBottomY = extensionTopY - portalHeight * 0.05;
+      const portalWidth = nextWidth * 0.9;
+      const portalHeight = Math.max(depth * 0.42, (extensionTopY - extensionCeiling) * 0.92);
+      const portalBottomY = extensionTopY - portalHeight * 0.04;
       const portalTopY = portalBottomY - portalHeight;
       const portalLeft = dims.centerX - portalWidth / 2;
       const glowId = `goal-portal-${Math.round(wallWidth)}`;
@@ -1885,7 +1910,7 @@ function buildFarWallSvg(
         `<rect data-goal-portal="true" x="${portalLeft}" y="${portalTopY}" width="${portalWidth}" height="${portalHeight}" fill="url(#${glowId})" opacity="0.95" />`,
       );
       parts.push(
-        `<rect data-goal-window="true" x="${portalLeft + portalWidth * 0.2}" y="${portalTopY + portalHeight * 0.22}" width="${portalWidth * 0.6}" height="${portalHeight * 0.45}" fill="${skyBottom}" opacity="0.82" />`,
+        `<rect data-goal-window="true" x="${portalLeft + portalWidth * 0.12}" y="${portalTopY + portalHeight * 0.14}" width="${portalWidth * 0.76}" height="${portalHeight * 0.7}" fill="${skyBottom}" opacity="0.82" />`,
       );
     } else {
       const distantWallHeight = Math.max(16, depth * 0.12);

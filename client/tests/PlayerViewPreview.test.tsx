@@ -227,6 +227,45 @@ describe('PlayerView 準備プレビュー', () => {
     expect(svg).toMatch(/data-depth-fade="start"/);
   });
 
+  it('スタートクリップは入口直前から床と側壁が見え、奥で強く暗転する', () => {
+    const maze = createDarkStartMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    const image = screen.getByAltText('スタート地点プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const floor = extractBaseFloorQuad(svg);
+    const size = extractViewBox(svg);
+    const fade = extractDepthFade(svg);
+    const leftWall = extractWallPolygon(svg, 'left');
+    const rightWall = extractWallPolygon(svg, 'right');
+
+    expect(floor).not.toBeNull();
+    expect(size).not.toBeNull();
+    expect(fade).not.toBeNull();
+    if (!floor || !size || !fade || !leftWall || !rightWall) {
+      return;
+    }
+
+    const bottomY = Math.max(...floor.map((p) => p.y));
+    const topY = Math.min(...floor.map((p) => p.y));
+    const minX = Math.min(...floor.map((p) => p.x));
+    const maxX = Math.max(...floor.map((p) => p.x));
+
+    expect(bottomY).toBeGreaterThan(size.height * 0.96);
+    expect(topY).toBeLessThan(size.height * 0.6);
+    expect(minX).toBeLessThan(size.width * 0.08);
+    expect(maxX).toBeGreaterThan(size.width * 0.92);
+    expect(
+      leftWall.points.some((point) => point.y >= size.height * 0.96 && point.x <= size.width * 0.12),
+    ).toBe(true);
+    expect(
+      rightWall.points.some((point) => point.y >= size.height * 0.96 && point.x >= size.width * 0.88),
+    ).toBe(true);
+    expect(fade.startRatio).toBeGreaterThan(0.45);
+  });
+
   it('分岐クリップでは開いている側の壁が角で途切れる', () => {
     const maze = createJunctionPreviewMaze();
     initializePrepPreviewState(maze);
@@ -258,6 +297,43 @@ describe('PlayerView 準備プレビュー', () => {
     expect(wall.points.some((point) => point.y <= door.y)).toBe(true);
   });
 
+  it('分岐クリップでは本線の床が途切れず、枝道は角から横に伸びる', () => {
+    const maze = createJunctionPreviewMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    const image = screen.getByAltText('迷路分岐プレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const floor = extractBaseFloorQuad(svg);
+    const size = extractViewBox(svg);
+    const door = extractDoorRect(svg, 'left');
+    const sideFloor = extractSideCorridorFloor(svg, 'left');
+
+    expect(floor).not.toBeNull();
+    expect(size).not.toBeNull();
+    expect(door).not.toBeNull();
+    expect(sideFloor).not.toBeNull();
+    if (!floor || !size || !door || !sideFloor) {
+      return;
+    }
+
+    const bottomY = Math.max(...floor.map((p) => p.y));
+    expect(bottomY).toBeGreaterThan(size.height * 0.96);
+
+    const [nearA, nearB, farB, farA] = sideFloor;
+    const doorBottom = door.y + door.height;
+    expect(Math.abs(nearA.y - doorBottom)).toBeLessThan(0.6);
+    expect(Math.abs(nearB.y - doorBottom)).toBeLessThan(0.6);
+    expect(farA.y).toBeLessThan(doorBottom);
+    expect(farB.y).toBeLessThan(doorBottom);
+    expect(Math.min(farA.x, farB.x)).toBeLessThan(door.x);
+  });
+
   it('ゴールクリップには青空のようなポータルが描かれる', () => {
     const maze = createJunctionPreviewMaze();
     initializePrepPreviewState(maze);
@@ -274,6 +350,32 @@ describe('PlayerView 準備プレビュー', () => {
     expect(svg).toMatch(/data-goal-portal="true"/);
     expect(svg).toMatch(/#6ec3ff/i);
     expect(svg).toMatch(/#ffffff/i);
+  });
+
+  it('ゴールクリップでは奥壁の大部分が空色の開口で占められる', () => {
+    const maze = createSkyGoalMaze();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    const image = screen.getByAltText('ゴールプレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const portal = extractPortalRect(svg);
+    const frontWall = extractFrontWallFillRect(svg);
+
+    expect(portal).not.toBeNull();
+    expect(frontWall).not.toBeNull();
+    if (!portal || !frontWall) {
+      return;
+    }
+
+    expect(portal.width).toBeGreaterThan(frontWall.width * 0.7);
+    expect(portal.height).toBeGreaterThan(frontWall.height * 0.6);
+    expect(frontWall.fill).toMatch(/6ec3ff|goal-sky/i);
   });
 });
 
@@ -353,6 +455,99 @@ function extractWallPolygon(svg: string, side: 'left' | 'right') {
   return { points };
 }
 
+function extractSideCorridorFloor(svg: string, side: 'left' | 'right') {
+  const match = svg.match(
+    new RegExp(`<g[^>]*data-side-corridor="${side}"[^>]*>\\s*<polygon[^>]*points="([^"]+)"`),
+  );
+  if (!match) {
+    return null;
+  }
+  const [, pointsText] = match;
+  const coords = pointsText
+    .trim()
+    .split(/\s+/)
+    .map((pair) => pair.split(',').map((value) => Number.parseFloat(value)))
+    .filter((values) => values.length === 2 && values.every((value) => Number.isFinite(value)))
+    .map(([x, y]) => ({ x, y }));
+  if (coords.length !== 4) {
+    return null;
+  }
+  return coords as [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ];
+}
+
+function extractPortalRect(svg: string) {
+  const match = svg.match(/<rect[^>]*data-goal-portal="true"[^>]*>/);
+  if (!match) {
+    return null;
+  }
+  const attributes = Object.fromEntries(
+    Array.from(match[0].matchAll(/([a-zA-Z-]+)="([^"]+)"/g)).map(([, key, value]) => [key, value]),
+  );
+  const parse = (value?: string) => (value ? Number.parseFloat(value) : NaN);
+  const x = parse(attributes.x);
+  const y = parse(attributes.y);
+  const width = parse(attributes.width);
+  const height = parse(attributes.height);
+  if ([x, y, width, height].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+function extractFrontWallFillRect(svg: string) {
+  const match = svg.match(/<rect[^>]*data-front-wall-fill="true"[^>]*>/);
+  if (!match) {
+    return null;
+  }
+  const attributes = Object.fromEntries(
+    Array.from(match[0].matchAll(/([a-zA-Z-]+)="([^"]+)"/g)).map(([, key, value]) => [key, value]),
+  );
+  const parse = (value?: string) => (value ? Number.parseFloat(value) : NaN);
+  const x = parse(attributes.x);
+  const y = parse(attributes.y);
+  const width = parse(attributes.width);
+  const height = parse(attributes.height);
+  if ([x, y, width, height].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  return { x, y, width, height, fill: attributes.fill ?? '' };
+}
+
+function extractViewBox(svg: string) {
+  const match = svg.match(/viewBox="0 0 ([0-9.]+) ([0-9.]+)"/);
+  if (!match) {
+    return null;
+  }
+  const [, width, height] = match;
+  return { width: Number.parseFloat(width), height: Number.parseFloat(height) };
+}
+
+function extractDepthFade(svg: string) {
+  const fadeGroup = svg.match(/<linearGradient id="depth-fade-[^"]+"[^>]*y1="([^"]+)"[^>]*y2="([^"]+)"/);
+  if (!fadeGroup) {
+    return null;
+  }
+  const [, y1, y2] = fadeGroup;
+  const fadePolygon = extractBaseFloorQuad(svg);
+  if (!fadePolygon) {
+    return null;
+  }
+  const bottomY = Math.max(...fadePolygon.map((p) => p.y));
+  const topY = Math.min(...fadePolygon.map((p) => p.y));
+  const start = Number.parseFloat(y1);
+  const end = Number.parseFloat(y2);
+  if ([start, end].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  const ratio = (bottomY - start) / (bottomY - topY);
+  return { start, end, startRatio: ratio };
+}
+
 function initializePrepPreviewState(maze: ReturnType<typeof prepareMaze>) {
   act(() => {
     useSessionStore.setState((state) => ({
@@ -423,6 +618,18 @@ function createStraightPreviewMaze(): ServerMazeState {
     start: { x: start.x, y: start.y },
     goal: { x: east.x, y: east.y },
     cells: [start, corridor, east],
+  };
+}
+
+function createSkyGoalMaze(): ServerMazeState {
+  const start = createCell(1, 1, { top: true, right: false, bottom: true, left: true });
+  const mid = createCell(2, 1, { top: true, right: false, bottom: true, left: false });
+  const goal = createCell(3, 1, { top: true, right: true, bottom: true, left: false });
+  return {
+    seed: 'forward-open-goal',
+    start: { x: start.x, y: start.y },
+    goal: { x: goal.x, y: goal.y },
+    cells: [start, mid, goal],
   };
 }
 
