@@ -253,17 +253,22 @@ describe('PlayerView 準備プレビュー', () => {
     const minX = Math.min(...floor.map((p) => p.x));
     const maxX = Math.max(...floor.map((p) => p.x));
 
-    expect(bottomY).toBeGreaterThan(size.height * 0.96);
-    expect(topY).toBeLessThan(size.height * 0.6);
-    expect(minX).toBeLessThan(size.width * 0.08);
-    expect(maxX).toBeGreaterThan(size.width * 0.92);
+    expect(bottomY).toBeGreaterThan(size.height * 0.985);
+    expect(topY).toBeLessThan(size.height * 0.55);
+    expect(minX).toBeLessThan(size.width * 0.02);
+    expect(maxX).toBeGreaterThan(size.width * 0.985);
     expect(
-      leftWall.points.some((point) => point.y >= size.height * 0.96 && point.x <= size.width * 0.12),
+      leftWall.points.some(
+        (point) => point.y >= size.height * 0.96 && point.x <= size.width * 0.05,
+      ),
     ).toBe(true);
     expect(
-      rightWall.points.some((point) => point.y >= size.height * 0.96 && point.x >= size.width * 0.88),
+      rightWall.points.some(
+        (point) => point.y >= size.height * 0.96 && point.x >= size.width * 0.95,
+      ),
     ).toBe(true);
-    expect(fade.startRatio).toBeGreaterThan(0.45);
+    expect(fade.startRatio).toBeGreaterThan(0.48);
+    expect(fade.startRatio).toBeLessThan(0.7);
   });
 
   it('分岐クリップでは開いている側の壁が角で途切れる', () => {
@@ -373,8 +378,8 @@ describe('PlayerView 準備プレビュー', () => {
       return;
     }
 
-    expect(portal.width).toBeGreaterThan(frontWall.width * 0.7);
-    expect(portal.height).toBeGreaterThan(frontWall.height * 0.6);
+    expect(portal.width).toBeGreaterThan(frontWall.width * 0.8);
+    expect(portal.height).toBeGreaterThan(frontWall.height * 0.7);
     expect(frontWall.fill).toMatch(/6ec3ff|goal-sky/i);
   });
 });
