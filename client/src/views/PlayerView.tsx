@@ -1279,7 +1279,7 @@ function createSideOpeningGeometry(
 
 function buildDoorwayBackground(opening: SideOpeningGeometry): string {
   const { x, y, width, height } = opening.door;
-  return `<rect data-doorway="${opening.side}" x="${x}" y="${y}" width="${width}" height="${height}" fill="#050101" opacity="0.85" />`;
+  return `<rect data-doorway="${opening.side}" x="${x}" y="${y}" width="${width}" height="${height}" fill="none" opacity="0" />`;
 }
 
 function buildDoorwayFrame(opening: SideOpeningGeometry): string {
@@ -1608,46 +1608,55 @@ function getFloorEdgeX(dims: WireframeDimensions, side: 'left' | 'right', y: num
     : lerp(dims.rightNearX, dims.rightFarX, ratio);
 }
 
+function lerpXAtY(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  y: number,
+): number {
+  if (start.y === end.y) {
+    return start.x;
+  }
+  const t = clamp((y - start.y) / (end.y - start.y), 0, 1);
+  return lerp(start.x, end.x, t);
+}
+
 function buildWallSvg(
   dims: WireframeDimensions,
   side: 'left' | 'right',
   variant: MazePreviewVariant,
   opening?: SideOpeningGeometry | null,
 ): string {
-  const nearX = getFloorEdgeX(dims, side, dims.bottomY);
   const ceilingY = getWallTopY(dims);
   const hasOpening = Boolean(opening);
+  const nearFloor = { x: getFloorEdgeX(dims, side, dims.bottomY), y: dims.bottomY };
   const tintRatio =
     variant === 'start' ? 0.4 : side === 'left' ? 0.48 : variant === 'goal' ? 0.52 : 0.58;
   const wallColor = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, tintRatio);
   const mortarColor =
     variant === 'start' ? mixHexColors(BRICK_LINE_COLOR, BACKGROUND_COLOR, 0.65) : BRICK_LINE_COLOR;
   const layers: string[] = [];
+  const useBranchShape = hasOpening && opening && (variant === 'junction' || variant === 'goal');
 
-  if (hasOpening && variant === 'junction' && opening) {
+  if (useBranchShape && opening) {
     const doorBottom = opening.door.y + opening.door.height;
     const doorEdgeX = side === 'left' ? opening.door.x : opening.door.x + opening.door.width;
-    const cornerX = getFloorEdgeX(dims, side, doorBottom);
-    const cornerY = doorBottom;
-    const bottomEdgeStart = { x: nearX, y: dims.bottomY };
-    const bottomEdgeEnd = { x: cornerX, y: cornerY };
-    const topEdgeStart = { x: nearX, y: ceilingY };
-    const topEdgeEnd = { x: doorEdgeX, y: ceilingY };
+    const corner = { x: getFloorEdgeX(dims, side, doorBottom), y: doorBottom };
+    const topEdgeStart = { x: nearFloor.x, y: ceilingY };
     const points =
       side === 'left'
         ? [
-            bottomEdgeStart,
             topEdgeStart,
             { x: doorEdgeX, y: ceilingY },
-            { x: doorEdgeX, y: cornerY },
-            bottomEdgeEnd,
+            { x: doorEdgeX, y: corner.y },
+            corner,
+            nearFloor,
           ]
         : [
-            bottomEdgeEnd,
-            { x: doorEdgeX, y: cornerY },
-            { x: doorEdgeX, y: ceilingY },
             topEdgeStart,
-            bottomEdgeStart,
+            nearFloor,
+            corner,
+            { x: doorEdgeX, y: corner.y },
+            { x: doorEdgeX, y: ceilingY },
           ];
     layers.push(
       `<polygon data-wall-side="${side}" points="${polygonPoints(points)}" fill="${wallColor}" opacity="0.98" />`,
@@ -1655,75 +1664,33 @@ function buildWallSvg(
     const mortarRows = 8;
     for (let i = 1; i < mortarRows; i += 1) {
       const ratio = i / mortarRows;
-      const start = interpolatePoint(bottomEdgeStart, bottomEdgeEnd, ratio);
-      const end = interpolatePoint(topEdgeStart, topEdgeEnd, ratio);
+      const y = lerp(nearFloor.y, ceilingY, ratio);
+      const leftX = nearFloor.x;
+      const rightX = y >= corner.y ? lerpXAtY(nearFloor, corner, y) : doorEdgeX;
       layers.push(
-        `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${mortarColor}" stroke-width="0.8" stroke-linecap="round" opacity="0.5" />`,
-      );
-    }
-    const mortarColumns = 3;
-    for (let i = 1; i <= mortarColumns; i += 1) {
-      const ratio = i / (mortarColumns + 1);
-      const bottom = interpolatePoint(bottomEdgeStart, bottomEdgeEnd, ratio);
-      const top = interpolatePoint(topEdgeStart, topEdgeEnd, ratio);
-      layers.push(
-        `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${mortarColor}" stroke-width="0.75" stroke-linecap="round" opacity="0.4" />`,
+        `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${mortarColor}" stroke-width="0.8" stroke-linecap="round" opacity="0.5" />`,
       );
     }
   } else {
     const endY = opening ? opening.door.y + opening.door.height : dims.topY;
-    const endX = opening
-      ? side === 'left'
-        ? opening.door.x
-        : opening.door.x + opening.door.width
-      : getFloorEdgeX(dims, side, endY);
+    const floorEnd = { x: getFloorEdgeX(dims, side, endY), y: endY };
+    const topNear = { x: nearFloor.x, y: ceilingY };
+    const topFar = { x: floorEnd.x, y: ceilingY };
     const points =
       side === 'left'
-        ? [
-            { x: nearX, y: dims.bottomY },
-            { x: nearX, y: ceilingY },
-            { x: endX, y: ceilingY },
-            { x: endX, y: endY },
-            ...(hasOpening ? [{ x: nearX, y: endY }] : []),
-          ]
-        : [
-            ...(hasOpening ? [{ x: endX, y: endY }] : []),
-            { x: endX, y: ceilingY },
-            { x: nearX, y: ceilingY },
-            { x: nearX, y: dims.bottomY },
-            { x: nearX, y: endY },
-          ];
+        ? [nearFloor, topNear, topFar, floorEnd]
+        : [floorEnd, topFar, topNear, nearFloor];
     layers.push(
       `<polygon data-wall-side="${side}" points="${polygonPoints(points)}" fill="${wallColor}" opacity="0.98" />`,
     );
     const mortarRows = 8;
     for (let i = 1; i < mortarRows; i += 1) {
       const ratio = i / mortarRows;
-      const start = {
-        x: nearX,
-        y: lerp(dims.bottomY, ceilingY, ratio),
-      };
-      const end = {
-        x: endX,
-        y: lerp(endY, ceilingY, ratio),
-      };
+      const y = lerp(nearFloor.y, ceilingY, ratio);
+      const leftX = nearFloor.x;
+      const rightX = y >= floorEnd.y ? getFloorEdgeX(dims, side, y) : floorEnd.x;
       layers.push(
-        `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${mortarColor}" stroke-width="0.8" stroke-linecap="round" opacity="0.5" />`,
-      );
-    }
-    const mortarColumns = 3;
-    for (let i = 1; i <= mortarColumns; i += 1) {
-      const ratio = i / (mortarColumns + 1);
-      const bottom = {
-        x: lerp(nearX, endX, ratio),
-        y: lerp(dims.bottomY, endY, ratio),
-      };
-      const top = {
-        x: lerp(nearX, endX, ratio),
-        y: ceilingY,
-      };
-      layers.push(
-        `<line x1="${bottom.x}" y1="${bottom.y}" x2="${top.x}" y2="${top.y}" stroke="${mortarColor}" stroke-width="0.75" stroke-linecap="round" opacity="0.4" />`,
+        `<line x1="${leftX}" y1="${y}" x2="${rightX}" y2="${y}" stroke="${mortarColor}" stroke-width="0.8" stroke-linecap="round" opacity="0.5" />`,
       );
     }
   }
@@ -1854,7 +1821,7 @@ function buildFarWallSvg(
         y: dims.topY,
       };
       const end = {
-        x: lerp(secondLeftX, secondRightX, offset),
+        x: start.x,
         y: secondTopY,
       };
       parts.push(

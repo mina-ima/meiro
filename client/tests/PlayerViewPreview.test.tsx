@@ -410,6 +410,37 @@ describe('PlayerView 準備プレビュー', () => {
     expect(portal.width).toBeGreaterThan(frontWall.width * 0.75);
     expect(portal.height).toBeGreaterThan(frontWall.height * 0.65);
   });
+
+  it('ゴール直前に分岐があっても閉じた側の壁は床端に接地する', () => {
+    const maze = createGoalWithBranchBefore();
+    initializePrepPreviewState(maze);
+
+    render(<PlayerView {...baseProps} phase="prep" />);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    const image = screen.getByAltText('ゴールプレビュー映像') as HTMLImageElement;
+    const svg = decodeSvgDataUri(image.getAttribute('src'));
+    const floor = extractBaseFloorQuad(svg);
+    const rightWall = extractWallPolygon(svg, 'right');
+
+    expect(floor).not.toBeNull();
+    expect(rightWall).not.toBeNull();
+    if (!floor || !rightWall) {
+      return;
+    }
+
+    const floorTopY = Math.min(...floor.map((p) => p.y));
+    const floorTopRightX = Math.max(...floor.filter((p) => Math.abs(p.y - floorTopY) < 0.01).map((p) => p.x));
+
+    const hasAlignedCorner = rightWall.points.some(
+      (point) => Math.abs(point.y - floorTopY) < 1.2 && Math.abs(point.x - floorTopRightX) < 1.2,
+    );
+
+    expect(hasAlignedCorner).toBe(true);
+  });
 });
 
 function decodeSvgDataUri(src: string | null): string {
