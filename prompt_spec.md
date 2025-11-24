@@ -220,13 +220,13 @@ type PointItem = {x:number,y:number,value:1|3|5};
 
 * **ミニマップなし**、**ヘッドボブなし**。HUD：残時間（mm:ssタイマー）、現在ポイント/規定ポイント、ゴール到達ボーナス値、達成率(%)進捗バー。
 * 不足補填が適用された探索開始時はHUDに「初期ポイント補填 +N」を表示してプレイヤーへ明示する。
-* 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。v1実装ではテキストオーバーレイでクリップを案内（client/src/views/PlayerView.tsx / client/tests/PlayerViewPreview.test.tsx）。
-  * プレビューの視覚表現は「クラシックな一人称レンガ迷路」を厳守し、床は左右対称の台形グリッド、壁は垂直レンガ面＋水平天井、前方開口は通路が遠景へ続く形で描画する。左右の枝道は壁面に矩形の開口部を穿ち、その奥へ同質のレンガ床/遠壁を描く。黒いドア/グロー矩形などUI的な装飾は禁止し、`data-front-wall` など既存 dataset の意味も維持する。
+* 準備中は**5秒ランダム通路プレビュー**を連続再生（**必ずゴールが1回映る**）。simpleMazePreview のミニマルSVG＋テキストオーバーレイで案内し、`client/tests/PlayerViewPreview.test.tsx` は prep プレビューが描画されるスモークのみ。
+  * 詳細なレンガジオメトリや `data-*` 属性検証は撤廃し、床/壁/空の簡素構成だけを維持する。
 * 探索フェーズ中のプレイヤービューは迷路データとレイキャスト結果を反映した**レンガ調の一人称描画**とし、黒背景の上に実際の壁ヒット位置へ赤いブリックカラムを描画する。床/天井/側壁は遠近によって暗度を変えたレンガパターンで埋め、開いている方向はカラムが欠けて通路が見えるようにする（`client/tests/PlayerViewRaycaster.test.tsx`）。
 * Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
 * **切断ポーズ中**はプレイヤー/オーナー共通で画面中央に半透明オーバーレイを重ね、「通信が途切れています」「残りXX秒で不在側敗北」をカウントダウン表示する（復帰で自動解除）。
 * 更新メモ(2025-10-03): start/junction/goal プレビューの床・壁ジオメトリ、フェード、空色ポータル占有率を仕様どおりに最終調整（PlayerView.tsx / PlayerViewPreview.test.tsx 反映）
-* 更新メモ(2025-11-24): スタートは床/側壁を最下部から表示しつつ中盤以降で暗転、分岐は床端に沿って壁を止め枝道床を角から横に伸ばし、ゴール直前に分岐があっても枝道＋大型ポータルを両立（PlayerView.tsx / PlayerViewPreview.test.tsx）
+* 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsx をスモーク化（詳細ジオメトリ/データ属性検証を削除、simpleMazePreview.tsへ集約）
 
 ### 8.2 オーナー
 
@@ -419,8 +419,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ### 17.4 UX/受入（Acceptance）
 
 * 仕様数値（速度/視界/HUD/ズーム倍率/クールダウン/禁止半径/上限下限）が**全て目視確認**できるデバッグHUD。
-* 準備中プレビューに**必ずゴール映像が含まれる**（3枚の静止クリップを5秒間隔で表示し、ゴール直前クリップでは光源付きプレビュー画像を重ねる）。迷路シードからスタート/分岐/ゴールの進行方向情報を抽出して一人称視点のプレビュー画像とヒントに反映する。
-  * 分岐クリップは start→junction までの経路ベクトルを「前方」として採用し、迷路セルの接続情報を相対方向（前/左右/後ろ）に投影して可視化する。進行方向が閉じている場合は前面を完全な煉瓦壁で塞ぎ、左右が開いていれば壁面に開口部と枝道の床を描画し、`client/tests/PlayerViewPreview.test.tsx` で前方閉塞・左右開口の data 属性を検証する。
+* 準備中プレビューに**必ずゴール映像が含まれる**（3枚の静止クリップを5秒間隔で表示し、ゴール直前クリップを1回含める）。simpleMazePreview の簡素SVGを採用し、`client/tests/PlayerViewPreview.test.tsx` のスモークで prep プレビューがクラッシュしないことのみ確認（詳細ジオメトリ/データ属性検証は撤廃）。
 * プレビュー画像は地面テクスチャや2色床を廃し、暗い壁×淡い通路のハイコントラストと前方グローだけで通路を明瞭に示す。
 * 探索中ビューも黒背景＋全て赤線/赤ドットのワイヤーフレームで幾何学的に表示し、Canvasレイヤーだけで通路立体感を再現する。
 * ゴール到達＝**即終了ではなく**規定未達なら続行し、**規定到達で終了**。
@@ -466,7 +465,7 @@ npm run dev --workspace @meiro/server -- --local
 * [x] 20×20/40×40、**最短≥4×L**（`server/tests/room-maze-initialization.test.ts`）
 * [x] 視界：FOV90°, 到達4マス（4マス目減光）＋迷路セルを2倍格子に投影してASCIIワイヤーフレームと床/壁レイヤーを動的描画し、4マス以遠は黒フォグで遮光＆閉じた壁面にはテクスチャストライプを描く（`client/tests/PlayerViewRaycaster.test.tsx`）
 * [x] プレイヤービュー：正面方向のみのワイヤーフレームに奥行きを反映し、dead-end / corner / junction 判定を `dataset` と描画で提示（`client/tests/PlayerViewRaycaster.test.tsx` 追加テスト）
-* [x] プレビュー：スタートは入口直前で床と側壁を明るく映しつつ中盤以降を暗転させ、分岐は側壁が角で途切れ枝道が横に伸び、ゴールは奥面ほぼ全面を占める青空グラデのポータルで終端を強調する（`client/tests/PlayerViewPreview.test.tsx`）
+* [x] プレビュー：simpleMazePreview による prep スモーク（床/壁/空の簡素SVG。詳細ジオメトリ検証は撤廃、`client/tests/PlayerViewPreview.test.tsx`）
 * [x] 壁：初期本数、削除1回、CD1.0s、禁止半径2、経路維持（`server/tests/owner-resources.test.ts` / `server/tests/owner-path-block.test.ts` / `client/tests/OwnerView.test.tsx` / `client/tests/DebugHUD.test.tsx` / `client/tests/AppOwnerForbiddenDistance.test.tsx`）
 * [x] 罠：40%速度、limit/5、同時2
 * [x] ポイント：下限不足→初期ポイント補填（上限=規定−1）

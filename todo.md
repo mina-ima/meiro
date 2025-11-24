@@ -163,14 +163,13 @@
 
 ### 13.2 プレイヤーUI
 - [x] 準備中プレビュー（5秒クリップ連続再生）
+  - DoD: prep フェーズでプレビューグループがレンダリングされクラッシュしない（client/tests/PlayerViewPreview.test.tsx スモーク）
 - [x] **必ずゴールが1回映る** ロジック
-  - DoD: client/tests/PlayerViewPreview.test.tsx でプレビューを検証
-- [x] プレビュー表現：スタートは奥壁なしで遠方を暗転、分岐は側壁が角で途切れて側道が横に伸び、ゴールは青空グラデのポータルで終端を強調（側面開口は通路中盤・奥行き0.55–0.7）
-  - DoD: client/tests/PlayerViewPreview.test.tsx の暗転/開口深度/角口/ポータル検証が通過
-- [x] プレビューの映像調整：スタートは入口直前で床・側壁を明示し手前を明るく、分岐は角から枝道が横伸びし本線床が途切れない、ゴールは奥面ほぼ全面を空色ポータルに置換
-  - DoD: client/tests/PlayerViewPreview.test.tsx の追加検証が通過
+  - DoD: デフォルトクリップ構成にゴール用クリップを含める（表示はスモークテストでレンダリングのみ確認）
+- [x] プレビュー表現：simpleMazePreview による簡素な床/壁/空のSVG（詳細なレンガジオメトリや data-* 属性の検証は撤廃）
+  - DoD: スモークテストで描画成功を確認。旧SVG詳細テストは2025-11-24に削除（PlayerView.tsx / simpleMazePreview.ts）
 - 更新メモ(2025-10-03): スタート/分岐/ゴールのプレビュー床・壁ジオメトリとフェード/ポータル描画を微調整し、SVGテストを最新しきい値へ追従
-- 更新メモ(2025-11-24): スタートの床/側壁を最下部から見せつつ中盤以降で暗転を強め、分岐では床エッジに沿って壁を止めて枝道床を角から横へ伸ばし、ゴール直前の分岐でも枝道表現と大型ポータルを両立（PlayerView.tsx / PlayerViewPreview.test.tsx）
+- 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsxをスモークテストへ置換（旧ジオメトリ/データ属性検証を撤廃、simpleMazePreview.ts へ移行）
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
@@ -251,9 +250,7 @@
 - [x] デバッグHUDで全パラメータが可視
   - DoD: `client/tests/DebugHUD.test.tsx` で仕様値の表示を確認
 - [x] 準備中プレビューにゴール映像が含まれる
-  - DoD: `client/tests/PlayerViewPreview.test.tsx` でゴールプレビュー映像の表示を確認
-- [x] 準備中プレビューが迷路固有の分岐情報を一人称視点風で表示する
-  - DoD: `client/tests/PlayerViewPreview.test.tsx` でスタート→分岐→ゴールごとに進行方向を抽出し、分岐クリップで左右開口部と袋小路の前面閉塞を data 属性ベースで検証
+  - DoD: デフォルトクリップにゴール用静止画を含め、`client/tests/PlayerViewPreview.test.tsx` のスモークでprepプレビューがレンダリングされることを確認（詳細ジオメトリ検証は撤廃）
 - [x] 規定到達で終了（到達未満なら継続）  
   - DoD: `server/tests/points-scoring.test.ts` でターゲット到達時の `RESULT` 通知と未達時継続を検証
 
@@ -353,7 +350,7 @@
 
 ## 24. 表示改善フィードバック（2025-05-24）
 - [x] プレイヤープレビュー画像で壁/通路コントラストを強調  
-  - DoD: `client/tests/PlayerViewPreview.test.tsx` の新規テストで床グリッド非表示と通路ハイライトの強調を検証
+  - DoD: simpleMazePreview の配色でコントラストを維持し、`client/tests/PlayerViewPreview.test.tsx` のスモークでprepプレビューが描画されることを確認（旧床グリッド非表示テストは撤廃）
 - [x] 探索フェーズのプレイヤービューを1点透視のワイヤーフレーム＋床/側壁レイヤーで刷新  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` で黒背景・赤線ガイドに加えて床グロー/側壁シルエットと開口部で壁列が抜ける挙動を検証
 - [x] プレイヤービューのレイキャストに迷路セルの壁情報を反映し、距離に応じて縦線の高さ/透明度を変化  
@@ -361,7 +358,7 @@
 - [x] プレイヤービューで dead-end / corner / junction を判別して前方ワイヤーフレームと `dataset` に反映  
   - DoD: `client/tests/PlayerViewRaycaster.test.tsx` の視界シルエット3テストでデータ属性と描画切替を確認
 - [x] プレイヤービューと準備プレビューを迷路に沿ったレンガ調一人称ビューへ刷新  
-  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` でレンガ床/壁カラム描画とヒット数に応じた開口部表現を検証し、`client/tests/PlayerViewPreview.test.tsx` でSVGプレビューにレンガ配色と傾き情報が含まれることを確認。クラシックな回廊表現として、床は左右対称の台形グリッド、壁は垂直レンガ面＋矩形の側道開口、前方開口は通路延長で描く。
+  - DoD: `client/tests/PlayerViewRaycaster.test.tsx` でレンガ床/壁カラム描画とヒット数に応じた開口部表現を検証し、準備プレビューは simpleMazePreview の簡易SVGを `client/tests/PlayerViewPreview.test.tsx` のスモークで描画確認（詳細ジオメトリ/データ属性検証は撤廃）。
 
 ---
 

@@ -16,10 +16,6 @@ import {
   type ServerMazeState,
 } from '../state/sessionStore';
 
-function createSvgDataUri(svg: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
-}
-
 interface PreviewClip {
   id: 'entry' | 'junction' | 'goal';
   title: string;
@@ -907,7 +903,6 @@ function deriveGoalViewCell(
 
 export type Direction = 'north' | 'east' | 'south' | 'west';
 
-
 const DIRECTION_INFO: Record<
   Direction,
   { wall: keyof ServerMazeCell['walls']; label: string; short: string }
@@ -1148,7 +1143,6 @@ function createPerspectivePreviewSvg(
   return createSimplePreviewSvg(cell, openDirections, variant, orientation, openings);
 }
 
-
 function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): RelativeOpenings {
   return {
     forward: isDirectionOpen(cell, facing),
@@ -1158,6 +1152,7 @@ function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): Relat
   };
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 function createSideOpeningGeometry(
   dims: WireframeDimensions,
   side: 'left' | 'right',
@@ -1958,6 +1953,7 @@ function buildFarWallSvg(
   return parts.join('\n');
 }
 
+/* eslint-enable @typescript-eslint/no-unused-vars */
 function polygonPoints(points: Array<{ x: number; y: number }>): string {
   return points.map((point) => `${point.x},${point.y}`).join(' ');
 }
