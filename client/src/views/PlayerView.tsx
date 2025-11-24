@@ -1,3 +1,4 @@
+import { createSimplePreviewSvg } from './simpleMazePreview';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HUD } from './HUD';
 import { useFixedFrameLoop } from '../game/frameLoop';
@@ -753,7 +754,7 @@ function scaleVector(vector: { x: number; y: number }): { x: number; y: number }
   };
 }
 
-function mixHexColors(colorA: string, colorB: string, t: number): string {
+export function mixHexColors(colorA: string, colorB: string, t: number): string {
   const a = hexToRgb(colorA);
   const b = hexToRgb(colorB);
   const ratio = clamp(t, 0, 1);
@@ -904,7 +905,8 @@ function deriveGoalViewCell(
   return goalCell;
 }
 
-type Direction = 'north' | 'east' | 'south' | 'west';
+export type Direction = 'north' | 'east' | 'south' | 'west';
+
 
 const DIRECTION_INFO: Record<
   Direction,
@@ -1131,7 +1133,7 @@ function selectCorridorCell(
   return pool[index] ?? pool[0];
 }
 
-type MazePreviewVariant = 'start' | 'junction' | 'goal';
+export type MazePreviewVariant = 'start' | 'junction' | 'goal';
 
 function createPerspectivePreviewSvg(
   cell: ServerMazeCell,
@@ -1139,60 +1141,13 @@ function createPerspectivePreviewSvg(
   variant: MazePreviewVariant,
   orientation: Direction,
 ): string {
-  const view = deriveViewParameters(cell, openDirections, variant);
-  const relativeOpenings = computeRelativeOpenings(cell, orientation);
-  const floor = buildFloorSvg(view.dims, variant);
-  const ceiling = `<rect width="${view.dims.width}" height="${view.dims.topY - 4}" fill="${CEILING_TINT_COLOR}" opacity="0.9" />`;
-  const farWall = buildFarWallSvg(view.dims, relativeOpenings.forward, variant);
-  const leftOpening = relativeOpenings.left ? createSideOpeningGeometry(view.dims, 'left') : null;
-  const rightOpening = relativeOpenings.right
-    ? createSideOpeningGeometry(view.dims, 'right')
-    : null;
-  const leftWall = buildWallSvg(view.dims, 'left', variant, leftOpening);
-  const rightWall = buildWallSvg(view.dims, 'right', variant, rightOpening);
-  const backExit = buildRearExitSvg(view.dims, relativeOpenings.backward);
+  // どの方向が開いているかは、既存のロジックを使って計算する
+  const openings = computeRelativeOpenings(cell, orientation);
 
-  const doorwayBackgrounds = [
-    leftOpening ? buildDoorwayBackground(leftOpening) : '',
-    rightOpening ? buildDoorwayBackground(rightOpening) : '',
-  ].join('\n');
-
-  const sideCorridors = [
-    leftOpening ? buildSideCorridorSvg(leftOpening) : '',
-    rightOpening ? buildSideCorridorSvg(rightOpening) : '',
-  ].join('\n');
-
-  const doorwayFrames = [
-    leftOpening ? buildDoorwayFrame(leftOpening) : '',
-    rightOpening ? buildDoorwayFrame(rightOpening) : '',
-  ].join('\n');
-  const depthFade = variant === 'start' ? buildDepthFadeOverlay(view.dims) : '';
-
-  return createSvgDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${view.dims.width} ${view.dims.height}">
-      <rect width="${view.dims.width}" height="${view.dims.height}" fill="${BACKGROUND_COLOR}" />
-      <g
-        data-view-tilt="${view.tilt.toFixed(2)}"
-        data-facing="${orientation}"
-        data-forward-open="${relativeOpenings.forward}"
-        data-left-open="${relativeOpenings.left}"
-        data-right-open="${relativeOpenings.right}"
-        data-back-open="${relativeOpenings.backward}"
-      >
-        ${ceiling}
-        ${floor}
-        ${backExit}
-        ${farWall}
-        ${leftWall}
-        ${rightWall}
-        ${doorwayBackgrounds}
-        ${sideCorridors}
-        ${doorwayFrames}
-        ${depthFade}
-      </g>
-    </svg>
-  `);
+  // プレビュー画像の描画は simpleMazePreview.ts に任せる
+  return createSimplePreviewSvg(cell, openDirections, variant, orientation, openings);
 }
+
 
 function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): RelativeOpenings {
   return {
