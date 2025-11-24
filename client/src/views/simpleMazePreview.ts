@@ -2,7 +2,7 @@
 // できるだけシンプルな「通路＋分岐＋ゴール」の一人称ビューを描画するモジュール
 // 壁と床の形状と明るさ重視で、模様は最低限にしています。
 
-import { mixHexColors, type Direction, type MazePreviewVariant } from './PlayerView';
+import type { Direction, MazePreviewVariant } from './PlayerView';
 import type { ServerMazeCell } from '../state/sessionStore';
 
 export type OpenFlags = {
@@ -37,6 +37,15 @@ type Dims = {
   centerX: number;
 };
 
+type SideOpeningGeometry = {
+  side: 'left' | 'right';
+  tBranch: number;
+  xBranch: number;
+  yBranch: number;
+  floor: [Point, Point, Point, Point];
+  door: { x: number; y: number; width: number; height: number };
+};
+
 // --------------------------------------------------
 // エントリーポイント
 // --------------------------------------------------
@@ -48,11 +57,14 @@ export function createSimplePreviewSvg(
   orientation: Direction,
   openings: OpenFlags,
 ): string {
-  const dims = computeDims(variant);
+  const dims = computeDims();
+
+  const leftOpening = openings.left ? createSideOpeningGeometry(dims, 'left') : null;
+  const rightOpening = openings.right ? createSideOpeningGeometry(dims, 'right') : null;
 
   const floor = buildMainFloor(dims, variant);
-  const sideWalls = buildSideWalls(dims, openings);
-  const branches = buildBranches(dims, openings);
+  const sideWalls = buildSideWalls(dims, { leftOpening, rightOpening });
+  const branches = buildBranches(dims, { openings, leftOpening, rightOpening });
   const front = buildFront(dims, variant, openings);
 
   const svg = `
@@ -82,17 +94,17 @@ export function createSimplePreviewSvg(
 // 基本寸法
 // --------------------------------------------------
 
-function computeDims(variant: MazePreviewVariant): Dims {
+function computeDims(): Dims {
   const width = WIDTH;
   const height = HEIGHT;
 
-  const bottomY = Math.round(height * 0.9);      // 床の最手前
-  const horizonY = Math.round(height * 0.45);    // 床と奥壁がぶつかるライン
+  const bottomY = Math.round(height * 0.99); // 床の最手前
+  const horizonY = Math.round(height * 0.55); // 床と奥壁がぶつかるライン
 
   const centerX = width / 2;
 
   // すべてのビューで床形状は同じにする
-  const nearWidth = width * 0.8;
+  const nearWidth = width * 0.98;
   const farWidth = nearWidth * 0.4;
 
   const leftNearX = Math.round(centerX - nearWidth / 2);
@@ -125,15 +137,13 @@ function buildMainFloor(d: Dims, variant: MazePreviewVariant): string {
     { x: d.leftFarX, y: d.horizonY },
   ];
 
-  const floorColor = FLOOR_BASE;
-
   const parts: string[] = [];
-  parts.push(poly(baseFloor, floorColor, 1, 'data-floor="main"'));
+  parts.push(poly(baseFloor, FLOOR_BASE, 1, 'data-floor="main"'));
 
-  // スタートだけ奥を暗くするフェード（4マス先から暗くなるイメージ）
+  // スタートだけ奥を暗くするフェード（手前半分は残す）
   if (variant === 'start') {
-    const fadeId = 'start-depth-fade';
-    const fadeStartT = 0.6; // 0.0=手前, 1.0=奥
+    const fadeId = 'depth-fade-start';
+    const fadeStartT = 0.52; // 0.0=手前, 1.0=奥
     const yStart = lerp(d.bottomY, d.horizonY, fadeStartT);
     const yEnd = d.horizonY;
 
@@ -141,15 +151,12 @@ function buildMainFloor(d: Dims, variant: MazePreviewVariant): string {
       <defs>
         <linearGradient id="${fadeId}" x1="0" y1="${yStart}" x2="0" y2="${yEnd}">
           <stop offset="0%" stop-color="${BG}" stop-opacity="0" />
-          <stop offset="40%" stop-color="${BG}" stop-opacity="0.4" />
-          <stop offset="100%" stop-color="${BG}" stop-opacity="0.98" />
+          <stop offset="100%" stop-color="${BG}" stop-opacity="0.95" />
         </linearGradient>
       </defs>
     `);
 
-    parts.push(
-      poly(baseFloor, `url(#${fadeId})`, 1, 'data-depth-fade="start"'),
-    );
+    parts.push(poly(baseFloor, `url(#${fadeId})`, 1, 'data-depth-fade="start"'));
   }
 
   return parts.join('\n');
@@ -159,38 +166,45 @@ function buildMainFloor(d: Dims, variant: MazePreviewVariant): string {
 // 側壁（本線）
 // --------------------------------------------------
 
-function buildSideWalls(d: Dims, openings: OpenFlags): string {
+function buildSideWalls(
+  d: Dims,
+  {
+    leftOpening,
+    rightOpening,
+  }: { leftOpening: SideOpeningGeometry | null; rightOpening: SideOpeningGeometry | null },
+): string {
   const parts: string[] = [];
 
-  const wallHeight = d.horizonY - d.bottomY;
-  const ceilY = d.horizonY - wallHeight * 0.6;
+  const wallHeight = d.bottomY - d.horizonY;
+  const ceilY = Math.round(d.horizonY - wallHeight * 0.6);
 
-  // 左側
-  {
-    const nearX = d.leftNearX;
-    const farX = d.leftFarX;
-    // 分岐がある側でも壁は基本的に手前から分岐の手前まで描画する
+  const buildWall = (side: 'left' | 'right', opening: SideOpeningGeometry | null) => {
+    const nearX = side === 'left' ? d.leftNearX : d.rightNearX;
+    const farX = side === 'left' ? d.leftFarX : d.rightFarX;
+
+    if (opening) {
+      const { xBranch, yBranch } = opening;
+      const wall: Point[] = [
+        { x: nearX, y: d.bottomY },
+        { x: nearX, y: ceilY },
+        { x: xBranch, y: ceilY },
+        { x: xBranch, y: yBranch },
+      ];
+      parts.push(poly(wall, WALL_COLOR, 1, `data-wall-side="${side}"`));
+      return;
+    }
+
     const wall: Point[] = [
       { x: nearX, y: d.bottomY },
       { x: nearX, y: ceilY },
       { x: farX, y: ceilY },
       { x: farX, y: d.horizonY },
     ];
-    parts.push(poly(wall, WALL_COLOR, 1, 'data-wall-side="left"'));
-  }
+    parts.push(poly(wall, WALL_COLOR, 1, `data-wall-side="${side}"`));
+  };
 
-  // 右側
-  {
-    const nearX = d.rightNearX;
-    const farX = d.rightFarX;
-    const wall: Point[] = [
-      { x: nearX, y: d.bottomY },
-      { x: nearX, y: ceilY },
-      { x: farX, y: ceilY },
-      { x: farX, y: d.horizonY },
-    ];
-    parts.push(poly(wall, WALL_COLOR, 1, 'data-wall-side="right"'));
-  }
+  buildWall('left', leftOpening);
+  buildWall('right', rightOpening);
 
   return parts.join('\n');
 }
@@ -199,7 +213,18 @@ function buildSideWalls(d: Dims, openings: OpenFlags): string {
 // 分岐（枝道）
 // --------------------------------------------------
 
-function buildBranches(d: Dims, openings: OpenFlags): string {
+function buildBranches(
+  d: Dims,
+  {
+    openings,
+    leftOpening,
+    rightOpening,
+  }: {
+    openings: OpenFlags;
+    leftOpening: SideOpeningGeometry | null;
+    rightOpening: SideOpeningGeometry | null;
+  },
+): string {
   const parts: string[] = [];
 
   // 分岐がない場合は何もしない
@@ -207,37 +232,25 @@ function buildBranches(d: Dims, openings: OpenFlags): string {
     return '';
   }
 
-  // 分岐が始まる奥行き（0.0=手前, 1.0=奥）
-  const tBranch = 0.55;
-  const yBranch = lerp(d.bottomY, d.horizonY, tBranch);
-  const xLeftAtBranch = lerp(d.leftNearX, d.leftFarX, tBranch);
-  const xRightAtBranch = lerp(d.rightNearX, d.rightFarX, tBranch);
+  const buildSideCorridor = (side: 'left' | 'right', opening: SideOpeningGeometry | null) => {
+    if (!opening) {
+      return;
+    }
 
-  const sideDepthT = 0.8;
-  const ySideFar = lerp(d.bottomY, d.horizonY, sideDepthT);
-  const sideLen = (d.rightNearX - d.leftNearX) * 0.6;
+    const corridor: string[] = [];
+    corridor.push(`<g data-side-corridor="${side}">`);
+    corridor.push(poly(opening.floor, FLOOR_BASE, 0.95));
+    corridor.push('</g>');
 
-  // 左側に分岐
-  if (openings.left) {
-    const nearA: Point = { x: xLeftAtBranch, y: yBranch };
-    const nearB: Point = { x: xLeftAtBranch, y: yBranch }; // 少し厚みを持たせるなら調整
-    const farA: Point = { x: xLeftAtBranch - sideLen, y: ySideFar };
-    const farB: Point = { x: xLeftAtBranch - sideLen, y: ySideFar + 1 };
+    const door = opening.door;
+    parts.push(
+      `<rect data-doorway="${side}" x="${door.x}" y="${door.y}" width="${door.width}" height="${door.height}" fill="${BG}" stroke="${BG}" stroke-opacity="0.12"/>`,
+    );
+    parts.push(corridor.join('\n'));
+  };
 
-    const floorPoly: Point[] = [nearA, nearB, farB, farA];
-    parts.push(poly(floorPoly, FLOOR_BASE, 0.95, 'data-side-corridor="left"'));
-  }
-
-  // 右側に分岐
-  if (openings.right) {
-    const nearA: Point = { x: xRightAtBranch, y: yBranch };
-    const nearB: Point = { x: xRightAtBranch, y: yBranch };
-    const farA: Point = { x: xRightAtBranch + sideLen, y: ySideFar };
-    const farB: Point = { x: xRightAtBranch + sideLen, y: ySideFar + 1 };
-
-    const floorPoly: Point[] = [nearB, nearA, farA, farB];
-    parts.push(poly(floorPoly, FLOOR_BASE, 0.95, 'data-side-corridor="right"'));
-  }
+  buildSideCorridor('left', leftOpening);
+  buildSideCorridor('right', rightOpening);
 
   return parts.join('\n');
 }
@@ -257,45 +270,112 @@ function buildFront(d: Dims, variant: MazePreviewVariant, openings: OpenFlags): 
   if (variant === 'goal') {
     // ゴールは奥面ほぼ全部が青空
     const skyId = 'goal-sky';
+    const portalId = 'goal-portal';
     parts.push(`
       <defs>
         <linearGradient id="${skyId}" x1="0" y1="${wallTop}" x2="0" y2="${wallBottom}">
           <stop offset="0%" stop-color="${SKY_TOP}" stop-opacity="0.98" />
           <stop offset="100%" stop-color="${SKY_BOTTOM}" stop-opacity="0.98" />
         </linearGradient>
+        <linearGradient id="${portalId}" x1="0" y1="${wallTop}" x2="0" y2="${wallBottom}">
+          <stop offset="0%" stop-color="${SKY_BOTTOM}" stop-opacity="0.95" />
+          <stop offset="100%" stop-color="${SKY_TOP}" stop-opacity="0.85" />
+        </linearGradient>
       </defs>
     `);
     parts.push(
-      `<rect data-front-wall-fill="true" x="${d.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="url(#${skyId})" opacity="1"/>`,
+      `<g data-front-wall="goal" data-forward-open="false">` +
+        `<rect data-front-wall-fill="true" x="${d.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="url(#${skyId})" opacity="1"/>` +
+        (() => {
+          const portalW = wallWidth * 0.84;
+          const portalH = wallHeight * 0.82;
+          const px = d.centerX - portalW / 2;
+          const py = wallTop + wallHeight * 0.09;
+          return `<rect data-goal-portal="true" x="${px}" y="${py}" width="${portalW}" height="${portalH}" fill="url(#${portalId})" opacity="0.95"/>`;
+        })() +
+        `</g>`,
     );
-    // さらに内側に一段明るいポータル
-    const portalW = wallWidth * 0.8;
-    const portalH = wallHeight * 0.8;
-    const px = d.centerX - portalW / 2;
-    const py = wallTop + wallHeight * 0.1;
+    return parts.join('\n');
+  }
+
+  // スタートは奥に壁を描かず、暗い奥行きだけを示す
+  if (variant === 'start') {
     parts.push(
-      `<rect data-goal-portal="true" x="${px}" y="${py}" width="${portalW}" height="${portalH}" fill="${SKY_BOTTOM}" opacity="0.9"/>`,
+      '<g data-front-wall="open" data-forward-extension="false" data-forward-fade="false"></g>',
     );
     return parts.join('\n');
   }
 
   // 前方が開いている場合：暗い穴だけ（奥の分岐があることを示す）
   if (openings.forward) {
-    const holeW = wallWidth * 0.35;
-    const holeH = wallHeight * 0.6;
-    const hx = d.centerX - holeW / 2;
-    const hy = wallBottom - holeH;
+    const fadeId = 'depth-fade-forward';
+    const depthT = 0.85;
+    const yExt = Math.max(wallTop, lerp(d.horizonY, d.horizonY - wallHeight, depthT));
+    const extension: Point[] = [
+      { x: d.leftFarX, y: d.horizonY },
+      { x: d.rightFarX, y: d.horizonY },
+      { x: d.centerX + (d.rightFarX - d.centerX) * 0.35, y: yExt },
+      { x: d.centerX - (d.centerX - d.leftFarX) * 0.35, y: yExt },
+    ];
+    parts.push(`
+      <defs>
+        <linearGradient id="${fadeId}" x1="0" y1="${yExt}" x2="0" y2="${d.horizonY}">
+          <stop offset="0%" stop-color="${BG}" stop-opacity="0.95" />
+          <stop offset="100%" stop-color="${BG}" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+    `);
     parts.push(
-      `<rect x="${hx}" y="${hy}" width="${holeW}" height="${holeH}" fill="${BG}" opacity="0.95"/>`,
+      `<g data-front-wall="open" data-forward-extension="true" data-forward-fade="true">` +
+        poly(extension, `url(#${fadeId})`, 1, 'data-forward-extension-shape="true"') +
+        `</g>`,
     );
     return parts.join('\n');
   }
 
   // dead end：普通のレンガ壁
   parts.push(
-    `<rect data-front-wall-fill="true" x="${d.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${WALL_COLOR}" opacity="0.96"/>`,
+    `<g data-front-wall="closed" data-forward-open="false">` +
+      `<rect data-front-wall-fill="true" x="${d.leftFarX}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${WALL_COLOR}" opacity="0.96"/>` +
+      `</g>`,
   );
   return parts.join('\n');
+}
+
+// --------------------------------------------------
+// 枝道ジオメトリ
+// --------------------------------------------------
+
+function createSideOpeningGeometry(d: Dims, side: 'left' | 'right'): SideOpeningGeometry {
+  const tBranch = 0.58;
+  const yBranch = lerp(d.bottomY, d.horizonY, tBranch);
+  const nearX = side === 'left' ? d.leftNearX : d.rightNearX;
+  const farX = side === 'left' ? d.leftFarX : d.rightFarX;
+  const xBranch = lerp(nearX, farX, tBranch);
+
+  const sideSign = side === 'left' ? -1 : 1;
+  const sideWidth = d.width * 0.25;
+  const lift = (d.bottomY - d.horizonY) * 0.3;
+  const yFar = clamp(yBranch - lift, d.horizonY + 2, yBranch - 1);
+
+  const nearInner: Point = { x: xBranch, y: yBranch };
+  const nearOuter: Point = { x: xBranch + sideSign * sideWidth, y: yBranch };
+  const farOuter: Point = { x: xBranch + sideSign * sideWidth * 0.9, y: yFar };
+  const farInner: Point = { x: xBranch + sideSign * sideWidth * 0.3, y: yFar };
+
+  const doorHeight = Math.min((d.bottomY - d.horizonY) * 0.18, 16);
+  const doorWidth = d.width * 0.07;
+  const doorX = side === 'left' ? xBranch : xBranch - doorWidth;
+  const doorY = yBranch - doorHeight;
+
+  return {
+    side,
+    tBranch,
+    xBranch,
+    yBranch,
+    floor: [nearInner, nearOuter, farOuter, farInner],
+    door: { x: doorX, y: doorY, width: doorWidth, height: doorHeight },
+  };
 }
 
 // --------------------------------------------------
@@ -306,10 +386,6 @@ function poly(points: Point[], fill: string, opacity = 1, extra = ''): string {
   const d = points.map((p) => `${p.x},${p.y}`).join(' ');
   const attr = extra ? ' ' + extra : '';
   return `<polygon${attr} points="${d}" fill="${fill}" opacity="${opacity}"/>`;
-}
-
-function line(from: Point, to: Point, stroke: string, width = 1, opacity = 1): string {
-  return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" opacity="${opacity}"/>`;
 }
 
 function lerp(a: number, b: number, t: number): number {
