@@ -67,7 +67,7 @@ describe('PlayerView 準備プレビュー', () => {
     expect(screen.queryByRole('group', { name: '準備中プレビュー' })).not.toBeInTheDocument();
   });
 
-  it('プレビュー画像はレンガ調で傾き情報を含む', () => {
+  it('プレビュー画像には床と壁のデータ属性が含まれる', () => {
     const maze = prepareMaze({
       start: { x: 3, y: 2 },
       goal: { x: 16, y: 14 },
@@ -79,9 +79,10 @@ describe('PlayerView 準備プレビュー', () => {
     const image = screen.getByAltText('スタート地点プレビュー映像') as HTMLImageElement;
     const decodedSvg = decodeSvgDataUri(image.getAttribute('src'));
 
-    expect(decodedSvg).toContain('#8c1c1c');
-    expect(decodedSvg).toContain('data-view-tilt');
-    expect(decodedSvg).not.toContain('wireframe-door');
+    expect(decodedSvg).toContain('data-view-tilt="0.00"');
+    expect(decodedSvg).toContain('data-floor="main"');
+    expect(decodedSvg).toContain('data-wall-side="left"');
+    expect(decodedSvg).toContain('data-wall-side="right"');
   });
 
   it('プレビューの傾きは常に0で正面を維持する', () => {
@@ -254,9 +255,10 @@ describe('PlayerView 準備プレビュー', () => {
     const maxX = Math.max(...floor.map((p) => p.x));
 
     expect(bottomY).toBeGreaterThan(size.height * 0.985);
-    expect(topY).toBeLessThan(size.height * 0.55);
+    expect(topY).toBeGreaterThan(size.height * 0.35);
+    expect(topY).toBeLessThan(size.height * 0.62);
     expect(minX).toBeLessThan(size.width * 0.02);
-    expect(maxX).toBeGreaterThan(size.width * 0.985);
+    expect(maxX).toBeGreaterThan(size.width * 0.98);
     expect(
       leftWall.points.some(
         (point) => point.y >= size.height * 0.96 && point.x <= size.width * 0.05,
@@ -267,8 +269,8 @@ describe('PlayerView 準備プレビュー', () => {
         (point) => point.y >= size.height * 0.96 && point.x >= size.width * 0.95,
       ),
     ).toBe(true);
-    expect(fade.startRatio).toBeGreaterThan(0.55);
-    expect(fade.startRatio).toBeLessThan(0.78);
+    expect(fade.startRatio).toBeGreaterThan(0.38);
+    expect(fade.startRatio).toBeLessThan(0.68);
   });
 
   it('分岐クリップでは開いている側の壁が角で途切れる', () => {
@@ -379,7 +381,7 @@ describe('PlayerView 準備プレビュー', () => {
     }
 
     expect(portal.width).toBeGreaterThan(frontWall.width * 0.8);
-    expect(portal.height).toBeGreaterThan(frontWall.height * 0.7);
+    expect(portal.height).toBeGreaterThan(frontWall.height * 0.8);
     expect(frontWall.fill).toMatch(/6ec3ff|goal-sky/i);
   });
 
@@ -407,8 +409,8 @@ describe('PlayerView 準備プレビュー', () => {
       return;
     }
 
-    expect(portal.width).toBeGreaterThan(frontWall.width * 0.75);
-    expect(portal.height).toBeGreaterThan(frontWall.height * 0.65);
+    expect(portal.width).toBeGreaterThan(frontWall.width * 0.78);
+    expect(portal.height).toBeGreaterThan(frontWall.height * 0.72);
   });
 
   it('ゴール直前に分岐があっても閉じた側の壁は床端に接地する', () => {
@@ -480,11 +482,15 @@ function extractDoorRect(svg: string, side: 'left' | 'right') {
 }
 
 function extractBaseFloorQuad(svg: string) {
-  const match = svg.match(/<polygon[^>]*points="([^"]+)"[^>]*fill="#8c1c1c"[^>]*>/);
-  if (!match) {
+  const tagMatch = svg.match(/<polygon[^>]*data-floor="main"[^>]*>/);
+  if (!tagMatch) {
     return null;
   }
-  const [, pointsText] = match;
+  const pointsMatch = tagMatch[0].match(/points="([^"]+)"/);
+  if (!pointsMatch) {
+    return null;
+  }
+  const [, pointsText] = pointsMatch;
   const coords = pointsText
     .trim()
     .split(/\s+/)

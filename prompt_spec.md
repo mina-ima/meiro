@@ -226,8 +226,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * Canvas描画ループは `useFixedFrameLoop` で `requestAnimationFrame` を間引き、30fps上限を保証する。
 * **切断ポーズ中**はプレイヤー/オーナー共通で画面中央に半透明オーバーレイを重ね、「通信が途切れています」「残りXX秒で不在側敗北」をカウントダウン表示する（復帰で自動解除）。
 * 更新メモ(2025-10-03): start/junction/goal プレビューの床・壁ジオメトリ、フェード、空色ポータル占有率を仕様どおりに最終調整（PlayerView.tsx / PlayerViewPreview.test.tsx 反映）
-* 更新メモ(2025-10-XX): スタート手前の床/側壁を画面下端まで見せて中盤から暗転、分岐の壁/枝道を床に密着させ、ゴール直前に分岐があっても枝道表現と全面ポータルを両立できるようSVG/テストを更新
-* 更新メモ(2025-10-XX): 正面壁の煉瓦線を水平/垂直に固定し、分岐/ゴールで枝道角の壁を床エッジで止めるジオメトリ調整を反映（PlayerView.tsx / PlayerViewPreview.test.tsx）
+* 更新メモ(2025-11-24): スタートは床/側壁を最下部から表示しつつ中盤以降で暗転、分岐は床端に沿って壁を止め枝道床を角から横に伸ばし、ゴール直前に分岐があっても枝道＋大型ポータルを両立（PlayerView.tsx / PlayerViewPreview.test.tsx）
 
 ### 8.2 オーナー
 
