@@ -16,6 +16,10 @@ import {
   type ServerMazeState,
 } from '../state/sessionStore';
 
+function createSvgDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
+}
+
 interface PreviewClip {
   id: 'entry' | 'junction' | 'goal';
   title: string;
@@ -1140,7 +1144,9 @@ function createPerspectivePreviewSvg(
   const openings = computeRelativeOpenings(cell, orientation);
 
   // プレビュー画像の描画は simpleMazePreview.ts に任せる
-  return createSimplePreviewSvg(cell, openDirections, variant, orientation, openings);
+  return createSvgDataUri(
+    createSimplePreviewSvg(cell, openDirections, variant, orientation, openings),
+  );
 }
 
 function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): RelativeOpenings {
