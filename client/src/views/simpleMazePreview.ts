@@ -137,6 +137,7 @@ function renderFloorLayers(slices: DepthSlice[]): string {
 
 function renderWallLayers(side: 'left' | 'right', slices: DepthSlice[]): string {
   const isLeft = side === 'left';
+  const outerFactor = 0.65;
   return slices
     .map((slice) => {
       const near = slice.near;
@@ -145,20 +146,86 @@ function renderWallLayers(side: 'left' | 'right', slices: DepthSlice[]): string 
       const topFar = wallTopY(far.y, far.t);
       const color = shadeColor(COLOR_WALL, far.t * 0.9);
       const opacity = 0.94 - far.t * 0.3;
-      const nearX = isLeft ? 0 : WIDTH;
-      const points = [
-        { x: nearX, y: topNear },
-        { x: nearX, y: near.y },
-        { x: isLeft ? near.xLeft : near.xRight, y: near.y },
-        { x: isLeft ? far.xLeft : far.xRight, y: far.y },
-        { x: nearX, y: far.y },
-        { x: nearX, y: topFar },
-      ];
+      const outerNear = isLeft ? 0 : WIDTH;
+      const outerFar = isLeft
+        ? far.xLeft * outerFactor
+        : WIDTH - (WIDTH - far.xRight) * outerFactor;
+      const points = isLeft
+        ? [
+            { x: outerNear, y: topNear },
+            { x: outerNear, y: near.y },
+            { x: near.xLeft, y: near.y },
+            { x: far.xLeft, y: far.y },
+            { x: outerFar, y: far.y },
+            { x: outerFar, y: topFar },
+          ]
+        : [
+            { x: outerNear, y: topNear },
+            { x: outerNear, y: near.y },
+            { x: near.xRight, y: near.y },
+            { x: far.xRight, y: far.y },
+            { x: outerFar, y: far.y },
+            { x: outerFar, y: topFar },
+          ];
       const base = `<polygon data-wall-side="${side}" data-wall-layer="${side}" data-layer-index="${slice.index}" points="${joinPoints(points)}" fill="${color}" fill-opacity="${opacity}" />`;
       const pattern = `<polygon data-wall-side="${side}" data-wall-layer-pattern="${side}" data-layer-index="${slice.index}" points="${joinPoints(points)}" fill="url(#wall-brick-pattern)" fill-opacity="${0.24 - far.t * 0.12}" />`;
       return `${base}\n${pattern}`;
     })
     .join('\n');
+}
+
+// 手前の床を視点直下まで埋める
+function renderForegroundFloor(slices: DepthSlice[]): string {
+  const near = slices[0]?.near;
+  if (!near) return '';
+  const bottomLeft = Math.max(0, near.xLeft - 50);
+  const bottomRight = Math.min(WIDTH, near.xRight + 50);
+  const base = `<polygon data-floor="foreground" points="${joinPoints([
+    { x: bottomLeft, y: HEIGHT },
+    { x: bottomRight, y: HEIGHT },
+    { x: near.xRight, y: near.y },
+    { x: near.xLeft, y: near.y },
+  ])}" fill="${COLOR_FLOOR}" fill-opacity="0.97" />`;
+  const pattern = `<polygon data-floor-pattern="foreground" points="${joinPoints([
+    { x: bottomLeft, y: HEIGHT },
+    { x: bottomRight, y: HEIGHT },
+    { x: near.xRight, y: near.y },
+    { x: near.xLeft, y: near.y },
+  ])}" fill="url(#floor-grid-pattern)" fill-opacity="0.22" />`;
+  return `${base}\n${pattern}`;
+}
+
+// 手前の左右壁を視点直下まで埋める
+function renderForegroundWalls(slices: DepthSlice[]): string {
+  const near = slices[0]?.near;
+  if (!near) return '';
+  const topNear = wallTopY(near.y, 0);
+  const leftInnerBottom = Math.max(0, near.xLeft - 30);
+  const rightInnerBottom = Math.min(WIDTH, near.xRight + 30);
+
+  const leftPoints = [
+    { x: 0, y: HEIGHT },
+    { x: leftInnerBottom, y: HEIGHT },
+    { x: near.xLeft, y: near.y },
+    { x: 0, y: near.y },
+    { x: 0, y: topNear },
+    { x: near.xLeft, y: topNear },
+  ];
+  const rightPoints = [
+    { x: WIDTH, y: HEIGHT },
+    { x: rightInnerBottom, y: HEIGHT },
+    { x: near.xRight, y: near.y },
+    { x: WIDTH, y: near.y },
+    { x: WIDTH, y: topNear },
+    { x: near.xRight, y: topNear },
+  ];
+
+  const leftWall = `<polygon data-wall-side="left" data-wall-layer="foreground" points="${joinPoints(leftPoints)}" fill="${COLOR_WALL}" fill-opacity="0.95" />`;
+  const rightWall = `<polygon data-wall-side="right" data-wall-layer="foreground" points="${joinPoints(rightPoints)}" fill="${COLOR_WALL}" fill-opacity="0.95" />`;
+  const leftPattern = `<polygon data-wall-side="left" data-wall-layer-pattern="foreground" points="${joinPoints(leftPoints)}" fill="url(#wall-brick-pattern)" fill-opacity="0.22" />`;
+  const rightPattern = `<polygon data-wall-side="right" data-wall-layer-pattern="foreground" points="${joinPoints(rightPoints)}" fill="url(#wall-brick-pattern)" fill-opacity="0.22" />`;
+
+  return [leftWall, rightWall, leftPattern, rightPattern].join('\n');
 }
 
 function renderStartFade(): string {
@@ -200,18 +267,19 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const steps = 3;
-  const anchorT = 0.55;
-  const anchor = {
-    x: isLeft ? lerp(FLOOR_NEAR_LEFT, FLOOR_FAR_LEFT, anchorT) : lerp(FLOOR_NEAR_RIGHT, FLOOR_FAR_RIGHT, anchorT),
-    y: lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, anchorT),
-  };
+  const startX = isLeft ? FLOOR_NEAR_LEFT : FLOOR_NEAR_RIGHT;
+  const endX = isLeft ? FLOOR_NEAR_LEFT - 70 : FLOOR_NEAR_RIGHT + 70;
+  const startY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, 0.5);
+  const endY = startY - 35;
+  const startWidth = 52;
+  const endWidth = 24;
   const corridor: { x: number; y: number; width: number }[] = [];
   for (let i = 0; i <= steps; i++) {
     const s = i / steps;
     corridor.push({
-      x: anchor.x + direction * 70 * s,
-      y: anchor.y - 18 * s,
-      width: lerp(42, 26, s),
+      x: lerp(startX, endX, s),
+      y: lerp(startY, endY, s),
+      width: lerp(startWidth, endWidth, s),
     });
   }
 
@@ -329,6 +397,8 @@ function renderStartView(openings: Openings): string {
     renderWallLayers('left', slices),
     renderWallLayers('right', slices),
     renderFloorLayers(slices),
+    renderForegroundWalls(slices),
+    renderForegroundFloor(slices),
   ];
   if (!openings.forward) {
     parts.push(renderForwardWall(0.22, 'start'));
