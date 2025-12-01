@@ -11,22 +11,20 @@ type Openings = {
 const WIDTH = 320;
 const HEIGHT = 180;
 
-// 色はシンプルでOK（レンガ模様にはこだわらない）
-const COLOR_FLOOR = '#8c4a32';
-const COLOR_WALL = '#7a3825';
-const COLOR_SKY = '#9fd8ff';
+const FLOOR_NEAR_Y = 160; // bottom of the main corridor floor
+const FLOOR_FAR_Y = 80; // horizon / far edge of floor
+
+const FLOOR_NEAR_LEFT = 60;
+const FLOOR_NEAR_RIGHT = 260;
+const FLOOR_FAR_LEFT = 120;
+const FLOOR_FAR_RIGHT = 200;
+
 const COLOR_BG = '#000000';
-
-// 共通で使う通路のジオメトリ（スクリーン座標）
-const BOTTOM_Y = 160;
-const TOP_Y = 80;
-const LEFT_NEAR_X = 60;
-const RIGHT_NEAR_X = 260;
-const LEFT_FAR_X = 110;
-const RIGHT_FAR_X = 210;
-
-// 分岐が始まる深さ（0=手前,1=遠端）
-const BRANCH_T = 0.5; // 通路の奥行きの中間くらい
+const COLOR_CEILING = '#0b0d14';
+const COLOR_FLOOR = '#8c4a32';
+const COLOR_WALL = '#6c3a2c';
+const COLOR_SKY = '#9fd8ff';
+const COLOR_SKY_EDGE = '#d3ecff';
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -36,67 +34,88 @@ function joinPoints(points: { x: number; y: number }[]): string {
   return points.map((p) => `${p.x},${p.y}`).join(' ');
 }
 
-// メインの通路床（手前から奥まで）
+function renderCeiling(): string {
+  return `<rect x="0" y="0" width="${WIDTH}" height="${FLOOR_FAR_Y}" fill="${COLOR_CEILING}" />`;
+}
+
 function renderMainFloor(): string {
   const pts = [
-    { x: LEFT_NEAR_X, y: BOTTOM_Y },
-    { x: RIGHT_NEAR_X, y: BOTTOM_Y },
-    { x: RIGHT_FAR_X, y: TOP_Y },
-    { x: LEFT_FAR_X, y: TOP_Y },
+    { x: FLOOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
+    { x: FLOOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: FLOOR_FAR_RIGHT, y: FLOOR_FAR_Y },
+    { x: FLOOR_FAR_LEFT, y: FLOOR_FAR_Y },
   ];
   return `<polygon data-floor="main" points="${joinPoints(pts)}" fill="${COLOR_FLOOR}" />`;
 }
 
-// サイドの壁（分岐なしのときの基本形）
 function renderSideWalls(): string {
   const leftWall = [
     { x: 0, y: 0 },
-    { x: 0, y: BOTTOM_Y },
-    { x: LEFT_NEAR_X, y: BOTTOM_Y },
-    { x: LEFT_FAR_X, y: TOP_Y },
-    { x: 0, y: TOP_Y },
+    { x: 0, y: HEIGHT },
+    { x: FLOOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
+    { x: FLOOR_FAR_LEFT, y: FLOOR_FAR_Y },
+    { x: 0, y: FLOOR_FAR_Y },
   ];
   const rightWall = [
-    { x: RIGHT_NEAR_X, y: BOTTOM_Y },
-    { x: WIDTH, y: BOTTOM_Y },
+    { x: FLOOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: WIDTH, y: HEIGHT },
     { x: WIDTH, y: 0 },
-    { x: WIDTH, y: TOP_Y },
-    { x: RIGHT_FAR_X, y: TOP_Y },
+    { x: WIDTH, y: FLOOR_FAR_Y },
+    { x: FLOOR_FAR_RIGHT, y: FLOOR_FAR_Y },
   ];
+
   return [
     `<polygon data-wall-side="left" points="${joinPoints(leftWall)}" fill="${COLOR_WALL}" />`,
     `<polygon data-wall-side="right" points="${joinPoints(rightWall)}" fill="${COLOR_WALL}" />`,
   ].join('\n');
 }
 
-// 分岐用：左右どちらかに伸びる枝道の床
+function renderStartFade(): string {
+  const fadeStart = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, 0.5);
+  const fadeId = 'start-depth-fade';
+  const floorPoly = [
+    { x: FLOOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
+    { x: FLOOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: FLOOR_FAR_RIGHT, y: FLOOR_FAR_Y },
+    { x: FLOOR_FAR_LEFT, y: FLOOR_FAR_Y },
+  ];
+
+  return `
+    <defs>
+      <linearGradient id="${fadeId}" x1="0" y1="${fadeStart}" x2="0" y2="${FLOOR_FAR_Y}">
+        <stop offset="0%" stop-color="${COLOR_BG}" stop-opacity="0" />
+        <stop offset="100%" stop-color="${COLOR_BG}" stop-opacity="0.95" />
+      </linearGradient>
+    </defs>
+    <polygon data-depth-fade="start" points="${joinPoints(floorPoly)}" fill="url(#${fadeId})" />
+  `;
+}
+
 function renderSideCorridor(side: 'left' | 'right'): string {
   const sign = side === 'left' ? -1 : 1;
-  const yBranch = lerp(BOTTOM_Y, TOP_Y, BRANCH_T);
-
-  // 本線の床上での「角」の位置（内側のエッジ）
-  const xInner =
+  const tBranch = 0.5;
+  const yBranch = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tBranch);
+  const xBranch =
     side === 'left'
-      ? lerp(LEFT_NEAR_X, LEFT_FAR_X, BRANCH_T)
-      : lerp(RIGHT_NEAR_X, RIGHT_FAR_X, BRANCH_T);
+      ? lerp(FLOOR_NEAR_LEFT, FLOOR_FAR_LEFT, tBranch)
+      : lerp(FLOOR_NEAR_RIGHT, FLOOR_FAR_RIGHT, tBranch);
 
-  const width = 40;
-  const depth = 30;
+  const sideWidth = 40;
+  const sideDepth = 25;
 
-  const p0 = { x: xInner, y: yBranch }; // 角の内側（本線との接点）
-  const p1 = { x: xInner + sign * width, y: yBranch }; // 枝道の手前外側
-  const p2 = { x: xInner + sign * (width * 0.9), y: yBranch - depth }; // 奥の外側
-  const p3 = { x: xInner + sign * (width * 0.4), y: yBranch - depth }; // 奥の内側
+  const p0 = { x: xBranch, y: yBranch };
+  const p1 = { x: xBranch + sign * sideWidth, y: yBranch };
+  const p2 = { x: xBranch + sign * sideWidth, y: yBranch - sideDepth };
+  const p3 = { x: xBranch + sign * (sideWidth * 0.4), y: yBranch - sideDepth };
 
   const floor = `<polygon data-side-corridor="${side}" points="${joinPoints([
     p0,
     p1,
     p2,
     p3,
-  ])}" fill="${COLOR_FLOOR}" />`;
+  ])}" fill="${COLOR_FLOOR}" opacity="0.95" />`;
 
-  // 枝道の内側の壁（奥の縦の面）
-  const wallHeight = 40;
+  const wallHeight = 36;
   const wall = [
     { x: p3.x, y: p3.y - wallHeight },
     { x: p2.x, y: p2.y - wallHeight },
@@ -108,75 +127,48 @@ function renderSideCorridor(side: 'left' | 'right'): string {
   return `${floor}\n${wallSvg}`;
 }
 
-// ゴールの空（ポータル）。奥の壁のほぼ全体を空にする
 function renderGoalPortal(): string {
-  const wallTop = 10;
-  const wallBottom = TOP_Y;
-  const wallLeft = LEFT_FAR_X;
-  const wallRight = RIGHT_FAR_X;
-  const wallWidth = wallRight - wallLeft;
-  const wallHeight = wallBottom - wallTop;
+  const backWallTop = 10;
+  const backWallBottom = FLOOR_FAR_Y;
+  const backWallLeft = FLOOR_FAR_LEFT;
+  const backWallRight = FLOOR_FAR_RIGHT;
+  const backWallWidth = backWallRight - backWallLeft;
+  const backWallHeight = backWallBottom - backWallTop;
 
-  const skyId = 'goal-sky';
+  const gradientId = 'goal-sky';
+  const portalWidth = backWallWidth * 0.85;
+  const portalHeight = backWallHeight * 0.85;
+  const portalLeft = backWallLeft + (backWallWidth - portalWidth) / 2;
+  const portalTop = backWallTop + (backWallHeight - portalHeight) / 2;
 
-  const base = `<rect data-front-wall-fill="true" x="${wallLeft}" y="${wallTop}" width="${wallWidth}" height="${wallHeight}" fill="${COLOR_SKY}" />`;
-
-  const portalWidth = wallWidth * 0.85;
-  const portalHeight = wallHeight * 0.85;
-  const portalLeft = wallLeft + (wallWidth - portalWidth) / 2;
-  const portalTop = wallTop + (wallHeight - portalHeight) / 2;
-
-  const gradient = `
+  const defs = `
     <defs>
-      <linearGradient id="${skyId}" x1="0" y1="${wallTop}" x2="0" y2="${wallBottom}">
-        <stop offset="0%" stop-color="${COLOR_SKY}" stop-opacity="1" />
-        <stop offset="100%" stop-color="white" stop-opacity="1" />
+      <linearGradient id="${gradientId}" x1="0" y1="${backWallTop}" x2="0" y2="${backWallBottom}">
+        <stop offset="0%" stop-color="${COLOR_SKY_EDGE}" />
+        <stop offset="100%" stop-color="${COLOR_SKY}" />
       </linearGradient>
     </defs>
   `;
 
-  const portal = `<rect data-goal-portal="true" x="${portalLeft}" y="${portalTop}" width="${portalWidth}" height="${portalHeight}" fill="url(#${skyId})" />`;
+  const wall = `<rect data-front-wall-fill="true" x="${backWallLeft}" y="${backWallTop}" width="${backWallWidth}" height="${backWallHeight}" fill="url(#${gradientId})" />`;
+  const portal = `<rect data-goal-portal="true" x="${portalLeft}" y="${portalTop}" width="${portalWidth}" height="${portalHeight}" fill="${COLOR_SKY_EDGE}" />`;
 
-  return `${gradient}\n${base}\n${portal}`;
+  return `${defs}\n${wall}\n${portal}`;
 }
 
-// 奥の暗がり（スタートなどで使う）。床の奥半分だけを暗くする。
-function renderDepthFade(): string {
-  const fadeTop = TOP_Y;
-  const fadeBottom = lerp(BOTTOM_Y, TOP_Y, 0.5);
-  const fadeId = 'depth-fade';
-
-  const poly = [
-    { x: LEFT_NEAR_X, y: fadeBottom },
-    { x: RIGHT_NEAR_X, y: fadeBottom },
-    { x: RIGHT_FAR_X, y: fadeTop },
-    { x: LEFT_FAR_X, y: fadeTop },
-  ];
-
-  return `
-    <defs>
-      <linearGradient id="${fadeId}" x1="0" y1="${fadeBottom}" x2="0" y2="${fadeTop}">
-        <stop offset="0%" stop-color="${COLOR_BG}" stop-opacity="0" />
-        <stop offset="60%" stop-color="${COLOR_BG}" stop-opacity="0.7" />
-        <stop offset="100%" stop-color="${COLOR_BG}" stop-opacity="0.98" />
-      </linearGradient>
-    </defs>
-    <polygon data-depth-fade="start" points="${joinPoints(poly)}" fill="url(#${fadeId})" />
-  `;
-}
-
-// 各ビューごとの描画本体（<g>の中身）
 function renderStartView(): string {
-  const floor = renderMainFloor();
+  const ceiling = renderCeiling();
   const walls = renderSideWalls();
-  const fade = renderDepthFade();
-  return [floor, walls, fade].join('\n');
+  const floor = renderMainFloor();
+  const fade = renderStartFade();
+  return [ceiling, walls, floor, fade].join('\n');
 }
 
 function renderJunctionView(openings: Openings): string {
-  const floor = renderMainFloor();
+  const ceiling = renderCeiling();
   const walls = renderSideWalls();
-  const parts: string[] = [floor, walls];
+  const floor = renderMainFloor();
+  const parts: string[] = [ceiling, walls, floor];
 
   if (openings.left) {
     parts.push(renderSideCorridor('left'));
@@ -185,17 +177,16 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderSideCorridor('right'));
   }
 
-  // junction の場合、前方は開いている前提なので奥の壁は描かない
   return parts.join('\n');
 }
 
 function renderGoalView(openings: Openings): string {
-  const floor = renderMainFloor();
-  const walls = renderSideWalls();
+  const ceiling = renderCeiling();
   const portal = renderGoalPortal();
-  const parts: string[] = [floor, walls, portal];
+  const walls = renderSideWalls();
+  const floor = renderMainFloor();
+  const parts: string[] = [ceiling, portal, walls, floor];
 
-  // ゴール手前に分岐がある場合も、枝道を表示する
   if (openings.left) {
     parts.push(renderSideCorridor('left'));
   }
@@ -206,7 +197,6 @@ function renderGoalView(openings: Openings): string {
   return parts.join('\n');
 }
 
-// メインエクスポート関数（PlayerView.tsx から呼ばれる）
 export function createSimplePreviewSvg(
   _cell: ServerMazeCell,
   _openDirections: Direction[],
@@ -229,7 +219,6 @@ export function createSimplePreviewSvg(
   } else if (variant === 'junction') {
     inner = renderJunctionView(openings);
   } else {
-    // goal
     inner = renderGoalView(openings);
   }
 
