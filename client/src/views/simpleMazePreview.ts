@@ -11,15 +11,15 @@ type Openings = {
 const WIDTH = 320;
 const HEIGHT = 180;
 
-// 通路の床と奥の位置
+// 床と奥の位置
 const FLOOR_NEAR_Y = 165; // 手前の床
-const FLOOR_FAR_Y = 90; // 奥（4マス先くらいのイメージ）
+const FLOOR_FAR_Y = 95; // 奥（4マス先くらいのイメージ）
 
 // 通路の幅（手前と奥）
 const CORRIDOR_NEAR_LEFT = 40;
-const CORRIDOR_NEAR_RIGHT = WIDTH - 40;
-const CORRIDOR_FAR_LEFT = WIDTH / 2 - 35;
-const CORRIDOR_FAR_RIGHT = WIDTH / 2 + 35;
+const CORRIDOR_NEAR_RIGHT = WIDTH - 40; // 280
+const CORRIDOR_FAR_LEFT = WIDTH / 2 - 35; // 125
+const CORRIDOR_FAR_RIGHT = WIDTH / 2 + 35; // 195
 
 // 色
 const COLOR_BG = '#000000';
@@ -39,12 +39,39 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+// パターン定義（レンガ・床の模様）
+function renderDefs(): string {
+  return `
+    <defs>
+      <!-- 壁用レンガパターン -->
+      <pattern id="wall-brick" patternUnits="userSpaceOnUse" width="16" height="12">
+        <rect x="0" y="0" width="16" height="12" fill="${COLOR_WALL}" />
+        <line x1="0" y1="6" x2="16" y2="6" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1" />
+        <line x1="8" y1="0" x2="8" y2="6" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1" />
+      </pattern>
+
+      <!-- 床用のタイルっぽいグリッド -->
+      <pattern id="floor-grid" patternUnits="userSpaceOnUse" width="18" height="18">
+        <rect x="0" y="0" width="18" height="18" fill="${COLOR_FLOOR}" />
+        <path d="M0 18 L18 0" stroke="#000000" stroke-opacity="0.25" stroke-width="1" />
+        <path d="M-18 18 L18 -18" stroke="#000000" stroke-opacity="0.12" stroke-width="1" />
+      </pattern>
+
+      <!-- 通路床の奥行きグラデーション -->
+      <linearGradient id="corridor-floor-grad" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_FAR_Y}">
+        <stop offset="0%" stop-color="${COLOR_FLOOR}" />
+        <stop offset="100%" stop-color="${COLOR_FLOOR_DARK}" />
+      </linearGradient>
+    </defs>
+  `;
+}
+
 // 天井
 function renderCeiling(): string {
   return `<rect x="0" y="0" width="${WIDTH}" height="${FLOOR_FAR_Y}" fill="${COLOR_CEILING}" />`;
 }
 
-// 通路の床（手前は明るく、奥は暗くなる）
+// 通路の床（手前は明るく、奥は暗く＋タイル模様）
 function renderCorridorFloor(): string {
   const pts = [
     { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
@@ -53,19 +80,12 @@ function renderCorridorFloor(): string {
     { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },
   ];
 
-  const gradId = 'corridor-floor-grad';
-  const defs = `
-    <defs>
-      <linearGradient id="${gradId}" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_FAR_Y}">
-        <stop offset="0%" stop-color="${COLOR_FLOOR}" />
-        <stop offset="100%" stop-color="${COLOR_FLOOR_DARK}" />
-      </linearGradient>
-    </defs>
-  `;
-
-  const floor = `<polygon data-floor="corridor" points="${joinPoints(
+  const gradFloor = `<polygon data-floor="corridor" points="${joinPoints(
     pts,
-  )}" fill="url(#${gradId})" />`;
+  )}" fill="url(#corridor-floor-grad)" />`;
+  const patternFloor = `<polygon data-floor="corridor-pattern" points="${joinPoints(
+    pts,
+  )}" fill="url(#floor-grid)" fill-opacity="0.35" />`;
 
   // 4マスより先は真っ黒で良い → 奥の上半分を黒で塗る
   const fadeTop = FLOOR_FAR_Y - 4;
@@ -73,35 +93,35 @@ function renderCorridorFloor(): string {
     CORRIDOR_FAR_RIGHT - CORRIDOR_FAR_LEFT
   }" height="${fadeTop}" fill="${COLOR_BG}" />`;
 
-  return `${defs}\n${floor}\n${farFade}`;
+  return `${gradFloor}\n${patternFloor}\n${farFade}`;
 }
 
-// 通路両側の壁（床から画面上端まで）
+// 通路両側の壁（床から画面上端まで）＋レンガ模様
 function renderCorridorWalls(): string {
-  // 左側の壁：黒い通路の左端に沿って、床から画面上端まで
+  // 左側の壁
   const leftWallPts = [
     { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y }, // 手前・床
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },   // 奥・床
-    { x: CORRIDOR_FAR_LEFT, y: 0 },             // 奥・上端
-    { x: CORRIDOR_NEAR_LEFT, y: 0 },            // 手前・上端
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y }, // 奥・床
+    { x: CORRIDOR_FAR_LEFT, y: 0 }, // 奥・上端
+    { x: CORRIDOR_NEAR_LEFT, y: 0 }, // 手前・上端
   ];
 
   // 右側の壁
   const rightWallPts = [
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },   // 奥・床
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y }, // 手前・床
-    { x: CORRIDOR_NEAR_RIGHT, y: 0 },            // 手前・上端
-    { x: CORRIDOR_FAR_RIGHT, y: 0 },             // 奥・上端
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: 0 },
+    { x: CORRIDOR_FAR_RIGHT, y: 0 },
   ];
 
-  const left = `<polygon data-wall-side="left" points="${joinPoints(
+  const leftWall = `<polygon data-wall-side="left" points="${joinPoints(
     leftWallPts,
-  )}" fill="${COLOR_WALL}" />`;
-  const right = `<polygon data-wall-side="right" points="${joinPoints(
+  )}" fill="url(#wall-brick)" />`;
+  const rightWall = `<polygon data-wall-side="right" points="${joinPoints(
     rightWallPts,
-  )}" fill="${COLOR_WALL}" />`;
+  )}" fill="url(#wall-brick)" />`;
 
-  return `${left}\n${right}`;
+  return `${leftWall}\n${rightWall}`;
 }
 
 // 正面の行き止まり壁（床から画面上端まで）
@@ -112,9 +132,9 @@ function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string 
   const right = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
 
   const pts = [
-    { x: left, y: 0 },       // 上端
+    { x: left, y: 0 },
     { x: right, y: 0 },
-    { x: right, y: bottomY }, // 床との接点
+    { x: right, y: bottomY },
     { x: left, y: bottomY },
   ];
 
@@ -123,11 +143,10 @@ function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string 
   )}" fill="${COLOR_WALL_DARK}" />`;
 }
 
-
 // ゴールの光る出口（通路奥の壁に開いた窓）
 function renderGoalPortal(): string {
   const wallBottom = FLOOR_FAR_Y;
-  const wallTop = wallBottom - 80;
+  const wallTop = 10;
   const left = CORRIDOR_FAR_LEFT;
   const right = CORRIDOR_FAR_RIGHT;
 
@@ -138,10 +157,10 @@ function renderGoalPortal(): string {
     { x: left, y: wallBottom },
   ];
 
-  const portalWidth = (right - left) * 0.4;
-  const portalHeight = wallBottom - wallTop - 16;
+  const portalWidth = (right - left) * 0.45;
+  const portalHeight = wallBottom - wallTop - 18;
   const portalLeft = (left + right) / 2 - portalWidth / 2;
-  const portalTop = wallTop + 8;
+  const portalTop = wallTop + 9;
 
   const wall = `<polygon data-front-wall-fill="true" points="${joinPoints(
     wallPts,
@@ -151,22 +170,21 @@ function renderGoalPortal(): string {
   return `${wall}\n${portal}`;
 }
 
-// 左右分岐（横に伸びる通路）を描く
-// 床面から天井まで壁がなく開いていて、奥に伸びる床と側面の壁が見えるようにする
+// 左右分岐（横に伸びる通路）
+// 床面から天井まで壁がなく開いていて、その先に横通路の床と側面が見える
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
 
-  // 分岐が見える位置（奥行き）：通路のだいたい真ん中
+  // 分岐が見える奥行き（通路の真ん中付近）
   const t = 0.55;
   const baseY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
   const innerX = isLeft
     ? lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t)
     : lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
 
-  // 横通路の奥行きと幅
   const branchDepth = 40;
-  const nearWidth = 45;
-  const farWidth = 30;
+  const nearWidth = 50;
+  const farWidth = 35;
 
   const nearInner = innerX;
   const nearOuter = isLeft ? innerX - nearWidth : innerX + nearWidth;
@@ -175,7 +193,7 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const farInner = innerX + (isLeft ? -10 : 10);
   const farOuter = isLeft ? farInner - farWidth : farInner + farWidth;
 
-  // 1) 横通路の床（台形）
+  // 横通路の床
   const floorPts = [
     { x: nearInner, y: baseY },
     { x: nearOuter, y: baseY },
@@ -184,9 +202,9 @@ function renderSideBranch(side: 'left' | 'right'): string {
   ];
   const floor = `<polygon data-side-corridor="${side}" data-branch-floor="${side}" points="${joinPoints(
     floorPts,
-  )}" fill="${COLOR_FLOOR}" />`;
+  )}" fill="url(#floor-grid)" />`;
 
-  // 2) 分岐通路の左右の壁（床から天井まで）
+  // 横通路の左右の壁（床から天井まで）
   const innerWallPts = [
     { x: nearInner, y: baseY },
     { x: farInner, y: farY },
@@ -202,31 +220,18 @@ function renderSideBranch(side: 'left' | 'right'): string {
 
   const innerWall = `<polygon data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
     innerWallPts,
-  )}" fill="${COLOR_WALL}" />`;
+  )}" fill="url(#wall-brick)" />`;
   const outerWall = `<polygon data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
     outerWallPts,
-  )}" fill="${COLOR_WALL_DARK}" />`;
+  )}" fill="url(#wall-brick)" />`;
 
-  // 3) メイン通路側の「入口の縁取り」だけ残す（穴だけに見えないよう控えめに）
-  const doorTop = baseY - 40;
-  const doorInner = innerX;
-  const doorOuter = isLeft ? innerX - (nearWidth - 6) : innerX + (nearWidth - 6);
-  const doorPts = [
-    { x: doorInner, y: baseY },
-    { x: doorInner, y: doorTop },
-    { x: doorOuter, y: doorTop + 6 },
-    { x: doorOuter, y: baseY - 6 },
-  ];
-  const frame = `<polygon data-branch-entry="${side}" points="${joinPoints(
-    doorPts,
-  )}" fill="none" stroke="${COLOR_WALL}" stroke-width="2" stroke-opacity="0.8" />`;
-
-  return [floor, innerWall, outerWall, frame].join('\n');
+  return [floor, innerWall, outerWall].join('\n');
 }
 
 // スタートビュー（一本道）
 function renderStartView(openings: Openings): string {
   const parts: string[] = [];
+  parts.push(renderDefs());
   parts.push(renderCeiling());
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
@@ -234,12 +239,14 @@ function renderStartView(openings: Openings): string {
   if (!openings.forward) {
     parts.push(renderFrontWall('start', 'near'));
   }
+
   return parts.join('\n');
 }
 
 // 分岐ビュー（正面は壁 + 左右に横通路）
 function renderJunctionView(openings: Openings): string {
   const parts: string[] = [];
+  parts.push(renderDefs());
   parts.push(renderCeiling());
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
@@ -251,7 +258,7 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderSideBranch('right'));
   }
 
-  // 分岐ポイントは常に突き当たりに見せる
+  // 分岐ポイントでは、その先は見えない想定 → 必ず前壁で塞ぐ
   parts.push(renderFrontWall('junction', 'near'));
 
   return parts.join('\n');
@@ -260,6 +267,7 @@ function renderJunctionView(openings: Openings): string {
 // ゴールビュー（奥の壁に光る出口）
 function renderGoalView(openings: Openings): string {
   const parts: string[] = [];
+  parts.push(renderDefs());
   parts.push(renderCeiling());
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
