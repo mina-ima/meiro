@@ -24,6 +24,15 @@ function parsePoints(pointsAttr: string | null) {
     });
 }
 
+function splitNearAndFarEdges(points: { x: number; y: number }[]) {
+  const ys = points.map((p) => p.y);
+  const nearY = Math.max(...ys);
+  const farY = Math.min(...ys);
+  const nearEdge = points.filter((p) => Math.abs(p.y - nearY) < 0.001);
+  const farEdge = points.filter((p) => Math.abs(p.y - farY) < 0.001);
+  return { nearEdge, farEdge, nearY, farY };
+}
+
 describe('simpleMazePreview', () => {
   it('スタートビューで床が画面下端まで伸び、左右の壁が1枚ずつだけ描かれる', () => {
     const { container } = renderPreview('start', {
@@ -93,7 +102,7 @@ describe('simpleMazePreview', () => {
     });
   });
 
-  it('左右分岐の床は奥ほど狭くなり、手前より外側にはみ出さない', () => {
+  it('左右分岐の床は奥ほど狭くなり、奥側がさらに側方へ伸びる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -116,7 +125,7 @@ describe('simpleMazePreview', () => {
       expect(widths[i].width).toBeLessThan(widths[i - 1].width);
     }
     widths.forEach(({ nearLeft, farLeft }) => {
-      expect(farLeft).toBeGreaterThanOrEqual(nearLeft);
+      expect(farLeft).toBeLessThan(nearLeft);
     });
   });
 
@@ -132,5 +141,65 @@ describe('simpleMazePreview', () => {
     const rightFloors = container.querySelectorAll('polygon[data-branch-floor="right"]');
     expect(leftFloors.length).toBeLessThanOrEqual(2);
     expect(rightFloors.length).toBeLessThanOrEqual(2);
+  });
+
+  it('左右分岐の床は壁の開口部から横方向へ伸び、奥に行くほど狭く高くなる', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftFloor = container.querySelector('polygon[data-branch-floor="left"]');
+    const rightFloor = container.querySelector('polygon[data-branch-floor="right"]');
+    expect(leftFloor).not.toBeNull();
+    expect(rightFloor).not.toBeNull();
+
+    const leftEdges = splitNearAndFarEdges(parsePoints(leftFloor?.getAttribute('points') ?? null));
+    const rightEdges = splitNearAndFarEdges(parsePoints(rightFloor?.getAttribute('points') ?? null));
+
+    const leftNearWidth =
+      Math.max(...leftEdges.nearEdge.map((p) => p.x)) - Math.min(...leftEdges.nearEdge.map((p) => p.x));
+    const leftFarWidth =
+      Math.max(...leftEdges.farEdge.map((p) => p.x)) - Math.min(...leftEdges.farEdge.map((p) => p.x));
+    expect(leftFarWidth).toBeLessThan(leftNearWidth);
+    expect(Math.min(...leftEdges.farEdge.map((p) => p.x))).toBeLessThan(
+      Math.min(...leftEdges.nearEdge.map((p) => p.x)),
+    );
+    expect(leftEdges.farY).toBeLessThan(leftEdges.nearY);
+
+    const rightNearWidth =
+      Math.max(...rightEdges.nearEdge.map((p) => p.x)) - Math.min(...rightEdges.nearEdge.map((p) => p.x));
+    const rightFarWidth =
+      Math.max(...rightEdges.farEdge.map((p) => p.x)) - Math.min(...rightEdges.farEdge.map((p) => p.x));
+    expect(rightFarWidth).toBeLessThan(rightNearWidth);
+    expect(Math.max(...rightEdges.farEdge.map((p) => p.x))).toBeGreaterThan(
+      Math.max(...rightEdges.nearEdge.map((p) => p.x)),
+    );
+    expect(rightEdges.farY).toBeLessThan(rightEdges.nearY);
+  });
+
+  it('左右分岐には壁が縦長の開口部として切り欠かれている', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const openings = Array.from(container.querySelectorAll('polygon[data-branch-entry]'));
+    expect(openings.length).toBe(2);
+
+    openings.forEach((poly) => {
+      const pts = parsePoints(poly.getAttribute('points'));
+      expect(pts.length).toBeGreaterThanOrEqual(4);
+      const xs = pts.map((p) => p.x);
+      const ys = pts.map((p) => p.y);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const height = Math.max(...ys) - Math.min(...ys);
+      expect(width).toBeGreaterThan(12);
+      expect(height).toBeGreaterThan(12);
+    });
   });
 });

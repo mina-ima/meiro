@@ -229,6 +229,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsx をスモーク化（詳細ジオメトリ/データ属性検証を削除、simpleMazePreview.tsへ集約）
 * 更新メモ(2025-12-18): simpleMazePreview を「床1枚＋左右壁1枚」の輪郭に固定し、junction/goals で forward 開放時に前壁を描かないことと分岐の狭まりを `client/tests/simpleMazePreview.test.tsx` で回帰検証
 * 更新メモ(2025-12-19): simpleMazePreview のオーバーレイを極薄にし、junction の左右開口を穴あき壁＋短い横廊下で表現（`client/tests/simpleMazePreview.test.tsx` で回帰）
+* 更新メモ(2025-12-20): simpleMazePreview を旧レイキャスト風の一本道・単一輪郭に寄せ、左右開口を四角い切り欠き＋短い横廊下で描画（`client/tests/simpleMazePreview.test.tsx` 回帰）
 
 ### 8.2 オーナー
 
