@@ -253,38 +253,56 @@ function renderSideBranch(side: 'left' | 'right'): string {
 
 // スタートビュー（一本道）
 // スタートビュー（一本道）
+// スタートビュー（一本道・通路の中から見た視点）
 function renderStartView(openings: Openings): string {
   const parts: string[] = [];
+
+  // 天井
   parts.push(renderCeiling());
-  parts.push(renderSideWalls());
-  parts.push(renderMainFloor());
-  // 先に床（黒い通路）を描いてから、通路壁を上に重ねる
+
+  // ここで外側の床・外側の壁は描かない
+  // parts.push(renderSideWalls());
+  // parts.push(renderMainFloor());
+
+  // 黒い通路の床
   parts.push(renderCorridorFloor());
+  // 通路の左右の壁（内側の壁のみ）
   parts.push(renderCorridorWalls());
 
+  // 正面が塞がれている場合だけ前壁を描く
   if (!openings.forward) {
     parts.push(renderFrontWall('near', 'start'));
   }
+
   return parts.join('\n');
 }
 
 
+
 // 分岐ビュー（十字路/T字路）
 // 分岐ビュー（十字路/T字路）
+// 分岐ビュー（通路の中 + 左右の分岐）
 function renderJunctionView(openings: Openings): string {
   const parts: string[] = [];
+
   parts.push(renderCeiling());
-  parts.push(renderSideWalls());
-  parts.push(renderMainFloor());
+  // 外側の床・外側の壁は描かない
+  // parts.push(renderSideWalls());
+  // parts.push(renderMainFloor());
+
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
 
+  // 左右の分岐（壁に穴＋横に伸びる床）
   if (openings.left) {
     parts.push(renderSideBranch('left'));
   }
   if (openings.right) {
     parts.push(renderSideBranch('right'));
   }
+
+  // 分岐は「行き止まりの手前」っぽく見せるなら常に前壁を描く
+  // （行き止まりでない設計なら、!openings.forward の条件に戻してもOK）
   parts.push(renderFrontWall('near', 'junction'));
 
   return parts.join('\n');
@@ -293,27 +311,36 @@ function renderJunctionView(openings: Openings): string {
 
 // ゴールビュー（出口 + 必要なら左右分岐）
 // ゴールビュー（出口 + 必要なら左右分岐）
+// ゴールビュー（通路の一番奥に光る出口）
 function renderGoalView(openings: Openings): string {
   const parts: string[] = [];
+
   parts.push(renderCeiling());
-  parts.push(renderSideWalls());
-  parts.push(renderMainFloor());
+  // parts.push(renderSideWalls());
+  // parts.push(renderMainFloor());
+
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
+
+  // 通路の最奥の壁＋出口
   parts.push(renderGoalPortal());
 
+  // 左右分岐がある場合
   if (openings.left) {
     parts.push(renderSideBranch('left'));
   }
   if (openings.right) {
     parts.push(renderSideBranch('right'));
   }
-  if (!openings.forward) {
-    parts.push(renderFrontWall('near', 'goal'));
-  }
+
+  // ゴール直前でさらに前壁を描きたい場合だけ有効化
+  // if (!openings.forward) {
+  //   parts.push(renderFrontWall('near', 'goal'));
+  // }
 
   return parts.join('\n');
 }
+
 
 
 export function createSimplePreviewSvg(
