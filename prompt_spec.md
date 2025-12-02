@@ -227,6 +227,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * **切断ポーズ中**はプレイヤー/オーナー共通で画面中央に半透明オーバーレイを重ね、「通信が途切れています」「残りXX秒で不在側敗北」をカウントダウン表示する（復帰で自動解除）。
 * 更新メモ(2025-10-03): start/junction/goal プレビューの床・壁ジオメトリ、フェード、空色ポータル占有率を仕様どおりに最終調整（PlayerView.tsx / PlayerViewPreview.test.tsx 反映）
 * 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsx をスモーク化（詳細ジオメトリ/データ属性検証を削除、simpleMazePreview.tsへ集約）
+* 更新メモ(2025-12-18): simpleMazePreview を「床1枚＋左右壁1枚」の輪郭に固定し、junction/goals で forward 開放時に前壁を描かないことと分岐の狭まりを `client/tests/simpleMazePreview.test.tsx` で回帰検証
 
 ### 8.2 オーナー
 

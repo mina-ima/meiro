@@ -170,6 +170,7 @@
   - DoD: スモークテストで描画成功を確認。旧SVG詳細テストは2025-11-24に削除（PlayerView.tsx / simpleMazePreview.ts）
 - 更新メモ(2025-10-03): スタート/分岐/ゴールのプレビュー床・壁ジオメトリとフェード/ポータル描画を微調整し、SVGテストを最新しきい値へ追従
 - 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsxをスモークテストへ置換（旧ジオメトリ/データ属性検証を撤廃、simpleMazePreview.ts へ移行）
+- 更新メモ(2025-12-18): simpleMazePreview を床/左右壁1枚の輪郭に統合し、junction forward 開放時の前壁非表示と分岐の狭まりを `client/tests/simpleMazePreview.test.tsx` で回帰検証
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

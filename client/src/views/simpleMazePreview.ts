@@ -39,6 +39,12 @@ type DepthSlice = {
   far: { xLeft: number; xRight: number; y: number; t: number };
 };
 
+type CorridorOutline = {
+  floorPoints: { x: number; y: number }[];
+  wallPoints: { left: { x: number; y: number }[]; right: { x: number; y: number }[] };
+  farY: number;
+};
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -86,6 +92,56 @@ function createDepthSlices(levels = DEPTH_LAYERS): DepthSlice[] {
   return slices;
 }
 
+// メイン通路の床と壁の輪郭を1枚にまとめる
+function computeCorridorOutline(slices: DepthSlice[]): CorridorOutline | null {
+  const first = slices[0];
+  const last = slices[slices.length - 1];
+  if (!first || !last) return null;
+
+  const bottomLeft = Math.max(0, first.near.xLeft - 36);
+  const bottomRight = Math.min(WIDTH, first.near.xRight + 36);
+  const farLeft = last.far.xLeft;
+  const farRight = last.far.xRight;
+  const farY = last.far.y;
+
+  const wallTopNear = wallTopY(first.near.y, first.near.t);
+  const wallTopFar = wallTopY(farY, last.far.t);
+
+  const floorPoints = [
+    { x: bottomLeft, y: HEIGHT },
+    { x: bottomRight, y: HEIGHT },
+    { x: farRight, y: farY },
+    { x: farLeft, y: farY },
+  ];
+
+  const leftWallPoints = [
+    { x: 0, y: wallTopNear },
+    { x: 0, y: HEIGHT },
+    { x: bottomLeft, y: HEIGHT },
+    { x: farLeft, y: farY },
+    { x: 0, y: farY },
+    { x: 0, y: wallTopFar },
+  ];
+
+  const rightWallPoints = [
+    { x: WIDTH, y: wallTopNear },
+    { x: WIDTH, y: HEIGHT },
+    { x: bottomRight, y: HEIGHT },
+    { x: farRight, y: farY },
+    { x: WIDTH, y: farY },
+    { x: WIDTH, y: wallTopFar },
+  ];
+
+  return {
+    floorPoints,
+    wallPoints: {
+      left: leftWallPoints,
+      right: rightWallPoints,
+    },
+    farY,
+  };
+}
+
 function renderBaseDefs(): string {
   return `
     <defs>
@@ -111,119 +167,110 @@ function renderCeiling(): string {
   return `<rect x="0" y="0" width="${WIDTH}" height="${FLOOR_FAR_Y}" fill="url(#ceiling-gradient)" />`;
 }
 
+// メイン通路の床を台形1枚で描き、奥行きの陰影を重ねる
 function renderFloorLayers(slices: DepthSlice[]): string {
-  return slices
+  const outline = computeCorridorOutline(slices);
+  if (!outline) return '';
+
+  const gradientId = 'floor-depth-gradient';
+  const gradient = `
+    <defs>
+      <linearGradient id="${gradientId}" x1="0" y1="${HEIGHT}" x2="0" y2="${outline.farY}">
+        <stop offset="0%" stop-color="${COLOR_FLOOR}" stop-opacity="0.98" />
+        <stop offset="100%" stop-color="${shadeColor(COLOR_FLOOR, 0.4)}" stop-opacity="0.86" />
+      </linearGradient>
+    </defs>
+  `;
+
+  const base = `<polygon data-floor="main" data-floor-layer="main" points="${joinPoints(outline.floorPoints)}" fill="url(#${gradientId})" />`;
+
+  const overlays = slices
     .map((slice) => {
-      const near = slice.near;
-      const far = slice.far;
-      const color = shadeColor(COLOR_FLOOR, far.t);
-      const opacity = 0.92 - far.t * 0.25;
-      const base = `<polygon data-floor="main" data-floor-layer="${slice.index}" points="${joinPoints([
-        { x: near.xLeft, y: near.y },
-        { x: near.xRight, y: near.y },
-        { x: far.xRight, y: far.y },
-        { x: far.xLeft, y: far.y },
-      ])}" fill="${color}" fill-opacity="${opacity}" />`;
-      const pattern = `<polygon data-floor-layer-pattern="${slice.index}" points="${joinPoints([
-        { x: near.xLeft, y: near.y },
-        { x: near.xRight, y: near.y },
-        { x: far.xRight, y: far.y },
-        { x: far.xLeft, y: far.y },
-      ])}" fill="url(#floor-grid-pattern)" fill-opacity="${0.25 - far.t * 0.1}" />`;
-      return `${base}\n${pattern}`;
+      const shade = shadeColor(COLOR_FLOOR, slice.far.t * 0.5);
+      const opacity = 0.14 - slice.far.t * 0.08;
+      return `<polygon data-floor="overlay" data-floor-layer="${slice.index}" points="${joinPoints(
+        outline.floorPoints,
+      )}" fill="${shade}" fill-opacity="${opacity}" />`;
     })
     .join('\n');
+
+  const pattern = `<polygon data-floor-pattern="main" points="${joinPoints(
+    outline.floorPoints,
+  )}" fill="url(#floor-grid-pattern)" fill-opacity="0.2" />`;
+
+  return [gradient, base, overlays, pattern].join('\n');
 }
 
+// 左右1枚ずつの壁を描き、同じ輪郭に深度の陰影を重ねる
 function renderWallLayers(side: 'left' | 'right', slices: DepthSlice[]): string {
+  const outline = computeCorridorOutline(slices);
+  if (!outline) return '';
   const isLeft = side === 'left';
-  const outerFactor = 0.65;
-  return slices
+  const points = isLeft ? outline.wallPoints.left : outline.wallPoints.right;
+
+  const gradientId = `wall-depth-${side}`;
+  const gradient = `
+    <defs>
+      <linearGradient id="${gradientId}" x1="0" y1="${outline.farY}" x2="0" y2="${HEIGHT}">
+        <stop offset="0%" stop-color="${shadeColor(COLOR_WALL, 0.5)}" stop-opacity="0.95" />
+        <stop offset="100%" stop-color="${COLOR_WALL}" stop-opacity="0.9" />
+      </linearGradient>
+    </defs>
+  `;
+
+  const base = `<polygon data-wall-side="${side}" data-wall-layer="main" points="${joinPoints(
+    points,
+  )}" fill="url(#${gradientId})" />`;
+
+  const overlays = slices
     .map((slice) => {
-      const near = slice.near;
-      const far = slice.far;
-      const topNear = wallTopY(near.y, near.t);
-      const topFar = wallTopY(far.y, far.t);
-      const color = shadeColor(COLOR_WALL, far.t * 0.9);
-      const opacity = 0.94 - far.t * 0.3;
-      const outerNear = isLeft ? 0 : WIDTH;
-      const outerFar = isLeft
-        ? far.xLeft * outerFactor
-        : WIDTH - (WIDTH - far.xRight) * outerFactor;
-      const points = isLeft
-        ? [
-            { x: outerNear, y: topNear },
-            { x: outerNear, y: near.y },
-            { x: near.xLeft, y: near.y },
-            { x: far.xLeft, y: far.y },
-            { x: outerFar, y: far.y },
-            { x: outerFar, y: topFar },
-          ]
-        : [
-            { x: outerNear, y: topNear },
-            { x: outerNear, y: near.y },
-            { x: near.xRight, y: near.y },
-            { x: far.xRight, y: far.y },
-            { x: outerFar, y: far.y },
-            { x: outerFar, y: topFar },
-          ];
-      const base = `<polygon data-wall-side="${side}" data-wall-layer="${side}" data-layer-index="${slice.index}" points="${joinPoints(points)}" fill="${color}" fill-opacity="${opacity}" />`;
-      const pattern = `<polygon data-wall-side="${side}" data-wall-layer-pattern="${side}" data-layer-index="${slice.index}" points="${joinPoints(points)}" fill="url(#wall-brick-pattern)" fill-opacity="${0.24 - far.t * 0.12}" />`;
-      return `${base}\n${pattern}`;
+      const shade = shadeColor(COLOR_WALL, slice.far.t * 0.75);
+      const opacity = 0.14 - slice.far.t * 0.08;
+      return `<polygon data-wall-side="${side}" data-wall-layer="overlay" data-layer-index="${
+        slice.index
+      }" points="${joinPoints(points)}" fill="${shade}" fill-opacity="${opacity}" />`;
     })
     .join('\n');
+
+  const pattern = `<polygon data-wall-side="${side}" data-wall-layer-pattern="main" points="${joinPoints(
+    points,
+  )}" fill="url(#wall-brick-pattern)" fill-opacity="0.18" />`;
+
+  return [gradient, base, overlays, pattern].join('\n');
 }
 
 // 手前の床を視点直下まで埋める
 function renderForegroundFloor(slices: DepthSlice[]): string {
-  const near = slices[0]?.near;
-  if (!near) return '';
-  const bottomLeft = Math.max(0, near.xLeft - 50);
-  const bottomRight = Math.min(WIDTH, near.xRight + 50);
-  const base = `<polygon data-floor="foreground" points="${joinPoints([
-    { x: bottomLeft, y: HEIGHT },
-    { x: bottomRight, y: HEIGHT },
-    { x: near.xRight, y: near.y },
-    { x: near.xLeft, y: near.y },
-  ])}" fill="${COLOR_FLOOR}" fill-opacity="0.97" />`;
-  const pattern = `<polygon data-floor-pattern="foreground" points="${joinPoints([
-    { x: bottomLeft, y: HEIGHT },
-    { x: bottomRight, y: HEIGHT },
-    { x: near.xRight, y: near.y },
-    { x: near.xLeft, y: near.y },
-  ])}" fill="url(#floor-grid-pattern)" fill-opacity="0.22" />`;
+  const outline = computeCorridorOutline(slices);
+  if (!outline) return '';
+  const base = `<polygon data-floor="foreground" points="${joinPoints(
+    outline.floorPoints,
+  )}" fill="${COLOR_FLOOR}" fill-opacity="0.16" />`;
+  const pattern = `<polygon data-floor-pattern="foreground" points="${joinPoints(
+    outline.floorPoints,
+  )}" fill="url(#floor-grid-pattern)" fill-opacity="0.12" />`;
   return `${base}\n${pattern}`;
 }
 
 // 手前の左右壁を視点直下まで埋める
 function renderForegroundWalls(slices: DepthSlice[]): string {
-  const near = slices[0]?.near;
-  if (!near) return '';
-  const topNear = wallTopY(near.y, 0);
-  const leftInnerBottom = Math.max(0, near.xLeft - 30);
-  const rightInnerBottom = Math.min(WIDTH, near.xRight + 30);
+  const outline = computeCorridorOutline(slices);
+  if (!outline) return '';
+  const leftPoints = outline.wallPoints.left;
+  const rightPoints = outline.wallPoints.right;
 
-  const leftPoints = [
-    { x: 0, y: HEIGHT },
-    { x: leftInnerBottom, y: HEIGHT },
-    { x: near.xLeft, y: near.y },
-    { x: 0, y: near.y },
-    { x: 0, y: topNear },
-    { x: near.xLeft, y: topNear },
-  ];
-  const rightPoints = [
-    { x: WIDTH, y: HEIGHT },
-    { x: rightInnerBottom, y: HEIGHT },
-    { x: near.xRight, y: near.y },
-    { x: WIDTH, y: near.y },
-    { x: WIDTH, y: topNear },
-    { x: near.xRight, y: topNear },
-  ];
-
-  const leftWall = `<polygon data-wall-side="left" data-wall-layer="foreground" points="${joinPoints(leftPoints)}" fill="${COLOR_WALL}" fill-opacity="0.95" />`;
-  const rightWall = `<polygon data-wall-side="right" data-wall-layer="foreground" points="${joinPoints(rightPoints)}" fill="${COLOR_WALL}" fill-opacity="0.95" />`;
-  const leftPattern = `<polygon data-wall-side="left" data-wall-layer-pattern="foreground" points="${joinPoints(leftPoints)}" fill="url(#wall-brick-pattern)" fill-opacity="0.22" />`;
-  const rightPattern = `<polygon data-wall-side="right" data-wall-layer-pattern="foreground" points="${joinPoints(rightPoints)}" fill="url(#wall-brick-pattern)" fill-opacity="0.22" />`;
+  const leftWall = `<polygon data-wall-side="left" data-wall-layer="foreground" points="${joinPoints(
+    leftPoints,
+  )}" fill="${COLOR_WALL}" fill-opacity="0.14" />`;
+  const rightWall = `<polygon data-wall-side="right" data-wall-layer="foreground" points="${joinPoints(
+    rightPoints,
+  )}" fill="${COLOR_WALL}" fill-opacity="0.14" />`;
+  const leftPattern = `<polygon data-wall-side="left" data-wall-layer-pattern="foreground" points="${joinPoints(
+    leftPoints,
+  )}" fill="url(#wall-brick-pattern)" fill-opacity="0.1" />`;
+  const rightPattern = `<polygon data-wall-side="right" data-wall-layer-pattern="foreground" points="${joinPoints(
+    rightPoints,
+  )}" fill="url(#wall-brick-pattern)" fill-opacity="0.1" />`;
 
   return [leftWall, rightWall, leftPattern, rightPattern].join('\n');
 }
@@ -263,16 +310,18 @@ function renderForwardWall(t: number, label: string): string {
   ])}" fill="${color}" stroke="#000000" stroke-opacity="0.25" />`;
 }
 
+// 左右分岐の床と壁をT字路風に描く
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
-  const direction = isLeft ? -1 : 1;
   const steps = 3;
-  const startX = isLeft ? FLOOR_NEAR_LEFT : FLOOR_NEAR_RIGHT;
-  const endX = isLeft ? FLOOR_NEAR_LEFT - 70 : FLOOR_NEAR_RIGHT + 70;
-  const startY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, 0.5);
-  const endY = startY - 35;
-  const startWidth = 52;
-  const endWidth = 24;
+  const startX = isLeft
+    ? lerp(FLOOR_NEAR_LEFT, FLOOR_FAR_LEFT, 0.4)
+    : lerp(FLOOR_NEAR_RIGHT, FLOOR_FAR_RIGHT, 0.4);
+  const endX = startX + (isLeft ? -10 : 10);
+  const startY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, 0.45);
+  const endY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, 0.12);
+  const startWidth = 44;
+  const endWidth = 20;
   const corridor: { x: number; y: number; width: number }[] = [];
   for (let i = 0; i <= steps; i++) {
     const s = i / steps;
@@ -287,24 +336,28 @@ function renderSideBranch(side: 'left' | 'right'): string {
   for (let i = 0; i < steps; i++) {
     const near = corridor[i];
     const far = corridor[i + 1];
-    const nearLeft = near.x - (isLeft ? near.width : 0);
-    const nearRight = near.x + (isLeft ? 0 : near.width);
-    const farLeft = far.x - (isLeft ? far.width : 0);
-    const farRight = far.x + (isLeft ? 0 : far.width);
+    const nearLeft = isLeft ? near.x - near.width : near.x;
+    const nearRight = isLeft ? near.x : near.x + near.width;
+    const farLeft = isLeft ? far.x - far.width : far.x;
+    const farRight = isLeft ? far.x : far.x + far.width;
     const t = (i + 1) / steps;
     const baseColor = shadeColor(COLOR_FLOOR, t * 0.7);
-    const floor = `<polygon data-side-corridor="${side}" data-branch-floor="${side}" data-branch-index="${i}" points="${joinPoints([
-      { x: nearLeft, y: near.y },
-      { x: nearRight, y: near.y },
-      { x: farRight, y: far.y },
-      { x: farLeft, y: far.y },
-    ])}" fill="${baseColor}" fill-opacity="${0.9 - t * 0.25}" />`;
-    const floorPattern = `<polygon data-side-corridor="${side}" data-branch-floor-pattern="${side}" data-branch-index="${i}" points="${joinPoints([
-      { x: nearLeft, y: near.y },
-      { x: nearRight, y: near.y },
-      { x: farRight, y: far.y },
-      { x: farLeft, y: far.y },
-    ])}" fill="url(#floor-grid-pattern)" fill-opacity="${0.22 - t * 0.08}" />`;
+    const floor = `<polygon data-side-corridor="${side}" data-branch-floor="${side}" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: nearLeft, y: near.y },
+        { x: nearRight, y: near.y },
+        { x: farRight, y: far.y },
+        { x: farLeft, y: far.y },
+      ],
+    )}" fill="${baseColor}" fill-opacity="${0.9 - t * 0.25}" />`;
+    const floorPattern = `<polygon data-side-corridor="${side}" data-branch-floor-pattern="${side}" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: nearLeft, y: near.y },
+        { x: nearRight, y: near.y },
+        { x: farRight, y: far.y },
+        { x: farLeft, y: far.y },
+      ],
+    )}" fill="url(#floor-grid-pattern)" fill-opacity="${0.22 - t * 0.08}" />`;
 
     const outerWallX = isLeft ? nearLeft : nearRight;
     const outerWallFarX = isLeft ? farLeft : farRight;
@@ -314,31 +367,39 @@ function renderSideBranch(side: 'left' | 'right'): string {
     const topFar = wallTopY(far.y, t * 0.6);
     const wallColor = shadeColor(COLOR_WALL, t * 0.8);
 
-    const outerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="outer" data-branch-index="${i}" points="${joinPoints([
-      { x: outerWallX, y: topNear },
-      { x: outerWallX, y: near.y },
-      { x: outerWallFarX, y: far.y },
-      { x: outerWallFarX, y: topFar },
-    ])}" fill="${wallColor}" fill-opacity="${0.9 - t * 0.22}" />`;
-    const outerPattern = `<polygon data-side-corridor="${side}" data-branch-wall-pattern="${side}" data-branch-position="outer" data-branch-index="${i}" points="${joinPoints([
-      { x: outerWallX, y: topNear },
-      { x: outerWallX, y: near.y },
-      { x: outerWallFarX, y: far.y },
-      { x: outerWallFarX, y: topFar },
-    ])}" fill="url(#wall-brick-pattern)" fill-opacity="${0.22 - t * 0.1}" />`;
+    const outerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="outer" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: outerWallX, y: topNear },
+        { x: outerWallX, y: near.y },
+        { x: outerWallFarX, y: far.y },
+        { x: outerWallFarX, y: topFar },
+      ],
+    )}" fill="${wallColor}" fill-opacity="${0.9 - t * 0.22}" />`;
+    const outerPattern = `<polygon data-side-corridor="${side}" data-branch-wall-pattern="${side}" data-branch-position="outer" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: outerWallX, y: topNear },
+        { x: outerWallX, y: near.y },
+        { x: outerWallFarX, y: far.y },
+        { x: outerWallFarX, y: topFar },
+      ],
+    )}" fill="url(#wall-brick-pattern)" fill-opacity="${0.22 - t * 0.1}" />`;
 
-    const innerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="inner" data-branch-index="${i}" points="${joinPoints([
-      { x: innerWallX, y: topNear },
-      { x: innerWallX, y: near.y },
-      { x: innerWallFarX, y: far.y },
-      { x: innerWallFarX, y: topFar },
-    ])}" fill="${shadeColor(COLOR_WALL, t * 0.6)}" fill-opacity="${0.85 - t * 0.2}" />`;
-    const innerPattern = `<polygon data-side-corridor="${side}" data-branch-wall-pattern="${side}" data-branch-position="inner" data-branch-index="${i}" points="${joinPoints([
-      { x: innerWallX, y: topNear },
-      { x: innerWallX, y: near.y },
-      { x: innerWallFarX, y: far.y },
-      { x: innerWallFarX, y: topFar },
-    ])}" fill="url(#wall-brick-pattern)" fill-opacity="${0.2 - t * 0.09}" />`;
+    const innerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="inner" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: innerWallX, y: topNear },
+        { x: innerWallX, y: near.y },
+        { x: innerWallFarX, y: far.y },
+        { x: innerWallFarX, y: topFar },
+      ],
+    )}" fill="${shadeColor(COLOR_WALL, t * 0.6)}" fill-opacity="${0.85 - t * 0.2}" />`;
+    const innerPattern = `<polygon data-side-corridor="${side}" data-branch-wall-pattern="${side}" data-branch-position="inner" data-branch-index="${i}" points="${joinPoints(
+      [
+        { x: innerWallX, y: topNear },
+        { x: innerWallX, y: near.y },
+        { x: innerWallFarX, y: far.y },
+        { x: innerWallFarX, y: topFar },
+      ],
+    )}" fill="url(#wall-brick-pattern)" fill-opacity="${0.2 - t * 0.09}" />`;
 
     parts.push(floor, floorPattern, innerWall, innerPattern, outerWall, outerPattern);
   }
@@ -394,14 +455,14 @@ function renderStartView(openings: Openings): string {
   const parts: string[] = [
     renderBaseDefs(),
     renderCeiling(),
+    renderFloorLayers(slices),
     renderWallLayers('left', slices),
     renderWallLayers('right', slices),
-    renderFloorLayers(slices),
     renderForegroundWalls(slices),
     renderForegroundFloor(slices),
   ];
   if (!openings.forward) {
-    parts.push(renderForwardWall(0.22, 'start'));
+    parts.push(renderForwardWall(0.5, 'start'));
   }
   parts.push(renderStartFade());
   return parts.join('\n');
@@ -413,9 +474,9 @@ function renderJunctionView(openings: Openings): string {
   const parts: string[] = [
     renderBaseDefs(),
     renderCeiling(),
+    renderFloorLayers(slices),
     renderWallLayers('left', slices),
     renderWallLayers('right', slices),
-    renderFloorLayers(slices),
   ];
 
   if (openings.left) {
@@ -424,8 +485,9 @@ function renderJunctionView(openings: Openings): string {
   if (openings.right) {
     parts.push(renderSideBranch('right'));
   }
+  parts.push(renderForegroundWalls(slices), renderForegroundFloor(slices));
   if (!openings.forward) {
-    parts.push(renderForwardWall(0.28, 'junction'));
+    parts.push(renderForwardWall(0.5, 'junction'));
   }
 
   return parts.join('\n');
@@ -437,9 +499,9 @@ function renderGoalView(openings: Openings): string {
   const parts: string[] = [
     renderBaseDefs(),
     renderCeiling(),
+    renderFloorLayers(slices),
     renderWallLayers('left', slices),
     renderWallLayers('right', slices),
-    renderFloorLayers(slices),
     renderGoalPortal(slices),
   ];
 
@@ -449,8 +511,9 @@ function renderGoalView(openings: Openings): string {
   if (openings.right) {
     parts.push(renderSideBranch('right'));
   }
+  parts.push(renderForegroundWalls(slices), renderForegroundFloor(slices));
   if (!openings.forward) {
-    parts.push(renderForwardWall(0.3, 'goal'));
+    parts.push(renderForwardWall(0.5, 'goal'));
   }
 
   return parts.join('\n');
