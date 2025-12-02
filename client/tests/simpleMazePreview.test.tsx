@@ -45,6 +45,21 @@ describe('simpleMazePreview', () => {
     expect(container.querySelectorAll('[data-forward-block]').length).toBe(0);
   });
 
+  it('床オーバーレイは段差が見えないほど薄い', () => {
+    const { container } = renderPreview('start', {
+      forward: true,
+      left: false,
+      right: false,
+      backward: false,
+    });
+
+    const overlays = Array.from(container.querySelectorAll('polygon[data-floor="overlay"]'));
+    overlays.forEach((poly) => {
+      const opacity = Number(poly.getAttribute('fill-opacity') ?? '1');
+      expect(opacity).toBeLessThanOrEqual(0.03);
+    });
+  });
+
   it('分岐ビューは forward=true で前壁を描かず、false で前壁を1枚だけ描く', () => {
     const open = renderPreview('junction', {
       forward: true,
@@ -61,6 +76,21 @@ describe('simpleMazePreview', () => {
       backward: false,
     });
     expect(closed.container.querySelectorAll('[data-forward-block]').length).toBe(1);
+  });
+
+  it('前景の壁オーバーレイは極薄か描かれない', () => {
+    const { container } = renderPreview('goal', {
+      forward: true,
+      left: false,
+      right: false,
+      backward: false,
+    });
+
+    const fgWalls = Array.from(container.querySelectorAll('polygon[data-wall-layer="foreground"]'));
+    fgWalls.forEach((poly) => {
+      const opacity = Number(poly.getAttribute('fill-opacity') ?? '1');
+      expect(opacity).toBeLessThanOrEqual(0.05);
+    });
   });
 
   it('左右分岐の床は奥ほど狭くなり、手前より外側にはみ出さない', () => {
@@ -88,5 +118,19 @@ describe('simpleMazePreview', () => {
     widths.forEach(({ nearLeft, farLeft }) => {
       expect(farLeft).toBeGreaterThanOrEqual(nearLeft);
     });
+  });
+
+  it('分岐の床ポリゴンは入口と奥行きを示す最小限の枚数に抑える', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftFloors = container.querySelectorAll('polygon[data-branch-floor="left"]');
+    const rightFloors = container.querySelectorAll('polygon[data-branch-floor="right"]');
+    expect(leftFloors.length).toBeLessThanOrEqual(2);
+    expect(rightFloors.length).toBeLessThanOrEqual(2);
   });
 });
