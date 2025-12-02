@@ -71,7 +71,7 @@ function renderCeiling(): string {
   return `<rect x="0" y="0" width="${WIDTH}" height="${FLOOR_FAR_Y}" fill="${COLOR_CEILING}" />`;
 }
 
-// 通路の床（手前は明るく、奥は暗く＋タイル模様）
+// 通路の床（手前は明るく、奥は暗く）＋奥に収束する線
 function renderCorridorFloor(): string {
   const pts = [
     { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
@@ -80,12 +80,22 @@ function renderCorridorFloor(): string {
     { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },
   ];
 
-  const gradFloor = `<polygon data-floor="corridor" points="${joinPoints(
+  // すでに renderDefs で corridor-floor-grad を定義している前提
+  const floor = `<polygon data-floor="corridor" points="${joinPoints(
     pts,
   )}" fill="url(#corridor-floor-grad)" />`;
-  const patternFloor = `<polygon data-floor="corridor-pattern" points="${joinPoints(
-    pts,
-  )}" fill="url(#floor-grid)" fill-opacity="0.35" />`;
+
+  // 奥に収束するガイドライン（床のタイルっぽい線）
+  const vanishX = (CORRIDOR_FAR_LEFT + CORRIDOR_FAR_RIGHT) / 2;
+  const vanishY = FLOOR_FAR_Y;
+  const numLines = 6;
+  let guideLines = '';
+
+  for (let i = 1; i < numLines; i += 1) {
+    const t = i / numLines;
+    const xNear = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_NEAR_RIGHT, t);
+    guideLines += `<line x1="${xNear}" y1="${FLOOR_NEAR_Y}" x2="${vanishX}" y2="${vanishY}" stroke="#000000" stroke-opacity="0.3" stroke-width="1" />`;
+  }
 
   // 4マスより先は真っ黒で良い → 奥の上半分を黒で塗る
   const fadeTop = FLOOR_FAR_Y - 4;
@@ -93,8 +103,9 @@ function renderCorridorFloor(): string {
     CORRIDOR_FAR_RIGHT - CORRIDOR_FAR_LEFT
   }" height="${fadeTop}" fill="${COLOR_BG}" />`;
 
-  return `${gradFloor}\n${patternFloor}\n${farFade}`;
+  return `${floor}\n${guideLines}\n${farFade}`;
 }
+
 
 // 通路両側の壁（床から画面上端まで）＋レンガ模様
 function renderCorridorWalls(): string {
@@ -145,8 +156,9 @@ function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string 
 
 // ゴールの光る出口（通路奥の壁に開いた窓）
 function renderGoalPortal(): string {
+  // 壁を画面上端から、奥の床までぴったり
+  const wallTop = 0;
   const wallBottom = FLOOR_FAR_Y;
-  const wallTop = 10;
   const left = CORRIDOR_FAR_LEFT;
   const right = CORRIDOR_FAR_RIGHT;
 
@@ -170,8 +182,9 @@ function renderGoalPortal(): string {
   return `${wall}\n${portal}`;
 }
 
+
 // 左右分岐（横に伸びる通路）
-// 床面から天井まで壁がなく開いていて、その先に横通路の床と側面が見える
+// 床面から天井まで壁がなく開いていて、その先に横通路の床と側面が見えるようにする
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
 
@@ -182,6 +195,7 @@ function renderSideBranch(side: 'left' | 'right'): string {
     ? lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t)
     : lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
 
+  // 横通路の奥行きと幅
   const branchDepth = 40;
   const nearWidth = 50;
   const farWidth = 35;
@@ -193,7 +207,7 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const farInner = innerX + (isLeft ? -10 : 10);
   const farOuter = isLeft ? farInner - farWidth : farInner + farWidth;
 
-  // 横通路の床
+  // 1) 横通路の床
   const floorPts = [
     { x: nearInner, y: baseY },
     { x: nearOuter, y: baseY },
@@ -202,9 +216,19 @@ function renderSideBranch(side: 'left' | 'right'): string {
   ];
   const floor = `<polygon data-side-corridor="${side}" data-branch-floor="${side}" points="${joinPoints(
     floorPts,
-  )}" fill="url(#floor-grid)" />`;
+  )}" fill="${COLOR_FLOOR}" />`;
 
-  // 横通路の左右の壁（床から天井まで）
+  // 床にも少しだけ収束線
+  const vanishX = isLeft ? farOuter : farInner;
+  let branchGuides = '';
+  const branchLines = 3;
+  for (let i = 1; i < branchLines; i += 1) {
+    const s = i / branchLines;
+    const xNear = lerp(nearInner, nearOuter, s);
+    branchGuides += `<line x1="${xNear}" y1="${baseY}" x2="${vanishX}" y2="${farY}" stroke="#000000" stroke-opacity="0.25" stroke-width="1" />`;
+  }
+
+  // 2) 横通路の左右の壁（床から天井まで）
   const innerWallPts = [
     { x: nearInner, y: baseY },
     { x: farInner, y: farY },
@@ -225,8 +249,9 @@ function renderSideBranch(side: 'left' | 'right'): string {
     outerWallPts,
   )}" fill="url(#wall-brick)" />`;
 
-  return [floor, innerWall, outerWall].join('\n');
+  return [floor, branchGuides, innerWall, outerWall].join('\n');
 }
+
 
 // スタートビュー（一本道）
 function renderStartView(openings: Openings): string {
