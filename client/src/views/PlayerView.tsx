@@ -1,3 +1,4 @@
+import { createFancyMazePreviewSvg } from './FancyMazePreview';
 import { createSimplePreviewSvg } from './simpleMazePreview';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HUD } from './HUD';
@@ -39,6 +40,7 @@ function getDefaultPreviewClips(): readonly PreviewClip[] {
 }
 
 const PREVIEW_INTERVAL_MS = 5_000;
+const USE_FANCY_PREVIEW = true;
 
 export interface PlayerViewProps {
   points: number;
@@ -1143,10 +1145,12 @@ function createPerspectivePreviewSvg(
   // どの方向が開いているかは、既存のロジックを使って計算する
   const openings = computeRelativeOpenings(cell, orientation);
 
-  // プレビュー画像の描画は simpleMazePreview.ts に任せる
-  return createSvgDataUri(
-    createSimplePreviewSvg(cell, openDirections, variant, orientation, openings),
-  );
+  // プレビュー画像の描画は simple / fancy を切り替え可能にする
+  const svg = USE_FANCY_PREVIEW
+    ? createFancyMazePreviewSvg(cell, openDirections, variant, orientation, openings)
+    : createSimplePreviewSvg(cell, openDirections, variant, orientation, openings);
+
+  return createSvgDataUri(svg);
 }
 
 function computeRelativeOpenings(cell: ServerMazeCell, facing: Direction): RelativeOpenings {

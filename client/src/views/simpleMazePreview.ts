@@ -12,7 +12,7 @@ const WIDTH = 320;
 const HEIGHT = 180;
 
 // 床と奥の位置
-const FLOOR_NEAR_Y = 165; // 手前の床
+const FLOOR_NEAR_Y = HEIGHT; // 手前の床は画面下端まで
 const FLOOR_FAR_Y = 95; // 奥（4マス先くらいのイメージ）
 
 // 通路の幅（手前と奥）
@@ -81,7 +81,7 @@ function renderCorridorFloor(): string {
   ];
 
   // すでに renderDefs で corridor-floor-grad を定義している前提
-  const floor = `<polygon data-floor="corridor" points="${joinPoints(
+  const floor = `<polygon data-floor="corridor" data-floor-layer="main" points="${joinPoints(
     pts,
   )}" fill="url(#corridor-floor-grad)" />`;
 
@@ -106,7 +106,6 @@ function renderCorridorFloor(): string {
   return `${floor}\n${guideLines}\n${farFade}`;
 }
 
-
 // 通路両側の壁（床から画面上端まで）＋レンガ模様
 function renderCorridorWalls(): string {
   // 左側の壁
@@ -125,10 +124,10 @@ function renderCorridorWalls(): string {
     { x: CORRIDOR_FAR_RIGHT, y: 0 },
   ];
 
-  const leftWall = `<polygon data-wall-side="left" points="${joinPoints(
+  const leftWall = `<polygon data-wall-side="left" data-wall-layer="main" points="${joinPoints(
     leftWallPts,
   )}" fill="url(#wall-brick)" />`;
-  const rightWall = `<polygon data-wall-side="right" points="${joinPoints(
+  const rightWall = `<polygon data-wall-side="right" data-wall-layer="main" points="${joinPoints(
     rightWallPts,
   )}" fill="url(#wall-brick)" />`;
 
@@ -182,8 +181,6 @@ function renderGoalPortal(): string {
   return `${wall}\n${portal}`;
 }
 
-
-
 // 左右分岐（横に伸びる通路）
 // 床面から天井まで壁がなく開いていて、その先に横通路の床と側面が見えるようにする
 function renderSideBranch(side: 'left' | 'right'): string {
@@ -198,14 +195,14 @@ function renderSideBranch(side: 'left' | 'right'): string {
 
   // 横通路の奥行きと幅
   const branchDepth = 40;
-  const nearWidth = 50;
-  const farWidth = 35;
+  const nearWidth = 56;
+  const farWidth = 30;
 
   const nearInner = innerX;
   const nearOuter = isLeft ? innerX - nearWidth : innerX + nearWidth;
 
   const farY = baseY - branchDepth;
-  const farInner = innerX + (isLeft ? -10 : 10);
+  const farInner = innerX + (isLeft ? -30 : 30);
   const farOuter = isLeft ? farInner - farWidth : farInner + farWidth;
 
   // 1) 横通路の床
@@ -250,10 +247,22 @@ function renderSideBranch(side: 'left' | 'right'): string {
     outerWallPts,
   )}" fill="url(#wall-brick)" />`;
 
-  return [floor, branchGuides, innerWall, outerWall].join('\n');
+  // 壁にあけた縦長の開口部
+  const openingWidth = 22;
+  const openingHeight = 36;
+  const openingLeft = isLeft ? nearInner - openingWidth : nearInner;
+  const openingRight = isLeft ? nearInner : nearInner + openingWidth;
+  const openingTop = Math.max(4, baseY - openingHeight - 6);
+  const openingBottom = baseY - 4;
+  const opening = `<polygon data-branch-entry="${side}" points="${joinPoints([
+    { x: openingLeft, y: openingBottom },
+    { x: openingRight, y: openingBottom },
+    { x: openingRight, y: openingTop },
+    { x: openingLeft, y: openingTop },
+  ])}" fill="${COLOR_BG}" />`;
+
+  return [floor, branchGuides, innerWall, outerWall, opening].join('\n');
 }
-
-
 
 // スタートビュー（一本道）
 function renderStartView(openings: Openings): string {
@@ -285,8 +294,9 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderSideBranch('right'));
   }
 
-  // 分岐ポイントでは、その先は見えない想定 → 必ず前壁で塞ぐ
-  parts.push(renderFrontWall('junction', 'near'));
+  if (!openings.forward) {
+    parts.push(renderFrontWall('junction', 'near'));
+  }
 
   return parts.join('\n');
 }
