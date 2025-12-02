@@ -67,39 +67,36 @@ function renderCorridorFloor(): string {
   ];
   return `<polygon data-floor="corridor" points="${joinPoints(pts)}" fill="${COLOR_CORRIDOR}" />`;
 }
-
 // メイン通路の左右の内側壁（通路の壁）
+// 通路の黒い床の両側に、縦長の四角い壁が立っているように見せる
 function renderCorridorWalls(): string {
-  const wallHeightNear = 45;
-  const wallHeightFar = 35;
+  // 手前と奥で少し高さを変えて、軽く遠近感を出す
+  const wallHeightNear = 55;
+  const wallHeightFar = 40;
 
-  // 左側の通路壁
-  const leftPts = [
-    // 下側（床と接する辺）
-    { x: FLOOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
-    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },
-    { x: FLOOR_FAR_LEFT, y: FLOOR_FAR_Y },
-    // 上側（少し上に持ち上げた辺）
-    { x: FLOOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar },
-    { x: FLOOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear },
+  // 左側の通路壁（4点の台形）
+  const leftWallPts = [
+    // 下辺（床と接する部分）
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y }, // 手前・内側
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },   // 奥・内側
+    // 上辺（少し上にオフセット）
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar },   // 奥・上
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear}, // 手前・上
   ];
 
-  // 右側の通路壁
-  const rightPts = [
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
-    { x: FLOOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
-    { x: FLOOR_FAR_RIGHT, y: FLOOR_FAR_Y },
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },
-    { x: FLOOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear },
-    { x: FLOOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },
+  // 右側の通路壁（左右を入れ替えただけ）
+  const rightWallPts = [
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },   // 奥・内側
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y }, // 手前・内側
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear }, // 手前・上
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },    // 奥・上
   ];
 
   const leftWall = `<polygon data-inner-wall="left" points="${joinPoints(
-    leftPts,
+    leftWallPts,
   )}" fill="${COLOR_INNER_WALL}" />`;
   const rightWall = `<polygon data-inner-wall="right" points="${joinPoints(
-    rightPts,
+    rightWallPts,
   )}" fill="${COLOR_INNER_WALL}" />`;
 
   return `${leftWall}\n${rightWall}`;
