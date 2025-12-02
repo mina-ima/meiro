@@ -137,24 +137,33 @@ function renderGoalPortal(): string {
 }
 
 // 左右の分岐通路（横に伸びる短い廊下）
+// 左右分岐の床と入口を、横に伸びる短い廊下としてシンプルに描く
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
 
-  // 分岐の起点（メイン通路上）
-  const baseY = FLOOR_NEAR_Y - 8;
-  const farY = baseY - 32;
+  // 分岐が見える位置（メイン通路の中ほど）
+  const baseT = 0.55;
+  const baseY = FLOOR_NEAR_Y - (FLOOR_NEAR_Y - FLOOR_FAR_Y) * baseT;
+  const farY = baseY - 22; // 少し奥に下がる
 
-  const entryX = isLeft ? CORRIDOR_NEAR_LEFT : CORRIDOR_NEAR_RIGHT;
-  const innerX = entryX; // メイン通路側
-  const outerX = isLeft ? entryX - 42 : entryX + 42;
+  // この高さでの壁の位置（左壁 or 右壁の内側）
+  const wallX = isLeft
+    ? FLOOR_NEAR_LEFT + (FLOOR_FAR_LEFT - FLOOR_NEAR_LEFT) * baseT
+    : FLOOR_NEAR_RIGHT + (FLOOR_FAR_RIGHT - FLOOR_NEAR_RIGHT) * baseT;
 
-  const farInnerX = isLeft ? innerX - 20 : innerX + 20;
-  const farOuterX = isLeft ? outerX - 20 : outerX + 20;
+  // 入口の幅（手前と奥で少し狭くする）
+  const doorWidthNear = 40;
+  const doorWidthFar = 26;
 
-  // 床
+  // 床の台形（横通路）
+  const nearInnerX = wallX; // メイン通路側
+  const nearOuterX = isLeft ? wallX - doorWidthNear : wallX + doorWidthNear;
+  const farInnerX = wallX + (isLeft ? -8 : 8);
+  const farOuterX = isLeft ? farInnerX - doorWidthFar : farInnerX + doorWidthFar;
+
   const floorPts = [
-    { x: innerX, y: baseY },
-    { x: outerX, y: baseY },
+    { x: nearInnerX, y: baseY },
+    { x: nearOuterX, y: baseY },
     { x: farOuterX, y: farY },
     { x: farInnerX, y: farY },
   ];
@@ -162,45 +171,32 @@ function renderSideBranch(side: 'left' | 'right'): string {
     floorPts,
   )}" fill="${COLOR_FLOOR}" />`;
 
-  const wallHeight = 50;
+  // 壁の開口部（穴があいている感じにする）
+  const doorHeight = 32;
+  const doorTopY = baseY - doorHeight;
+  const doorInnerX = wallX;
+  const doorOuterX = isLeft ? wallX - (doorWidthNear - 4) : wallX + (doorWidthNear - 4);
 
-  // 外側の壁
-  const outerWallPts = [
-    { x: outerX, y: baseY },
-    { x: outerX, y: baseY - wallHeight },
-    { x: farOuterX, y: farY - wallHeight },
-    { x: farOuterX, y: farY },
+  const doorPts = [
+    { x: doorInnerX, y: baseY },
+    { x: doorInnerX, y: doorTopY },
+    { x: doorOuterX, y: doorTopY + 4 },
+    { x: doorOuterX, y: baseY - 4 },
   ];
-  const outerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
-    outerWallPts,
-  )}" fill="${COLOR_WALL}" />`;
 
-  // 内側の壁（メイン通路側）
-  const innerWallPts = [
-    { x: innerX, y: baseY },
-    { x: innerX, y: baseY - wallHeight },
-    { x: farInnerX, y: farY - wallHeight },
-    { x: farInnerX, y: farY },
-  ];
-  const innerWall = `<polygon data-side-corridor="${side}" data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
-    innerWallPts,
-  )}" fill="${COLOR_WALL}" />`;
+  // 壁を少し暗く塗りつぶして「穴」を表現
+  const doorHole = `<polygon points="${joinPoints(
+    doorPts,
+  )}" fill="${COLOR_BG}" fill-opacity="0.85" />`;
 
-  // 入口の縁取り（開口部が分かるように）
-  const frameHeight = 30;
-  const frameTopY = baseY - frameHeight;
-  const entryFramePts = [
-    { x: innerX, y: baseY },
-    { x: innerX, y: frameTopY },
-    { x: outerX, y: frameTopY - 4 },
-    { x: outerX, y: baseY - 4 },
-  ];
-  const entryFrame = `<polygon data-branch-entry="${side}" points="${joinPoints(
-    entryFramePts,
-  )}" fill="rgba(0,0,0,0.2)" />`;
+  // 入口の縁取り
+  const doorFrame = `<polygon data-branch-entry="${side}" points="${joinPoints(
+    doorPts,
+  )}" fill="none" stroke="${COLOR_WALL}" stroke-width="1.5" stroke-opacity="0.9" />`;
 
-  return [floor, innerWall, outerWall, entryFrame].join('\n');
+  return [floor, doorHole, doorFrame].join('\n');
 }
+
 
 // スタートビュー（一本道）
 function renderStartView(openings: Openings): string {
