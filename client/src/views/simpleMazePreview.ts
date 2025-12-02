@@ -183,6 +183,7 @@ function renderGoalPortal(): string {
 }
 
 
+
 // 左右分岐（横に伸びる通路）
 // 床面から天井まで壁がなく開いていて、その先に横通路の床と側面が見えるようにする
 function renderSideBranch(side: 'left' | 'right'): string {
@@ -251,6 +252,7 @@ function renderSideBranch(side: 'left' | 'right'): string {
 
   return [floor, branchGuides, innerWall, outerWall].join('\n');
 }
+
 
 
 // スタートビュー（一本道）
