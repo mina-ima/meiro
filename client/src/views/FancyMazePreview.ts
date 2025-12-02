@@ -27,6 +27,7 @@ const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_BRANCH_FLOOR = '#6b4a30';
 const COLOR_BRANCH_WALL = '#744c32';
+const COLOR_BRANCH_GUIDE = '#c6b59b';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 
@@ -192,58 +193,95 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
+  // junction 用の左右分岐通路を2レイヤーで描画し、壁を天井まで切り欠いて奥行きを持たせる
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1]; // slice 2 あたりに開口
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
-  const anchorY = lerp(anchorSlice.near.y, anchorSlice.far.y, 0.3);
+  const entryY = lerp(anchorSlice.near.y, anchorSlice.far.y, 0.25);
 
-  const layers = [
-    { depth: 28, near: 62, far: 42 },
-    { depth: 18, near: 40, far: 26 },
+  const branchStops: { y: number; inner: number; outer: number }[] = [];
+  for (let i = 0; i <= 2; i += 1) {
+    const t = i / 2;
+    const y = lerp(entryY, entryY - 54, t);
+    const inset = lerp(0, 14, t);
+    const width = lerp(112, 70, t);
+    branchStops.push({
+      y,
+      inner: anchorX + direction * inset,
+      outer: anchorX + direction * (inset + width),
+    });
+  }
+
+  const branchVanish = {
+    x: anchorX + direction * 220,
+    y: entryY - 70,
+  };
+
+  const cutDepth = 36;
+  const cutPoints = [
+    { x: anchorX, y: 0 },
+    { x: anchorX, y: anchorSlice.near.y },
+    { x: anchorX + direction * cutDepth, y: anchorSlice.near.y - 10 },
+    { x: anchorX + direction * cutDepth, y: 0 },
   ];
 
   const parts: string[] = [];
-  layers.forEach((layer, idx) => {
-    const nearOuter = anchorX + direction * layer.near;
-    const farY = anchorY - layer.depth;
-    const farInner = anchorX + direction * (layer.near * 0.3);
-    const farOuter = farInner + direction * layer.far;
+  parts.push(
+    `<polygon data-branch-cut="${side}" points="${joinPoints(
+      cutPoints,
+    )}" fill="${COLOR_BG}" fill-opacity="0.98" />`,
+  );
 
+  branchStops.forEach((near, idx) => {
+    if (idx === branchStops.length - 1) return;
+    const far = branchStops[idx + 1];
     const floorPoints = [
-      { x: anchorX, y: anchorY },
-      { x: nearOuter, y: anchorY },
-      { x: farOuter, y: farY },
-      { x: farInner, y: farY },
+      { x: near.inner, y: near.y },
+      { x: near.outer, y: near.y },
+      { x: far.outer, y: far.y },
+      { x: far.inner, y: far.y },
     ];
+    const floorFill = mixColor(COLOR_BRANCH_FLOOR, COLOR_BG, 0.12 + idx * 0.15);
     parts.push(
       `<polygon data-branch="${side}" data-layer="floor" data-slice="${idx + 2}" points="${joinPoints(
         floorPoints,
-      )}" fill="${COLOR_BRANCH_FLOOR}" />`,
+      )}" fill="${floorFill}" />`,
     );
 
-    const wallHeight = anchorY - farY;
+    const guideCount = 3 + idx;
+    for (let g = 1; g < guideCount; g += 1) {
+      const u = g / guideCount;
+      const x = lerp(near.inner, near.outer, u);
+      parts.push(
+        `<line data-branch-guide="${side}" data-slice="${idx + 2}" x1="${x}" y1="${near.y}" x2="${branchVanish.x}" y2="${branchVanish.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.26 - idx * 0.06}" stroke-width="0.9" />`,
+      );
+    }
+
+    const baseHeight = 92 - idx * 8;
     const innerWall = [
-      { x: anchorX, y: anchorY },
-      { x: farInner, y: farY },
-      { x: farInner, y: farY - wallHeight * 0.5 },
-      { x: anchorX, y: anchorY - wallHeight * 0.5 },
+      { x: near.inner, y: near.y },
+      { x: far.inner, y: far.y },
+      { x: far.inner, y: far.y - baseHeight * 0.85 },
+      { x: near.inner, y: near.y - baseHeight },
     ];
     const outerWall = [
-      { x: nearOuter, y: anchorY },
-      { x: farOuter, y: farY },
-      { x: farOuter, y: farY - wallHeight * 0.5 },
-      { x: nearOuter, y: anchorY - wallHeight * 0.5 },
+      { x: near.outer, y: near.y },
+      { x: far.outer, y: far.y },
+      { x: far.outer, y: far.y - baseHeight * 0.78 },
+      { x: near.outer, y: near.y - baseHeight * 0.9 },
     ];
+
+    const wallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.2 + idx * 0.1);
     parts.push(
-      `<polygon data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
+      `<polygon data-branch-wall="${side}" data-branch-position="inner" data-slice="${idx + 2}" points="${joinPoints(
         innerWall,
-      )}" fill="${COLOR_BRANCH_WALL}" fill-opacity="0.75" />`,
+      )}" fill="${wallFill}" fill-opacity="${0.72 - idx * 0.08}" />`,
     );
     parts.push(
-      `<polygon data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
+      `<polygon data-branch-wall="${side}" data-branch-position="outer" data-slice="${idx + 2}" points="${joinPoints(
         outerWall,
-      )}" fill="${COLOR_BRANCH_WALL}" fill-opacity="0.65" />`,
+      )}" fill="${wallFill}" fill-opacity="${0.62 - idx * 0.06}" />`,
     );
   });
 
@@ -267,7 +305,9 @@ function renderView(
     if (openings.right) {
       parts.push(renderSideBranch('right', slices));
     }
-    parts.push(renderFrontWall(stops, 3, variant));
+    if (!openings.forward) {
+      parts.push(renderFrontWall(stops, 3, variant));
+    }
   } else if (variant === 'goal') {
     parts.push(renderFrontWall(stops, 4, variant));
     parts.push(renderGoalPortal(stops[4]));

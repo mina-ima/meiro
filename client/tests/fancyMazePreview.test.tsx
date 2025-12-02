@@ -102,7 +102,7 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
-  it('分岐ビューは前壁を必ず描き、左右の開口部に奥行きのある横通路を重ねる', () => {
+  it('分岐ビュー forward=true は前壁を描かず、左右の開口部に奥行きのある横通路を重ねる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -110,7 +110,15 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    expect(container.querySelectorAll('[data-wall-side="front"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-wall-side="front"]').length).toBe(0);
+
+    const cuts = Array.from(container.querySelectorAll('[data-branch-cut]'));
+    expect(cuts.length).toBe(2);
+    cuts.forEach((cut) => {
+      const points = parsePoints(cut.getAttribute('points'));
+      const minY = Math.min(...points.map((p) => p.y));
+      expect(minY).toBe(0);
+    });
 
     const leftBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="left"][data-layer="floor"]'),
@@ -128,6 +136,31 @@ describe('FancyMazePreview', () => {
     const rightSize = edgeWidths(parsePoints(rightBranchFloors[0].getAttribute('points')));
     expect(rightSize.farWidth).toBeLessThan(rightSize.nearWidth);
     expect(rightSize.farY).toBeLessThan(rightSize.nearY);
+
+    const leftGuides = Array.from(container.querySelectorAll('line[data-branch-guide="left"]'));
+    const rightGuides = Array.from(container.querySelectorAll('line[data-branch-guide="right"]'));
+    const leftVanishXs = new Set(leftGuides.map((line) => Number(line.getAttribute('x2'))));
+    const leftVanishYs = new Set(leftGuides.map((line) => Number(line.getAttribute('y2'))));
+    const rightVanishXs = new Set(rightGuides.map((line) => Number(line.getAttribute('x2'))));
+    const rightVanishYs = new Set(rightGuides.map((line) => Number(line.getAttribute('y2'))));
+    expect(leftVanishXs.size).toBe(1);
+    expect(leftVanishYs.size).toBe(1);
+    expect(rightVanishXs.size).toBe(1);
+    expect(rightVanishYs.size).toBe(1);
+  });
+
+  it('分岐ビュー forward=false は奥に1枚だけ前壁を描く', () => {
+    const { container } = renderPreview('junction', {
+      forward: false,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const frontWalls = container.querySelectorAll('[data-wall-side="front"]');
+    expect(frontWalls.length).toBe(1);
+    const slices = new Set(Array.from(frontWalls).map((el) => el.getAttribute('data-slice')));
+    expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
   it('ゴールビューは最奥の前壁スライスにポータルを設置する', () => {
