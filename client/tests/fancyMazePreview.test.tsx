@@ -112,13 +112,14 @@ describe('FancyMazePreview', () => {
 
     expect(container.querySelectorAll('[data-wall-side="front"]').length).toBe(0);
 
-    const cuts = Array.from(container.querySelectorAll('[data-branch-cut]'));
-    expect(cuts.length).toBe(2);
-    cuts.forEach((cut) => {
-      const points = parsePoints(cut.getAttribute('points'));
-      const minY = Math.min(...points.map((p) => p.y));
-      expect(minY).toBe(0);
-    });
+    const corridorLeft = container.querySelector(
+      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
+    );
+    const corridorRight = container.querySelector(
+      '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
+    );
+    expect(corridorLeft).not.toBeNull();
+    expect(corridorRight).not.toBeNull();
 
     const leftBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="left"][data-layer="floor"]'),
@@ -126,16 +127,53 @@ describe('FancyMazePreview', () => {
     const rightBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
     );
-    expect(leftBranchFloors.length).toBeGreaterThan(0);
-    expect(rightBranchFloors.length).toBeGreaterThan(0);
+    expect(leftBranchFloors.length).toBe(2);
+    expect(rightBranchFloors.length).toBe(2);
 
     const leftSize = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
-    expect(leftSize.farWidth).toBeLessThan(leftSize.nearWidth);
-    expect(leftSize.farY).toBeLessThan(leftSize.nearY);
+    const leftFarSize = edgeWidths(parsePoints(leftBranchFloors[1].getAttribute('points')));
+    expect(leftSize.nearWidth).toBeGreaterThan(leftFarSize.nearWidth);
+    expect(leftSize.farWidth).toBeGreaterThan(leftFarSize.farWidth);
+    expect(leftSize.nearY).toBeGreaterThan(leftFarSize.nearY);
+    expect(leftSize.farY).toBeGreaterThan(leftFarSize.farY);
 
     const rightSize = edgeWidths(parsePoints(rightBranchFloors[0].getAttribute('points')));
-    expect(rightSize.farWidth).toBeLessThan(rightSize.nearWidth);
-    expect(rightSize.farY).toBeLessThan(rightSize.nearY);
+    const rightFarSize = edgeWidths(parsePoints(rightBranchFloors[1].getAttribute('points')));
+    expect(rightSize.nearWidth).toBeGreaterThan(rightFarSize.nearWidth);
+    expect(rightSize.farWidth).toBeGreaterThan(rightFarSize.farWidth);
+    expect(rightSize.nearY).toBeGreaterThan(rightFarSize.nearY);
+    expect(rightSize.farY).toBeGreaterThan(rightFarSize.farY);
+
+    const corridorLeftNear = Math.max(
+      ...parsePoints(corridorLeft?.getAttribute('points') ?? '').map((p) => p.y),
+    );
+    const corridorLeftNearX = Math.max(
+      ...parsePoints(corridorLeft?.getAttribute('points') ?? '')
+        .filter((p) => Math.abs(p.y - corridorLeftNear) < 0.001)
+        .map((p) => p.x),
+    );
+    const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
+      .filter((p) => Math.abs(p.y - leftSize.nearY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.max(...leftNearXs)).toBeCloseTo(corridorLeftNearX, 5);
+
+    const corridorRightNear = Math.max(
+      ...parsePoints(corridorRight?.getAttribute('points') ?? '').map((p) => p.y),
+    );
+    const corridorRightNearX = Math.min(
+      ...parsePoints(corridorRight?.getAttribute('points') ?? '')
+        .filter((p) => Math.abs(p.y - corridorRightNear) < 0.001)
+        .map((p) => p.x),
+    );
+    const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
+      .filter((p) => Math.abs(p.y - rightSize.nearY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.min(...rightNearXs)).toBeCloseTo(corridorRightNearX, 5);
+
+    const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
+    const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
+    expect(branchWallsLeft.length).toBeGreaterThan(0);
+    expect(branchWallsRight.length).toBeGreaterThan(0);
 
     const leftGuides = Array.from(container.querySelectorAll('line[data-branch-guide="left"]'));
     const rightGuides = Array.from(container.querySelectorAll('line[data-branch-guide="right"]'));

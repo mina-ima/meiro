@@ -170,6 +170,7 @@
   - DoD: スモークテストで描画成功を確認。旧SVG詳細テストは2025-11-24に削除（PlayerView.tsx / simpleMazePreview.ts）
 - 更新メモ(2025-10-03): スタート/分岐/ゴールのプレビュー床・壁ジオメトリとフェード/ポータル描画を微調整し、SVGテストを最新しきい値へ追従
 - 更新メモ(2025-11-24): プレビューSVGを簡略化し、PlayerViewPreview.test.tsxをスモークテストへ置換（旧ジオメトリ/データ属性検証を撤廃、simpleMazePreview.ts へ移行）
+- 更新メモ(2025-12-03): FancyMazePreview の junction を左右2レイヤーの横通路＋forward=false時のみ前壁で十字路風に調整し、`client/tests/fancyMazePreview.test.tsx` で回帰
 - 更新メモ(2025-12-18): simpleMazePreview を床/左右壁1枚の輪郭に統合し、junction forward 開放時の前壁非表示と分岐の狭まりを `client/tests/simpleMazePreview.test.tsx` で回帰検証
 - 更新メモ(2025-12-19): simpleMazePreview のオーバーレイを極薄にし、junction の左右開口を穴あき壁＋短い横廊下で表現（`client/tests/simpleMazePreview.test.tsx` で回帰）
 - 更新メモ(2025-12-20): simpleMazePreview を旧レイキャスト風に寄せ、一本道と左右開口の切り欠き＋短い横廊下を強調（`client/tests/simpleMazePreview.test.tsx` 回帰）
