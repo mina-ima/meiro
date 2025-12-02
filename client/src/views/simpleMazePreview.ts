@@ -16,10 +16,12 @@ const FLOOR_NEAR_Y = 160; // 手前の床のY
 const FLOOR_FAR_Y = 90; // 奥の床のY（地平線）
 
 // メイン通路（黒い部分）の幅
-const CORRIDOR_NEAR_LEFT = 120;
-const CORRIDOR_NEAR_RIGHT = 200;
-const CORRIDOR_FAR_LEFT = 150;
-const CORRIDOR_FAR_RIGHT = 170;
+// メイン通路（黒い部分）の幅
+const CORRIDOR_NEAR_LEFT = 20;              // 画面下の左端寄り
+const CORRIDOR_NEAR_RIGHT = WIDTH - 20;     // 画面下の右端寄り
+const CORRIDOR_FAR_LEFT = WIDTH / 2 - 30;   // 奥の左端
+const CORRIDOR_FAR_RIGHT = WIDTH / 2 + 30;  // 奥の右端
+
 
 // 床全体（茶色）の幅
 const FLOOR_NEAR_LEFT = 40;
@@ -76,6 +78,7 @@ function renderMainFloor(): string {
 }
 
 // 黒いメイン通路
+// 黒いメイン通路（奥に向かって少し暗くなる）
 function renderCorridorFloor(): string {
   const pts = [
     { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
@@ -83,34 +86,52 @@ function renderCorridorFloor(): string {
     { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },
     { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },
   ];
-  return `<polygon data-floor="corridor" points="${joinPoints(pts)}" fill="${COLOR_CORRIDOR}" />`;
+
+  const gradId = 'corridor-depth';
+  const defs = `
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_FAR_Y}">
+        <!-- 手前はやや明るい黒、奥は真っ黒に近づける -->
+        <stop offset="0%" stop-color="#050508" stop-opacity="1.0" />
+        <stop offset="100%" stop-color="#000000" stop-opacity="1.0" />
+      </linearGradient>
+    </defs>
+  `;
+
+  const base = `<polygon data-floor="corridor" points="${joinPoints(
+    pts,
+  )}" fill="url(#${gradId})" />`;
+
+  // 4マスより奥は真っ黒でよい → 地平線より少し上を黒で塗る
+  const fadeTop = FLOOR_FAR_Y - 5;
+  const farFade = `<rect x="${CORRIDOR_FAR_LEFT}" y="0" width="${
+    CORRIDOR_FAR_RIGHT - CORRIDOR_FAR_LEFT
+  }" height="${fadeTop}" fill="#000000" />`;
+
+  return `${defs}\n${base}\n${farFade}`;
 }
 // メイン通路の左右の内側壁（通路の壁）
-// 通路の黒い床の両側に、縦長の四角い壁が立っているように見せる
-// メイン通路の左右の内側壁（通路の壁）
-// 通路の黒い床の両側に、縦長の台形が立っているように見せる
-// メイン通路の左右の内側壁（通路の壁）
-// 黒い通路の両側に、縦長の台形が立っているように見せる
+// 黒い通路の両端に沿って縦長の台形を立てる
 function renderCorridorWalls(): string {
-  const wallHeightNear = 60;
-  const wallHeightFar = 45;
+  const wallHeightNear = 70; // 手前の壁の高さ
+  const wallHeightFar = 50;  // 奥側の高さ
 
   // 左側の通路壁
   const leftWallPts = [
-    // 下辺（通路と接する内側）
-    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },           // 手前・内側
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },             // 奥・内側
-    // 上辺
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar },   // 奥・上
-    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear}, // 手前・上
+    // 下辺（通路の左端に沿って）
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },               // 手前・内側
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },                 // 奥・内側
+    // 上辺（少し上に持ち上げる）
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar }, // 奥・上
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear }, // 手前・上
   ];
 
   // 右側の通路壁
   const rightWallPts = [
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },             // 奥・内側
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },           // 手前・内側
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear }, // 手前・上
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },    // 奥・上
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear },
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },
   ];
 
   const leftWall = `<polygon data-inner-wall="left" points="${joinPoints(
@@ -122,6 +143,7 @@ function renderCorridorWalls(): string {
 
   return `${leftWall}\n${rightWall}`;
 }
+
 
 
 // 外側の左右の大きな壁
@@ -164,10 +186,8 @@ function renderFrontWall(depth: 'near' | 'far', label: string): string {
   return `<polygon data-forward-block="${label}" points="${joinPoints(pts)}" fill="${COLOR_WALL}" />`;
 }
 
-// ゴールの光る出口
 // ゴールの光る出口（通路奥の壁に窓があいているように見せる）
 function renderGoalPortal(): string {
-  // 通路の一番奥の高さに壁を置く
   const wallBottom = FLOOR_FAR_Y;
   const wallTop = wallBottom - 60;
   const left = CORRIDOR_FAR_LEFT;
@@ -192,6 +212,7 @@ function renderGoalPortal(): string {
 
   return `${wall}\n${portal}`;
 }
+
 
 
 // 左右分岐の床と入口を、横に伸びる短い廊下としてシンプルに描く
@@ -282,18 +303,21 @@ function renderStartView(openings: Openings): string {
 // 分岐ビュー（十字路/T字路）
 // 分岐ビュー（十字路/T字路）
 // 分岐ビュー（通路の中 + 左右の分岐）
+// 分岐ビュー（通路の中 + 左右の分岐）
 function renderJunctionView(openings: Openings): string {
   const parts: string[] = [];
 
   parts.push(renderCeiling());
-  // 外側の床・外側の壁は描かない
+
+  // 外の世界は描かない
   // parts.push(renderSideWalls());
   // parts.push(renderMainFloor());
 
+  // 黒い通路 + 通路の壁
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
 
-  // 左右の分岐（壁に穴＋横に伸びる床）
+  // 左右の分岐（壁に穴 + 横方向の床）
   if (openings.left) {
     parts.push(renderSideBranch('left'));
   }
@@ -301,8 +325,7 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderSideBranch('right'));
   }
 
-  // 分岐は「行き止まりの手前」っぽく見せるなら常に前壁を描く
-  // （行き止まりでない設計なら、!openings.forward の条件に戻してもOK）
+  // 分岐の先は必ず突き当たりに見せる
   parts.push(renderFrontWall('near', 'junction'));
 
   return parts.join('\n');
