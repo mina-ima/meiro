@@ -69,27 +69,29 @@ function renderCorridorFloor(): string {
 }
 // メイン通路の左右の内側壁（通路の壁）
 // 通路の黒い床の両側に、縦長の四角い壁が立っているように見せる
+// メイン通路の左右の内側壁（通路の壁）
+// 通路の黒い床の両側に、縦長の台形が立っているように見せる
 function renderCorridorWalls(): string {
-  // 手前と奥で少し高さを変えて、軽く遠近感を出す
-  const wallHeightNear = 55;
-  const wallHeightFar = 40;
+  // 手前と奥で少しだけ高さを変える（軽い遠近感）
+  const wallHeightNear = 60;
+  const wallHeightFar = 45;
 
-  // 左側の通路壁（4点の台形）
+  // 左側の通路壁
   const leftWallPts = [
-    // 下辺（床と接する部分）
-    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y }, // 手前・内側
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },   // 奥・内側
-    // 上辺（少し上にオフセット）
-    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar },   // 奥・上
-    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear}, // 手前・上
+    // 下辺（床に接している辺：通路の左端）
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y },
+    // 上辺（少し上に持ち上げた辺）
+    { x: CORRIDOR_FAR_LEFT, y: FLOOR_FAR_Y - wallHeightFar },
+    { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y - wallHeightNear },
   ];
 
-  // 右側の通路壁（左右を入れ替えただけ）
+  // 右側の通路壁（左右を入れ替え）
   const rightWallPts = [
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },   // 奥・内側
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y }, // 手前・内側
-    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear }, // 手前・上
-    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },    // 奥・上
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y },
+    { x: CORRIDOR_NEAR_RIGHT, y: FLOOR_NEAR_Y - wallHeightNear },
+    { x: CORRIDOR_FAR_RIGHT, y: FLOOR_FAR_Y - wallHeightFar },
   ];
 
   const leftWall = `<polygon data-inner-wall="left" points="${joinPoints(
@@ -101,6 +103,7 @@ function renderCorridorWalls(): string {
 
   return `${leftWall}\n${rightWall}`;
 }
+
 
 // 外側の左右の大きな壁
 function renderSideWalls(): string {
@@ -229,13 +232,15 @@ function renderSideBranch(side: 'left' | 'right'): string {
 }
 
 // スタートビュー（一本道）
+// スタートビュー（一本道）
 function renderStartView(openings: Openings): string {
   const parts: string[] = [];
   parts.push(renderCeiling());
   parts.push(renderSideWalls());
   parts.push(renderMainFloor());
-  parts.push(renderCorridorWalls());
+  // 先に床（黒い通路）を描いてから、通路壁を上に重ねる
   parts.push(renderCorridorFloor());
+  parts.push(renderCorridorWalls());
 
   if (!openings.forward) {
     parts.push(renderFrontWall('near', 'start'));
@@ -243,14 +248,16 @@ function renderStartView(openings: Openings): string {
   return parts.join('\n');
 }
 
+
+// 分岐ビュー（十字路/T字路）
 // 分岐ビュー（十字路/T字路）
 function renderJunctionView(openings: Openings): string {
   const parts: string[] = [];
   parts.push(renderCeiling());
   parts.push(renderSideWalls());
   parts.push(renderMainFloor());
-  parts.push(renderCorridorWalls());
   parts.push(renderCorridorFloor());
+  parts.push(renderCorridorWalls());
 
   if (openings.left) {
     parts.push(renderSideBranch('left'));
@@ -265,14 +272,16 @@ function renderJunctionView(openings: Openings): string {
   return parts.join('\n');
 }
 
+
+// ゴールビュー（出口 + 必要なら左右分岐）
 // ゴールビュー（出口 + 必要なら左右分岐）
 function renderGoalView(openings: Openings): string {
   const parts: string[] = [];
   parts.push(renderCeiling());
   parts.push(renderSideWalls());
   parts.push(renderMainFloor());
-  parts.push(renderCorridorWalls());
   parts.push(renderCorridorFloor());
+  parts.push(renderCorridorWalls());
   parts.push(renderGoalPortal());
 
   if (openings.left) {
@@ -287,6 +296,7 @@ function renderGoalView(openings: Openings): string {
 
   return parts.join('\n');
 }
+
 
 export function createSimplePreviewSvg(
   _cell: ServerMazeCell,
