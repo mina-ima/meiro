@@ -201,8 +201,8 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const anchorY = anchorSlice.near.y;
 
   const layers = [
-    { nearWidth: 74, farWidth: 52, nearY: anchorY, farY: anchorY - 14, innerShift: 4 },
-    { nearWidth: 60, farWidth: 38, nearY: anchorY, farY: anchorY - 24, innerShift: 10 },
+    { nearWidth: 40, farWidth: 28, nearY: anchorY, farY: anchorY - 14, innerShift: 6 },
+    { nearWidth: 34, farWidth: 20, nearY: anchorY, farY: anchorY - 26, innerShift: 12 },
   ];
   const branchVanish = {
     x: anchorX + direction * 190,
@@ -281,6 +281,19 @@ function renderView(
 
   if (variant === 'junction') {
     // junction: 通路の床・壁を描いた上に左右分岐を重ね、必要な場合だけ奥側に前壁を置く
+    const leftMask = `<polygon data-overlay="junction-mask-left" points="${joinPoints([
+      { x: 0, y: 0 },
+      { x: slices[0].near.left, y: 0 },
+      { x: slices[0].near.left, y: FLOOR_NEAR_Y },
+      { x: 0, y: FLOOR_NEAR_Y },
+    ])}" fill="${COLOR_BG}" />`;
+    const rightMask = `<polygon data-overlay="junction-mask-right" points="${joinPoints([
+      { x: slices[0].near.right, y: 0 },
+      { x: WIDTH, y: 0 },
+      { x: WIDTH, y: FLOOR_NEAR_Y },
+      { x: slices[0].near.right, y: FLOOR_NEAR_Y },
+    ])}" fill="${COLOR_BG}" />`;
+    parts.push(leftMask, rightMask);
     if (openings.left) {
       parts.push(renderSideBranch('left', slices));
     }

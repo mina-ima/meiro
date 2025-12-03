@@ -111,6 +111,8 @@ describe('FancyMazePreview', () => {
     });
 
     expect(container.querySelectorAll('[data-wall-side="front"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-overlay="junction-mask-left"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-overlay="junction-mask-right"]').length).toBe(1);
 
     const corridorLeft = container.querySelector(
       '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
