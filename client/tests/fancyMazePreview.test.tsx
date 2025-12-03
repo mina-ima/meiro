@@ -122,16 +122,8 @@ describe('FancyMazePreview', () => {
     const rightSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
     );
-    expect(leftSlice2Walls.length).toBe(0);
-    expect(rightSlice2Walls.length).toBe(0);
-    const remainingLeftWalls = container.querySelectorAll(
-      '[data-layer="wall"][data-wall-side="left"]:not([data-slice="2"])',
-    );
-    const remainingRightWalls = container.querySelectorAll(
-      '[data-layer="wall"][data-wall-side="right"]:not([data-slice="2"])',
-    );
-    expect(remainingLeftWalls.length).toBeGreaterThan(0);
-    expect(remainingRightWalls.length).toBeGreaterThan(0);
+    expect(leftSlice2Walls.length).toBe(1);
+    expect(rightSlice2Walls.length).toBe(1);
 
     const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
     expect(floorSlice2).not.toBeNull();
@@ -209,10 +201,14 @@ describe('FancyMazePreview', () => {
     expect(rightMask).not.toBeNull();
     const leftMaskYs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.y);
     const rightMaskYs = parsePoints(rightMask?.getAttribute('points') ?? '').map((p) => p.y);
+    const leftMaskXs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.x);
+    const rightMaskXs = parsePoints(rightMask?.getAttribute('points') ?? '').map((p) => p.x);
     expect(Math.max(...leftMaskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.min(...leftMaskYs)).toBe(0);
     expect(Math.min(...rightMaskYs)).toBe(0);
+    expect(Math.max(...leftMaskXs) - Math.min(...leftMaskXs)).toBeLessThanOrEqual(6);
+    expect(Math.max(...rightMaskXs) - Math.min(...rightMaskXs)).toBeLessThanOrEqual(6);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
@@ -229,6 +225,45 @@ describe('FancyMazePreview', () => {
     expect(leftVanishYs.size).toBe(1);
     expect(rightVanishXs.size).toBe(1);
     expect(rightVanishYs.size).toBe(1);
+  });
+
+  it('分岐ビュー 左だけ開いている場合は右壁を切らず、左の穴だけを分岐通路で埋める', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: false,
+      backward: false,
+    });
+
+    expect(container.querySelectorAll('[data-overlay="branch-cut-right"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-overlay="junction-mask-right"]').length).toBe(0);
+    expect(
+      container.querySelectorAll('[data-layer="wall"][data-wall-side="right"][data-slice="2"]').length,
+    ).toBe(1);
+
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
+    const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const floor2NearLeft = Math.min(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
+    );
+
+    const leftBranchFloors = Array.from(
+      container.querySelectorAll('polygon[data-branch="left"][data-layer="floor"]'),
+    );
+    const rightBranchFloors = Array.from(
+      container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
+    );
+    expect(leftBranchFloors.length).toBe(2);
+    expect(rightBranchFloors.length).toBe(0);
+
+    const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
+    const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
+      .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
+    expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
   });
 
   it('分岐ビュー forward=false は奥に1枚だけ前壁を描く', () => {
@@ -275,8 +310,8 @@ describe('FancyMazePreview', () => {
     const rightSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
     );
-    expect(leftSlice2Walls.length).toBe(0);
-    expect(rightSlice2Walls.length).toBe(0);
+    expect(leftSlice2Walls.length).toBe(1);
+    expect(rightSlice2Walls.length).toBe(1);
 
     const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
     const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');
@@ -304,6 +339,50 @@ describe('FancyMazePreview', () => {
     const frontWall = container.querySelector('[data-wall-side="front"]');
     const portal = container.querySelector('[data-goal-portal="true"]');
     expect(frontWall).not.toBeNull();
+    expect(portal).not.toBeNull();
+  });
+
+  it('ゴールビュー 左だけ開いている場合でも右側の壁は保たれる', () => {
+    const { container } = renderPreview('goal', {
+      forward: true,
+      left: true,
+      right: false,
+      backward: false,
+    });
+
+    expect(container.querySelectorAll('[data-overlay="branch-cut-right"]').length).toBe(0);
+    expect(container.querySelectorAll('[data-overlay="junction-mask-right"]').length).toBe(0);
+
+    const rightSlice2Walls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
+    );
+    expect(rightSlice2Walls.length).toBe(1);
+
+    const leftBranchFloors = Array.from(
+      container.querySelectorAll('polygon[data-branch="left"][data-layer="floor"]'),
+    );
+    const rightBranchFloors = Array.from(
+      container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
+    );
+    expect(leftBranchFloors.length).toBe(2);
+    expect(rightBranchFloors.length).toBe(0);
+
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
+    const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const floor2NearLeft = Math.min(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
+    );
+
+    const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
+    const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
+      .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
+    expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
+
+    const portal = container.querySelector('[data-goal-portal="true"]');
     expect(portal).not.toBeNull();
   });
 });
