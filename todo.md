@@ -374,3 +374,11 @@
 
 ### 実行順（推奨短縮版）
 1) DO雛形 + 20Hz STATE配信 → 2) 迷路 + BFS検証 → 3) 移動/視界 → 4) 編集/資源/禁止 → 5) ポイント/勝敗 → 6) 切断/再接続 → 7) UI/HUD/サウンド → 8) 計測/最適化 → 9) 総合テスト/リリース
+
+---
+
+## 25. FancyMazePreview 分岐表示の微調整（2026-01-07）
+- [x] junction/goal の branch マスク幅を細帯にし、手前の壁を残したまま切れ目だけを黒で抜く  
+  - DoD: `client/src/views/FancyMazePreview.ts` のマスク座標を anchorX 付近の数px 幅にし、`client/tests/fancyMazePreview.test.tsx` が通る
+- [x] 横通路の壁高さを天井付近まで引き上げ、左右90度の廊下感を強調  
+  - DoD: branch-wall のポリゴン上端が床から十分離れ、tests での分岐床・ガイドの性質が維持される

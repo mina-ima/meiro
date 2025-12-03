@@ -204,7 +204,7 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // junction 用の左右分岐: slice2 の床ラインから左右に90度曲がる横通路を描く
+  // junction/goal 用の左右分岐: slice2 の床ラインから左右に90度曲がる横通路を描く
   // 分岐位置のメイン通路壁は切り欠き（マスク）で隠し、横通路の床と壁だけが見えるようにする
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
@@ -213,23 +213,23 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const anchorY = anchorSlice.near.y;
   const corridorWidth = anchorSlice.near.right - anchorSlice.near.left;
 
-  const vanishX = isLeft ? -260 : WIDTH + 260;
-  const vanishY = anchorY - (anchorSlice.near.y - anchorSlice.far.y) * 2.6;
+  const vanishX = isLeft ? -WIDTH * 0.6 : WIDTH + WIDTH * 0.6;
+  const vanishY = anchorY - Math.max(32, (anchorSlice.near.y - anchorSlice.far.y) * 3);
 
   const layers = [
     {
-      nearWidth: corridorWidth * 0.7,
-      farWidth: corridorWidth * 0.52,
+      nearWidth: corridorWidth * 0.64,
+      farWidth: corridorWidth * 0.46,
       nearY: anchorY,
-      farY: anchorY - 32,
-      wallHeight: 86,
+      farY: anchorY - 30,
+      wallHeight: 150,
     },
     {
-      nearWidth: corridorWidth * 0.54,
-      farWidth: corridorWidth * 0.4,
-      nearY: anchorY - 12,
-      farY: anchorY - 54,
-      wallHeight: 74,
+      nearWidth: corridorWidth * 0.52,
+      farWidth: corridorWidth * 0.36,
+      nearY: anchorY - 14,
+      farY: anchorY - 48,
+      wallHeight: 132,
     },
   ];
 
@@ -270,14 +270,14 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
     const innerWall = [
       { x: nearInner, y: layer.nearY },
       { x: farInner, y: layer.farY },
-      { x: farInner, y: layer.farY - wallHeight * 0.72 },
-      { x: nearInner, y: layer.nearY - wallHeight },
+      { x: farInner, y: Math.max(0, layer.farY - wallHeight * 0.82) },
+      { x: nearInner, y: Math.max(0, layer.nearY - wallHeight) },
     ];
     const outerWall = [
       { x: nearOuter, y: layer.nearY },
       { x: farOuter, y: layer.farY },
-      { x: farOuter, y: layer.farY - wallHeight * 0.68 },
-      { x: nearOuter, y: layer.nearY - wallHeight * 0.88 },
+      { x: farOuter, y: Math.max(0, layer.farY - wallHeight * 0.78) },
+      { x: nearOuter, y: Math.max(0, layer.nearY - wallHeight * 0.9) },
     ];
 
     const wallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.24 + idx * 0.1);
@@ -310,8 +310,9 @@ function renderView(
   const anchorLeft = anchorSlice.near.left;
   const anchorRight = anchorSlice.near.right;
   const anchorY = anchorSlice.near.y;
-  const cutWidth = Math.max(12, (anchorRight - anchorLeft) * 0.05);
+  const cutWidth = Math.max(2, Math.min(4, (anchorRight - anchorLeft) * 0.02));
   const hasSideBranch = openings.left || openings.right;
+  const maskWidth = cutWidth + 1;
 
   const branchCuts: string[] = [];
   if (openings.left) {
@@ -337,16 +338,16 @@ function renderView(
 
   const branchMasks = [
     `<polygon data-overlay="junction-mask-left" points="${joinPoints([
-      { x: 0, y: 0 },
       { x: anchorLeft, y: 0 },
+      { x: anchorLeft + maskWidth, y: 0 },
+      { x: anchorLeft + maskWidth, y: anchorY },
       { x: anchorLeft, y: anchorY },
-      { x: 0, y: anchorY },
     ])}" fill="${COLOR_BG}" />`,
     `<polygon data-overlay="junction-mask-right" points="${joinPoints([
+      { x: anchorRight - maskWidth, y: 0 },
       { x: anchorRight, y: 0 },
-      { x: WIDTH, y: 0 },
-      { x: WIDTH, y: anchorY },
       { x: anchorRight, y: anchorY },
+      { x: anchorRight - maskWidth, y: anchorY },
     ])}" fill="${COLOR_BG}" />`,
   ];
 

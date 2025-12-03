@@ -237,6 +237,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-05): FancyMazePreview junction の左右開口に branch-cut マスクを追加し、横通路の消失点を左右外側へ振って幅を太めに再設定（`client/tests/fancyMazePreview.test.tsx` でbranch-cut存在とfarOuterの側方シフトを検証）
 * 更新メモ(2026-01-05追記): FancyMazePreview junction で openings.left/right のとき slice2 側面壁を描かずに開口をくり抜き、窓状に見えないよう `client/tests/fancyMazePreview.test.tsx` で slice2 壁非描画を検証
 * 更新メモ(2026-01-06): FancyMazePreview junction/goal の branch マスク下辺を slice2 床ラインに揃え、横通路の床幅・側方消失点を強めて床が見えるT字路にし、goal でも同じ切り欠き＋横通路描画で統一（`client/tests/fancyMazePreview.test.tsx` でマスク位置とgoal分岐を検証）
+* 更新メモ(2026-01-07): FancyMazePreview junction/goal の branch マスクを細帯化し（手前壁を残す）、横通路の壁高さを天井付近まで伸ばして90度の短い廊下感を強調（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 
 ### 8.2 オーナー
 
