@@ -152,10 +152,13 @@ describe('FancyMazePreview', () => {
         .filter((p) => Math.abs(p.y - corridorLeftNear) < 0.001)
         .map((p) => p.x),
     );
+    const corridorLeftFloorY = corridorLeftNear;
     const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - leftSize.nearY) < 0.001)
       .map((p) => p.x);
     expect(Math.max(...leftNearXs)).toBeCloseTo(corridorLeftNearX, 5);
+    expect(leftSize.nearY).toBeLessThanOrEqual(corridorLeftFloorY + 0.001);
+    expect(leftSize.nearY).toBeGreaterThanOrEqual(corridorLeftFloorY - 0.01);
 
     const corridorRightNear = Math.max(
       ...parsePoints(corridorRight?.getAttribute('points') ?? '').map((p) => p.y),
@@ -165,10 +168,13 @@ describe('FancyMazePreview', () => {
         .filter((p) => Math.abs(p.y - corridorRightNear) < 0.001)
         .map((p) => p.x),
     );
+    const corridorRightFloorY = corridorRightNear;
     const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - rightSize.nearY) < 0.001)
       .map((p) => p.x);
     expect(Math.min(...rightNearXs)).toBeCloseTo(corridorRightNearX, 5);
+    expect(rightSize.nearY).toBeLessThanOrEqual(corridorRightFloorY + 0.001);
+    expect(rightSize.nearY).toBeGreaterThanOrEqual(corridorRightFloorY - 0.01);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));

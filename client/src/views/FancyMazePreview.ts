@@ -193,20 +193,20 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // junction 用の左右分岐通路を2レイヤーで描画し、壁の境界から横方向に伸ばす
+  // 分岐床は slice2 の床位置より手前には出さず、メイン通路の壁端から横通路を伸ばす
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1];
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
-  const anchorY = lerp(anchorSlice.near.y, anchorSlice.far.y, 0.5);
+  const anchorY = anchorSlice.near.y;
 
   const layers = [
-    { nearWidth: 78, farWidth: 54, nearY: anchorY, farY: anchorY - 18, innerShift: 6 },
-    { nearWidth: 60, farWidth: 38, nearY: anchorY - 18, farY: anchorY - 36, innerShift: 12 },
+    { nearWidth: 78, farWidth: 56, nearY: anchorY, farY: anchorY - 18, innerShift: 6 },
+    { nearWidth: 62, farWidth: 40, nearY: anchorY - 12, farY: anchorY - 30, innerShift: 12 },
   ];
   const branchVanish = {
-    x: anchorX + direction * 210,
-    y: anchorY - 60,
+    x: anchorX + direction * 190,
+    y: anchorY - 70,
   };
 
   const parts: string[] = [];
@@ -239,18 +239,18 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
       );
     }
 
-    const wallHeight = 84 - idx * 10;
+    const wallHeight = 80 - idx * 8;
     const innerWall = [
       { x: nearInner, y: layer.nearY },
       { x: farInner, y: layer.farY },
-      { x: farInner, y: layer.farY - wallHeight * 0.78 },
+      { x: farInner, y: layer.farY - wallHeight * 0.75 },
       { x: nearInner, y: layer.nearY - wallHeight },
     ];
     const outerWall = [
       { x: nearOuter, y: layer.nearY },
       { x: farOuter, y: layer.farY },
       { x: farOuter, y: layer.farY - wallHeight * 0.7 },
-      { x: nearOuter, y: layer.nearY - wallHeight * 0.92 },
+      { x: nearOuter, y: layer.nearY - wallHeight * 0.9 },
     ];
 
     const wallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.24 + idx * 0.1);
