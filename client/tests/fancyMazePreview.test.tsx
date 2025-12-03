@@ -203,6 +203,17 @@ describe('FancyMazePreview', () => {
     expect(rightLayer2.nearY).toBeLessThan(rightLayer1.nearY);
     expect(rightLayer2.nearY).toBeGreaterThanOrEqual(rightLayer1.nearY - 14);
 
+    const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
+    const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');
+    expect(leftMask).not.toBeNull();
+    expect(rightMask).not.toBeNull();
+    const leftMaskYs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.y);
+    const rightMaskYs = parsePoints(rightMask?.getAttribute('points') ?? '').map((p) => p.y);
+    expect(Math.max(...leftMaskYs)).toBeCloseTo(floor2NearY, 0.1);
+    expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
+    expect(Math.min(...leftMaskYs)).toBe(0);
+    expect(Math.min(...rightMaskYs)).toBe(0);
+
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
     expect(branchWallsLeft.length).toBeGreaterThan(0);
@@ -248,5 +259,51 @@ describe('FancyMazePreview', () => {
     const frontWall = container.querySelector('[data-wall-side="front"]');
     expect(frontWall).not.toBeNull();
     expect(frontWall?.getAttribute('data-slice')).toBe('4');
+  });
+
+  it('ゴールビューでも左右開放時は分岐用の切り欠きと横通路をjunctionと同じルールで描く', () => {
+    const { container } = renderPreview('goal', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftSlice2Walls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
+    );
+    const rightSlice2Walls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
+    );
+    expect(leftSlice2Walls.length).toBe(0);
+    expect(rightSlice2Walls.length).toBe(0);
+
+    const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
+    const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');
+    expect(leftMask).not.toBeNull();
+    expect(rightMask).not.toBeNull();
+
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
+    const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const leftMaskYs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.y);
+    const rightMaskYs = parsePoints(rightMask?.getAttribute('points') ?? '').map((p) => p.y);
+    expect(Math.max(...leftMaskYs)).toBeCloseTo(floor2NearY, 0.1);
+    expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
+
+    const leftBranchFloors = container.querySelectorAll(
+      'polygon[data-branch="left"][data-layer="floor"]',
+    );
+    const rightBranchFloors = container.querySelectorAll(
+      'polygon[data-branch="right"][data-layer="floor"]',
+    );
+    expect(leftBranchFloors.length).toBe(2);
+    expect(rightBranchFloors.length).toBe(2);
+
+    const frontWall = container.querySelector('[data-wall-side="front"]');
+    const portal = container.querySelector('[data-goal-portal="true"]');
+    expect(frontWall).not.toBeNull();
+    expect(portal).not.toBeNull();
   });
 });

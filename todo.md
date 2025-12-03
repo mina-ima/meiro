@@ -179,6 +179,7 @@
 - 更新メモ(2025-12-21): FancyMazePreview junction に左右マスクを追加し、分岐幅を控えめにして壁外を暗転（本線床にかぶらず外側が見えないように調整、`client/tests/fancyMazePreview.test.tsx` 回帰）
 - 更新メモ(2026-01-05): FancyMazePreview junction の左右開口を branch-cut マスクでくり抜き、横通路の消失点を左右外側へ振って奥側の壁を横方向へ引き込むようジオメトリを再設定（`client/tests/fancyMazePreview.test.tsx` で branch-cut と farOuter シフトを回帰）
 - 更新メモ(2026-01-05追記): FancyMazePreview junction で openings.left/right の側は slice2 側面壁を描かずに実際の開口を作り、「窓」問題を解消（`client/tests/fancyMazePreview.test.tsx` で slice2 壁非描画を検証）
+- 更新メモ(2026-01-06): FancyMazePreview junction/goal の branch マスクを slice2 床ラインで止め、横通路床の幅と側方方向を強調して床が見える横通路にし、goal でも同じ切り欠き＋横通路描画に統一（`client/tests/fancyMazePreview.test.tsx` でマスク位置とgoal分岐を追記検証）
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
