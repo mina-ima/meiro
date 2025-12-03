@@ -193,7 +193,7 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // 分岐床は slice2 の床位置より手前には出さず、メイン通路の壁端から横通路を伸ばす
+  // junction 用の左右分岐: slice2 の床ラインから横通路を伸ばし、メイン通路より手前には出さない
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1];
@@ -201,8 +201,8 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const anchorY = anchorSlice.near.y;
 
   const layers = [
-    { nearWidth: 78, farWidth: 56, nearY: anchorY, farY: anchorY - 18, innerShift: 6 },
-    { nearWidth: 62, farWidth: 40, nearY: anchorY - 12, farY: anchorY - 30, innerShift: 12 },
+    { nearWidth: 74, farWidth: 52, nearY: anchorY, farY: anchorY - 14, innerShift: 4 },
+    { nearWidth: 60, farWidth: 38, nearY: anchorY, farY: anchorY - 24, innerShift: 10 },
   ];
   const branchVanish = {
     x: anchorX + direction * 190,

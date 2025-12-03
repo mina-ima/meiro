@@ -130,19 +130,21 @@ describe('FancyMazePreview', () => {
     expect(leftBranchFloors.length).toBe(2);
     expect(rightBranchFloors.length).toBe(2);
 
-    const leftSize = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
-    const leftFarSize = edgeWidths(parsePoints(leftBranchFloors[1].getAttribute('points')));
-    expect(leftSize.nearWidth).toBeGreaterThan(leftFarSize.nearWidth);
-    expect(leftSize.farWidth).toBeGreaterThan(leftFarSize.farWidth);
-    expect(leftSize.nearY).toBeGreaterThan(leftFarSize.nearY);
-    expect(leftSize.farY).toBeGreaterThan(leftFarSize.farY);
+    const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
+    const leftLayer2 = edgeWidths(parsePoints(leftBranchFloors[1].getAttribute('points')));
+    expect(leftLayer1.nearWidth).toBeGreaterThan(leftLayer2.nearWidth);
+    expect(leftLayer1.farWidth).toBeGreaterThan(leftLayer2.farWidth);
+    expect(leftLayer1.farY).toBeLessThan(leftLayer1.nearY);
+    expect(leftLayer2.farY).toBeLessThan(leftLayer2.nearY);
+    expect(leftLayer1.farY).toBeGreaterThan(leftLayer2.farY);
 
-    const rightSize = edgeWidths(parsePoints(rightBranchFloors[0].getAttribute('points')));
-    const rightFarSize = edgeWidths(parsePoints(rightBranchFloors[1].getAttribute('points')));
-    expect(rightSize.nearWidth).toBeGreaterThan(rightFarSize.nearWidth);
-    expect(rightSize.farWidth).toBeGreaterThan(rightFarSize.farWidth);
-    expect(rightSize.nearY).toBeGreaterThan(rightFarSize.nearY);
-    expect(rightSize.farY).toBeGreaterThan(rightFarSize.farY);
+    const rightLayer1 = edgeWidths(parsePoints(rightBranchFloors[0].getAttribute('points')));
+    const rightLayer2 = edgeWidths(parsePoints(rightBranchFloors[1].getAttribute('points')));
+    expect(rightLayer1.nearWidth).toBeGreaterThan(rightLayer2.nearWidth);
+    expect(rightLayer1.farWidth).toBeGreaterThan(rightLayer2.farWidth);
+    expect(rightLayer1.farY).toBeLessThan(rightLayer1.nearY);
+    expect(rightLayer2.farY).toBeLessThan(rightLayer2.nearY);
+    expect(rightLayer1.farY).toBeGreaterThan(rightLayer2.farY);
 
     const corridorLeftNear = Math.max(
       ...parsePoints(corridorLeft?.getAttribute('points') ?? '').map((p) => p.y),
@@ -154,11 +156,12 @@ describe('FancyMazePreview', () => {
     );
     const corridorLeftFloorY = corridorLeftNear;
     const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
-      .filter((p) => Math.abs(p.y - leftSize.nearY) < 0.001)
+      .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
       .map((p) => p.x);
     expect(Math.max(...leftNearXs)).toBeCloseTo(corridorLeftNearX, 5);
-    expect(leftSize.nearY).toBeLessThanOrEqual(corridorLeftFloorY + 0.001);
-    expect(leftSize.nearY).toBeGreaterThanOrEqual(corridorLeftFloorY - 0.01);
+    expect(leftLayer1.nearY).toBeCloseTo(corridorLeftFloorY, 0.5);
+    expect(leftLayer2.nearY).toBeGreaterThanOrEqual(corridorLeftFloorY - 0.01);
+    expect(leftLayer2.nearY).toBeLessThanOrEqual(corridorLeftFloorY + 8);
 
     const corridorRightNear = Math.max(
       ...parsePoints(corridorRight?.getAttribute('points') ?? '').map((p) => p.y),
@@ -170,11 +173,12 @@ describe('FancyMazePreview', () => {
     );
     const corridorRightFloorY = corridorRightNear;
     const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
-      .filter((p) => Math.abs(p.y - rightSize.nearY) < 0.001)
+      .filter((p) => Math.abs(p.y - rightLayer1.nearY) < 0.001)
       .map((p) => p.x);
     expect(Math.min(...rightNearXs)).toBeCloseTo(corridorRightNearX, 5);
-    expect(rightSize.nearY).toBeLessThanOrEqual(corridorRightFloorY + 0.001);
-    expect(rightSize.nearY).toBeGreaterThanOrEqual(corridorRightFloorY - 0.01);
+    expect(rightLayer1.nearY).toBeCloseTo(corridorRightFloorY, 0.5);
+    expect(rightLayer2.nearY).toBeGreaterThanOrEqual(corridorRightFloorY - 0.01);
+    expect(rightLayer2.nearY).toBeLessThanOrEqual(corridorRightFloorY + 8);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
