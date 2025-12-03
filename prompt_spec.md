@@ -238,6 +238,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-05追記): FancyMazePreview junction で openings.left/right のとき slice2 側面壁を描かずに開口をくり抜き、窓状に見えないよう `client/tests/fancyMazePreview.test.tsx` で slice2 壁非描画を検証
 * 更新メモ(2026-01-06): FancyMazePreview junction/goal の branch マスク下辺を slice2 床ラインに揃え、横通路の床幅・側方消失点を強めて床が見えるT字路にし、goal でも同じ切り欠き＋横通路描画で統一（`client/tests/fancyMazePreview.test.tsx` でマスク位置とgoal分岐を検証）
 * 更新メモ(2026-01-07): FancyMazePreview junction/goal で openings.* が true の側だけ細い branch マスクを入れ、穴の内側を分岐床+側壁で埋めて黒抜けを解消。非開口側の壁は保持し、分岐壁を天井付近まで伸ばして短い横通路感を強調（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+* 更新メモ(2026-01-08): FancyMazePreview junction/goal の分岐床とガイドを slice2 床ライン基準で左右90度に振り、開口側だけの細いマスクに限定して黒帯を除去。非開口側の壁は触らず、横通路の太さと左右対称性を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰
 
 ### 8.2 オーナー
 

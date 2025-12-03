@@ -162,8 +162,7 @@ function renderCorridorWalls(
   const parts: string[] = [];
   slices.forEach((slice) => {
     const isBranchingVariant = variant === 'junction' || variant === 'goal';
-    // junction/goal: 消したメイン通路の壁の代わりに、分岐通路の床と壁で穴を埋める（切り欠きは後段のマスクで処理）
-    // 左右どちらかだけ openings.* が true の場合、その側だけ壁を切り、もう一方は切らない
+    // junction/goal でも壁スライスは素直に描き、後段の openings.* に応じたマスクで切り欠きを作る
     if (isBranchingVariant && openings) {
       parts.push(renderWallSlice('left', slice));
       parts.push(renderWallSlice('right', slice));
@@ -205,49 +204,45 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // junction/goal 用の左右分岐: slice2 の床ラインから左右に90度曲がる横通路を描く
-  // junction/goal: 消したメイン通路の壁の代わりに、分岐通路の床と壁で穴を埋める
+  // junction の左右分岐: slice2 の床ラインから左右90度に伸びる通路を描く（本線床より手前には出さない）
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1];
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
-  const anchorY = anchorSlice.near.y;
+  const floorY = anchorSlice.near.y;
   const corridorWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const vanishX = isLeft ? -WIDTH * 0.55 : WIDTH + WIDTH * 0.55;
-  const vanishY = Math.max(FLOOR_VANISH_Y, anchorY - 140);
+  const vanish = {
+    x: isLeft ? -WIDTH * 0.35 : WIDTH + WIDTH * 0.35,
+    y: Math.max(FLOOR_VANISH_Y, floorY - 38),
+  };
 
-  const depthBase = Math.max(26, (anchorSlice.near.y - anchorSlice.far.y) * 1.4);
+  const depthBase = Math.max(18, Math.min(26, (anchorSlice.near.y - anchorSlice.far.y) * 1.6));
+  const nearWidth0 = corridorWidth * 0.64;
+  const nearWidth1 = nearWidth0 * 0.82;
   const layers = [
     {
-      nearWidth: corridorWidth * 0.52,
-      farWidth: corridorWidth * 0.4,
-      nearLift: 0,
+      nearWidth: nearWidth0,
+      farWidth: nearWidth0 * 0.58,
+      innerShift: nearWidth0 * 1.06,
       depth: depthBase,
     },
     {
-      nearWidth: corridorWidth * 0.4,
-      farWidth: corridorWidth * 0.32,
-      nearLift: 12,
-      depth: depthBase + 18,
+      nearWidth: nearWidth1,
+      farWidth: nearWidth1 * 0.62,
+      innerShift: nearWidth1 * 1.08,
+      depth: depthBase + 12,
     },
   ];
 
   const parts: string[] = [];
   layers.forEach((layer, idx) => {
-    const nearY = anchorY - layer.nearLift;
-    const farY = nearY - layer.depth;
-    const nearInner = anchorX;
-    const nearOuter = anchorX + direction * layer.nearWidth;
-    const innerShift = layer.nearWidth * 0.28 + idx * 3;
-    const farInner = anchorX + direction * innerShift;
-    const farOuter = farInner + direction * layer.farWidth;
+    const nearInner = { x: anchorX, y: floorY };
+    const nearOuter = { x: anchorX + direction * layer.nearWidth, y: floorY };
+    const farY = floorY - layer.depth;
+    const farInner = { x: anchorX + direction * layer.innerShift, y: farY };
+    const farOuter = { x: farInner.x + direction * layer.farWidth, y: farY };
 
-    const floorPoints = [
-      { x: nearInner, y: nearY },
-      { x: nearOuter, y: nearY },
-      { x: farOuter, y: farY },
-      { x: farInner, y: farY },
-    ];
+    const floorPoints = [nearInner, nearOuter, farOuter, farInner];
     const floorFill = mixColor(COLOR_BRANCH_FLOOR, COLOR_BG, 0.16 + idx * 0.14);
     parts.push(
       `<polygon data-branch="${side}" data-layer="floor" data-slice="${idx + 1}" points="${joinPoints(
@@ -258,29 +253,28 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
     const guideCount = 2 + idx;
     for (let g = 1; g <= guideCount; g += 1) {
       const u = g / (guideCount + 1);
-      const x = lerp(nearInner, nearOuter, u);
-      const y = nearY;
+      const x = lerp(nearInner.x, nearOuter.x, u);
       parts.push(
-        `<line data-branch-guide="${side}" data-slice="${idx + 1}" x1="${x}" y1="${y}" x2="${vanishX}" y2="${vanishY}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.3 - idx * 0.08}" stroke-width="0.9" />`,
+        `<line data-branch-guide="${side}" data-slice="${idx + 1}" x1="${x}" y1="${floorY}" x2="${vanish.x}" y2="${vanish.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.3 - idx * 0.08}" stroke-width="0.9" />`,
       );
     }
 
-    const wallHeight = Math.max(anchorY * 1.1, 180);
-    const innerWallTopNear = Math.max(0, Math.min(FLOOR_VANISH_Y, nearY - wallHeight));
+    const wallHeight = Math.max(floorY * 0.95, 180);
+    const innerWallTopNear = Math.max(0, Math.min(FLOOR_VANISH_Y, floorY - wallHeight));
     const innerWallTopFar = Math.max(0, Math.min(FLOOR_VANISH_Y, farY - wallHeight * 0.72));
-    const outerWallTopNear = Math.max(0, Math.min(FLOOR_VANISH_Y, nearY - wallHeight * 0.92));
+    const outerWallTopNear = Math.max(0, Math.min(FLOOR_VANISH_Y, floorY - wallHeight * 0.92));
     const outerWallTopFar = Math.max(0, Math.min(FLOOR_VANISH_Y, farY - wallHeight * 0.68));
     const innerWall = [
-      { x: nearInner, y: nearY },
-      { x: farInner, y: farY },
-      { x: farInner, y: innerWallTopFar },
-      { x: nearInner, y: innerWallTopNear },
+      nearInner,
+      farInner,
+      { x: farInner.x, y: innerWallTopFar },
+      { x: nearInner.x, y: innerWallTopNear },
     ];
     const outerWall = [
-      { x: nearOuter, y: nearY },
-      { x: farOuter, y: farY },
-      { x: farOuter, y: outerWallTopFar },
-      { x: nearOuter, y: outerWallTopNear },
+      nearOuter,
+      farOuter,
+      { x: farOuter.x, y: outerWallTopFar },
+      { x: nearOuter.x, y: outerWallTopNear },
     ];
 
     const wallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.24 + idx * 0.1);
@@ -313,45 +307,46 @@ function renderView(
   const anchorLeft = anchorSlice.near.left;
   const anchorRight = anchorSlice.near.right;
   const anchorY = anchorSlice.near.y;
-  const cutWidth = Math.max(2, Math.min(4, (anchorRight - anchorLeft) * 0.02));
+  const cutWidth = Math.max(2, Math.min(4.5, (anchorRight - anchorLeft) * 0.02));
   const hasSideBranch = openings.left || openings.right;
-  const maskWidth = cutWidth + 1;
+  const maskWidth = Math.min(6, cutWidth + 2);
 
+  // openings.* が true の側だけ壁を切り欠き、消した壁の代わりに分岐通路の床と壁を差し込む
   const branchCuts: string[] = [];
   const branchMasks: string[] = [];
   if (openings.left) {
     branchCuts.push(
       `<polygon data-overlay="branch-cut-left" points="${joinPoints([
-        { x: anchorLeft, y: 0 },
-        { x: anchorLeft + cutWidth, y: 0 },
-        { x: anchorLeft + cutWidth, y: anchorY },
-        { x: anchorLeft, y: anchorY },
+        { x: anchorLeft - cutWidth * 0.2, y: 0 },
+        { x: anchorLeft + cutWidth * 0.8, y: 0 },
+        { x: anchorLeft + cutWidth * 0.2, y: anchorY },
+        { x: anchorLeft - cutWidth * 0.8, y: anchorY },
       ])}" fill="${COLOR_BG}" />`,
     );
     branchMasks.push(
       `<polygon data-overlay="junction-mask-left" points="${joinPoints([
-        { x: anchorLeft, y: 0 },
-        { x: anchorLeft + maskWidth, y: 0 },
-        { x: anchorLeft + maskWidth, y: anchorY },
-        { x: anchorLeft, y: anchorY },
+        { x: anchorLeft - maskWidth, y: 0 },
+        { x: anchorLeft - maskWidth * 0.2, y: 0 },
+        { x: anchorLeft - maskWidth * 0.4, y: anchorY },
+        { x: anchorLeft - maskWidth, y: anchorY },
       ])}" fill="${COLOR_BG}" />`,
     );
   }
   if (openings.right) {
     branchCuts.push(
       `<polygon data-overlay="branch-cut-right" points="${joinPoints([
-        { x: anchorRight, y: 0 },
-        { x: anchorRight - cutWidth, y: 0 },
-        { x: anchorRight - cutWidth, y: anchorY },
-        { x: anchorRight, y: anchorY },
+        { x: anchorRight - cutWidth * 0.8, y: 0 },
+        { x: anchorRight + cutWidth * 0.2, y: 0 },
+        { x: anchorRight + cutWidth * 0.8, y: anchorY },
+        { x: anchorRight - cutWidth * 0.2, y: anchorY },
       ])}" fill="${COLOR_BG}" />`,
     );
     branchMasks.push(
       `<polygon data-overlay="junction-mask-right" points="${joinPoints([
-        { x: anchorRight - maskWidth, y: 0 },
-        { x: anchorRight, y: 0 },
-        { x: anchorRight, y: anchorY },
-        { x: anchorRight - maskWidth, y: anchorY },
+        { x: anchorRight + maskWidth * 0.2, y: 0 },
+        { x: anchorRight + maskWidth, y: 0 },
+        { x: anchorRight + maskWidth, y: anchorY },
+        { x: anchorRight + maskWidth * 0.4, y: anchorY },
       ])}" fill="${COLOR_BG}" />`,
     );
   }

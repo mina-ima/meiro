@@ -184,7 +184,7 @@ describe('FancyMazePreview', () => {
       .map((p) => p.x);
     expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
     expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
-    expect(leftLayer2.nearY).toBeLessThan(leftLayer1.nearY);
+    expect(leftLayer2.nearY).toBeLessThanOrEqual(leftLayer1.nearY);
     expect(leftLayer2.nearY).toBeGreaterThanOrEqual(leftLayer1.nearY - 14);
 
     const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
@@ -192,7 +192,7 @@ describe('FancyMazePreview', () => {
       .map((p) => p.x);
     expect(Math.min(...rightNearXs)).toBeCloseTo(floor2NearRight, 5);
     expect(rightLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
-    expect(rightLayer2.nearY).toBeLessThan(rightLayer1.nearY);
+    expect(rightLayer2.nearY).toBeLessThanOrEqual(rightLayer1.nearY);
     expect(rightLayer2.nearY).toBeGreaterThanOrEqual(rightLayer1.nearY - 14);
 
     const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
