@@ -235,6 +235,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2025-12-03仕上げ): FancyMazePreview junction の左右分岐2レイヤーをどちらも slice2 床ラインに接続し、near幅は手前>奥・far幅も段階狭まりにしつつ前壁は forward=false のみ1枚、`client/tests/fancyMazePreview.test.tsx` で接続位置と奥行き関係を検証
 * 更新メモ(2025-12-21): FancyMazePreview junction に左右マスクを追加し、分岐幅を控えめにして壁外を暗転（床が本線に乗らず外側が見えないよう調整、`client/tests/fancyMazePreview.test.tsx` でマスク存在と分岐縮小を回帰）
 * 更新メモ(2026-01-05): FancyMazePreview junction の左右開口に branch-cut マスクを追加し、横通路の消失点を左右外側へ振って幅を太めに再設定（`client/tests/fancyMazePreview.test.tsx` でbranch-cut存在とfarOuterの側方シフトを検証）
+* 更新メモ(2026-01-05追記): FancyMazePreview junction で openings.left/right のとき slice2 側面壁を描かずに開口をくり抜き、窓状に見えないよう `client/tests/fancyMazePreview.test.tsx` で slice2 壁非描画を検証
 
 ### 8.2 オーナー
 

@@ -116,14 +116,33 @@ describe('FancyMazePreview', () => {
     expect(container.querySelectorAll('[data-overlay="branch-cut-left"]').length).toBe(1);
     expect(container.querySelectorAll('[data-overlay="branch-cut-right"]').length).toBe(1);
 
-    const corridorLeft = container.querySelector(
+    const leftSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
     );
-    const corridorRight = container.querySelector(
+    const rightSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
     );
-    expect(corridorLeft).not.toBeNull();
-    expect(corridorRight).not.toBeNull();
+    expect(leftSlice2Walls.length).toBe(0);
+    expect(rightSlice2Walls.length).toBe(0);
+    const remainingLeftWalls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="left"]:not([data-slice="2"])',
+    );
+    const remainingRightWalls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="right"]:not([data-slice="2"])',
+    );
+    expect(remainingLeftWalls.length).toBeGreaterThan(0);
+    expect(remainingRightWalls.length).toBeGreaterThan(0);
+
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
+    const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const floor2NearLeft = Math.min(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
+    );
+    const floor2NearRight = Math.max(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
+    );
 
     const leftBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="left"][data-layer="floor"]'),
@@ -168,37 +187,19 @@ describe('FancyMazePreview', () => {
     const rightFarOuter = Math.max(...rightFarPoints.map((p) => p.x));
     expect(rightFarOuter).toBeGreaterThan(rightNearOuter + 5);
 
-    const corridorLeftNear = Math.max(
-      ...parsePoints(corridorLeft?.getAttribute('points') ?? '').map((p) => p.y),
-    );
-    const corridorLeftNearX = Math.max(
-      ...parsePoints(corridorLeft?.getAttribute('points') ?? '')
-        .filter((p) => Math.abs(p.y - corridorLeftNear) < 0.001)
-        .map((p) => p.x),
-    );
-    const corridorLeftFloorY = corridorLeftNear;
     const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
       .map((p) => p.x);
-    expect(Math.max(...leftNearXs)).toBeCloseTo(corridorLeftNearX, 5);
-    expect(leftLayer1.nearY).toBeCloseTo(corridorLeftFloorY, 0.5);
+    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
+    expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
     expect(leftLayer2.nearY).toBeLessThan(leftLayer1.nearY);
     expect(leftLayer2.nearY).toBeGreaterThanOrEqual(leftLayer1.nearY - 14);
 
-    const corridorRightNear = Math.max(
-      ...parsePoints(corridorRight?.getAttribute('points') ?? '').map((p) => p.y),
-    );
-    const corridorRightNearX = Math.min(
-      ...parsePoints(corridorRight?.getAttribute('points') ?? '')
-        .filter((p) => Math.abs(p.y - corridorRightNear) < 0.001)
-        .map((p) => p.x),
-    );
-    const corridorRightFloorY = corridorRightNear;
     const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - rightLayer1.nearY) < 0.001)
       .map((p) => p.x);
-    expect(Math.min(...rightNearXs)).toBeCloseTo(corridorRightNearX, 5);
-    expect(rightLayer1.nearY).toBeCloseTo(corridorRightFloorY, 0.5);
+    expect(Math.min(...rightNearXs)).toBeCloseTo(floor2NearRight, 5);
+    expect(rightLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
     expect(rightLayer2.nearY).toBeLessThan(rightLayer1.nearY);
     expect(rightLayer2.nearY).toBeGreaterThanOrEqual(rightLayer1.nearY - 14);
 

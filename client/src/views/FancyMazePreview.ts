@@ -154,11 +154,21 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
   return [wallPolygon, ...lines].join('\n');
 }
 
-function renderCorridorWalls(slices: SliceGeometry[]): string {
+function renderCorridorWalls(
+  slices: SliceGeometry[],
+  variant?: MazePreviewVariant,
+  openings?: Openings,
+): string {
   const parts: string[] = [];
   slices.forEach((slice) => {
-    parts.push(renderWallSlice('left', slice));
-    parts.push(renderWallSlice('right', slice));
+    const isJunction = variant === 'junction';
+    // junction では openings.left/right が true の側の slice2 壁を描かず、分岐位置の本線側面を物理的に消す
+    if (!(isJunction && openings?.left && slice.index === 2)) {
+      parts.push(renderWallSlice('left', slice));
+    }
+    if (!(isJunction && openings?.right && slice.index === 2)) {
+      parts.push(renderWallSlice('right', slice));
+    }
   });
   return parts.join('\n');
 }
@@ -294,7 +304,7 @@ function renderView(
 ): string {
   const parts: string[] = [];
   parts.push(renderFloorSlices(slices));
-  parts.push(renderCorridorWalls(slices));
+  parts.push(renderCorridorWalls(slices, variant, openings));
 
   if (variant === 'junction') {
     const anchorSlice = slices[1];
