@@ -193,28 +193,49 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // junction 用の左右分岐: slice2 の床ラインから横通路を伸ばし、メイン通路より手前には出さない
+  // junction 用の左右分岐: slice2 の床ラインから左右に90度曲がる横通路を描く
+  // 分岐床は本線床より手前に出さず、各通路ごとに左右の消失点に向かうガイド線を引く
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1];
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
   const anchorY = anchorSlice.near.y;
+  const corridorWidth = anchorSlice.near.right - anchorSlice.near.left;
+
+  const vanishX = isLeft ? -120 : WIDTH + 120;
+  const vanishY = anchorY - (anchorSlice.near.y - anchorSlice.far.y) * 0.7;
 
   const layers = [
-    { nearWidth: 40, farWidth: 28, nearY: anchorY, farY: anchorY - 14, innerShift: 6 },
-    { nearWidth: 34, farWidth: 20, nearY: anchorY, farY: anchorY - 26, innerShift: 12 },
+    {
+      nearWidth: corridorWidth * 0.62,
+      farWidth: corridorWidth * 0.62 * 0.74,
+      nearY: anchorY,
+      farY: anchorY - 22,
+      innerShift: corridorWidth * 0.18,
+    },
+    {
+      nearWidth: corridorWidth * 0.48,
+      farWidth: corridorWidth * 0.48 * 0.7,
+      nearY: anchorY - 6,
+      farY: anchorY - 40,
+      innerShift: corridorWidth * 0.18,
+    },
   ];
-  const branchVanish = {
-    x: anchorX + direction * 190,
-    y: anchorY - 70,
-  };
 
   const parts: string[] = [];
   layers.forEach((layer, idx) => {
     const nearInner = anchorX;
     const nearOuter = anchorX + direction * layer.nearWidth;
-    const farInner = anchorX + direction * layer.innerShift;
-    const farOuter = farInner + direction * layer.farWidth;
+    const baseFarInner = anchorX + direction * layer.innerShift;
+    const baseFarOuter = baseFarInner + direction * layer.farWidth;
+    const tiltInner = 0.16 + idx * 0.06;
+    const tiltOuter = 0.46 + idx * 0.07;
+    const projectToVanish = (nearX: number) => {
+      const t = (layer.farY - layer.nearY) / (vanishY - layer.nearY);
+      return nearX + (vanishX - nearX) * t;
+    };
+    const farInner = lerp(baseFarInner, projectToVanish(nearInner), tiltInner);
+    const farOuter = lerp(baseFarOuter, projectToVanish(nearOuter), tiltOuter);
 
     const floorPoints = [
       { x: nearInner, y: layer.nearY },
@@ -235,7 +256,7 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
       const x = lerp(nearInner, nearOuter, u);
       const y = layer.nearY;
       parts.push(
-        `<line data-branch-guide="${side}" data-slice="${idx + 1}" x1="${x}" y1="${y}" x2="${branchVanish.x}" y2="${branchVanish.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.3 - idx * 0.08}" stroke-width="0.9" />`,
+        `<line data-branch-guide="${side}" data-slice="${idx + 1}" x1="${x}" y1="${y}" x2="${vanishX}" y2="${vanishY}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.3 - idx * 0.08}" stroke-width="0.9" />`,
       );
     }
 
