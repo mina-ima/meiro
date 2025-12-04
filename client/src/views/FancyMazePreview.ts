@@ -27,6 +27,8 @@ const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
+const COLOR_FLOOR = COLOR_FLOOR_BASE;
+const COLOR_WALL_DARK = '#3e2118';
 
 type SliceStop = {
   y: number;
@@ -151,6 +153,159 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
   return [wallPolygon, ...lines].join('\n');
 }
 
+// junction は 4スライスジオメトリではなく、固定ジオメトリのL字通路で描画する。
+// メイン通路の床と左右壁、左右の分岐床＋分岐壁、正面の奥壁を単純なポリゴンで構成する。
+function renderFixedJunctionView(openings: Openings): string {
+  const floorBottomY = HEIGHT - 10;
+  const floorTopY = HEIGHT * 0.45;
+  const floorNearLeft = 40;
+  const floorNearRight = WIDTH - 40;
+  const floorFarLeft = WIDTH * 0.5 - 60;
+  const floorFarRight = WIDTH * 0.5 + 60;
+
+  const parts: string[] = [];
+
+  const mainFloorPoints = [
+    { x: floorNearLeft, y: floorBottomY },
+    { x: floorNearRight, y: floorBottomY },
+    { x: floorFarRight, y: floorTopY },
+    { x: floorFarLeft, y: floorTopY },
+  ];
+  parts.push(
+    `<polygon data-junction-element="main-floor" points="${joinPoints(
+      mainFloorPoints,
+    )}" fill="${COLOR_FLOOR}" />`,
+  );
+
+  const leftWallPoints = [
+    { x: floorNearLeft, y: floorBottomY },
+    { x: floorNearLeft, y: 0 },
+    { x: floorFarLeft, y: 0 },
+    { x: floorFarLeft, y: floorTopY },
+  ];
+  parts.push(
+    `<polygon data-junction-element="left-wall" points="${joinPoints(
+      leftWallPoints,
+    )}" fill="${COLOR_WALL}" />`,
+  );
+
+  const rightWallPoints = [
+    { x: floorNearRight, y: floorBottomY },
+    { x: floorNearRight, y: 0 },
+    { x: floorFarRight, y: 0 },
+    { x: floorFarRight, y: floorTopY },
+  ];
+  parts.push(
+    `<polygon data-junction-element="right-wall" points="${joinPoints(
+      rightWallPoints,
+    )}" fill="${COLOR_WALL}" />`,
+  );
+
+  const branchDepth = 40;
+  const branchWidthNear = 80;
+  const branchWidthFar = 60;
+
+  if (openings.left) {
+    const leftBranchNearY = floorBottomY - 10;
+    const leftBranchFarY = leftBranchNearY - branchDepth;
+
+    const leftBranchNearInner = { x: floorNearLeft, y: leftBranchNearY };
+    const leftBranchNearOuter = { x: floorNearLeft - branchWidthNear, y: leftBranchNearY };
+    const leftBranchFarOuter = { x: floorNearLeft - branchWidthFar, y: leftBranchFarY };
+    const leftBranchFarInner = { x: floorNearLeft + 10, y: leftBranchFarY };
+
+    const leftBranchFloorPoints = [
+      leftBranchNearInner,
+      leftBranchNearOuter,
+      leftBranchFarOuter,
+      leftBranchFarInner,
+    ];
+    parts.push(
+      `<polygon data-junction-branch="left" data-junction-part="floor" points="${joinPoints(
+        leftBranchFloorPoints,
+      )}" fill="${COLOR_FLOOR}" />`,
+    );
+
+    const leftInnerWallPoints = [
+      leftBranchNearInner,
+      leftBranchFarInner,
+      { x: leftBranchFarInner.x, y: 0 },
+      { x: leftBranchNearInner.x, y: 0 },
+    ];
+    parts.push(
+      `<polygon data-junction-branch="left" data-junction-part="inner-wall" points="${joinPoints(
+        leftInnerWallPoints,
+      )}" fill="${COLOR_WALL}" />`,
+    );
+
+    const leftOuterWallPoints = [
+      leftBranchNearOuter,
+      leftBranchFarOuter,
+      { x: leftBranchFarOuter.x, y: 0 },
+      { x: leftBranchNearOuter.x, y: 0 },
+    ];
+    parts.push(
+      `<polygon data-junction-branch="left" data-junction-part="outer-wall" points="${joinPoints(
+        leftOuterWallPoints,
+      )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`,
+    );
+  }
+
+  if (openings.right) {
+    const rightBranchNearY = floorBottomY - 10;
+    const rightBranchFarY = rightBranchNearY - branchDepth;
+
+    const rightBranchNearInner = { x: floorNearRight, y: rightBranchNearY };
+    const rightBranchNearOuter = { x: floorNearRight + branchWidthNear, y: rightBranchNearY };
+    const rightBranchFarOuter = { x: floorNearRight + branchWidthFar, y: rightBranchFarY };
+    const rightBranchFarInner = { x: floorNearRight - 10, y: rightBranchFarY };
+
+    const rightBranchFloorPoints = [
+      rightBranchNearInner,
+      rightBranchNearOuter,
+      rightBranchFarOuter,
+      rightBranchFarInner,
+    ];
+    parts.push(
+      `<polygon data-junction-branch="right" data-junction-part="floor" points="${joinPoints(
+        rightBranchFloorPoints,
+      )}" fill="${COLOR_FLOOR}" />`,
+    );
+
+    const rightInnerWallPoints = [
+      rightBranchNearInner,
+      rightBranchFarInner,
+      { x: rightBranchFarInner.x, y: 0 },
+      { x: rightBranchNearInner.x, y: 0 },
+    ];
+    parts.push(
+      `<polygon data-junction-branch="right" data-junction-part="inner-wall" points="${joinPoints(
+        rightInnerWallPoints,
+      )}" fill="${COLOR_WALL}" />`,
+    );
+
+    const rightOuterWallPoints = [
+      rightBranchNearOuter,
+      rightBranchFarOuter,
+      { x: rightBranchFarOuter.x, y: 0 },
+      { x: rightBranchNearOuter.x, y: 0 },
+    ];
+    parts.push(
+      `<polygon data-junction-branch="right" data-junction-part="outer-wall" points="${joinPoints(
+        rightOuterWallPoints,
+      )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`,
+    );
+  }
+
+  parts.push(
+    `<rect data-junction-element="back-wall" x="${floorFarLeft}" y="0" width="${
+      floorFarRight - floorFarLeft
+    }" height="${floorTopY}" fill="${COLOR_WALL_DARK}" />`,
+  );
+
+  return parts.join('\n');
+}
+
 function renderCorridorWalls(
   slices: SliceGeometry[],
   variant?: MazePreviewVariant,
@@ -257,22 +412,22 @@ function renderView(
   slices: SliceGeometry[],
   stops: SliceStop[],
 ): string {
+  if (variant === 'junction') {
+    return renderFixedJunctionView(openings);
+  }
+
   const parts: string[] = [];
   parts.push(renderFloorGradient());
   parts.push(renderFloorSlices(slices));
   parts.push(renderCorridorWalls(slices, variant, openings));
 
-  if (variant === 'junction' || variant === 'goal') {
-    // junction / goal 分岐: slice2 の床ラインから壁を1枚だけ抜き、横方向への短い通路をL字に挿し込む。
+  if (variant === 'goal') {
+    // goal 分岐: slice2 の床ラインから壁を1枚だけ抜き、横方向への短い通路をL字に挿し込む。
     if (openings.left) parts.push(renderSideBranch('left', slices));
     if (openings.right) parts.push(renderSideBranch('right', slices));
   }
 
-  if (variant === 'junction') {
-    if (!openings.forward) {
-      parts.push(renderFrontWall(stops, 3, variant));
-    }
-  } else if (variant === 'goal') {
+  if (variant === 'goal') {
     parts.push(renderFrontWall(stops, 4, variant));
     parts.push(renderGoalPortal(stops[4]));
   } else {

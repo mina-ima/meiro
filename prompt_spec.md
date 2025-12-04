@@ -246,6 +246,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-12): FancyMazePreview junction の分岐床 near 側を必ず slice2 床稜線(anchorY)の角(anchorX)から描き始め、内側壁の起点も同じ座標に揃えて「外した slice2 壁の奥から壁が伸びる」見た目を固定。`client/tests/fancyMazePreview.test.tsx` に anchorX との一致検証を追加
 * 更新メモ(2026-01-13): FancyMazePreview junction/goal の分岐床 near 側を slice2 床稜線(anchorY)と完全に揃え、内側壁の下辺も anchorX/anchorY→farY を共有して本線壁との食い込みを解消。描画順を床→壁→分岐床→分岐壁に固定し、`client/tests/fancyMazePreview.test.tsx` で anchorY/anchorX の一致と壁起点を厳密に検証
 * 更新メモ(2026-01-14): FancyMazePreview junction/goal の開口側で slice2 床ライン(anchorY)と内側X(anchorX)を基準に側面壁1枚だけを抜き、その穴から奥へ90度に曲がるL字の分岐床＋内外壁を描画。goal でも同じロジックを共有し、branch 床/壁が anchorY/farY と連続することを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰
+* 更新メモ(2026-01-15): FancyMazePreview junction を固定座標のL字通路ポリゴン描画に置き換え、分岐有無のスモーク検証だけに簡略化（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 
 ### 8.2 オーナー
 
