@@ -25,7 +25,6 @@ const COLOR_FLOOR_LINE = '#d8c6aa';
 const COLOR_WALL = '#8a5f3f';
 const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
-const COLOR_BRANCH_GUIDE = '#c6b59b';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 
@@ -39,15 +38,6 @@ type SliceGeometry = {
   index: number;
   near: SliceStop;
   far: SliceStop;
-};
-
-type BranchAnchor = {
-  anchorY: number;
-  anchorFarY: number;
-  anchorXLeft: number;
-  anchorXRight: number;
-  anchorFarLeft: number;
-  anchorFarRight: number;
 };
 
 function lerp(a: number, b: number, t: number): number {
@@ -222,14 +212,15 @@ function renderFloorGradient(): string {
 }
 
 // junction/goal の左右分岐:
-// slice2 の床ライン(anchorY)を入口とし、左右 90 度に曲がる横通路を
-// グレーの床＋左右の壁で描画する。
-// 分岐側では slice2 の本線側面壁を描かず、穴の中を分岐通路の床と壁で完全に埋める。
+// slice2 の床ライン(anchorY)の角から左右に 90 度に曲がる横通路を、
+// グレー床＋左右の壁(内側/外側)で描画する。
+// 分岐側では slice2 の本線側面壁を描かず、この横通路で穴を完全に埋める。
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  const anchorSlice = slices[1];
-  const anchorY = anchorSlice.near.y;
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;
+
+  const anchorSlice = slices[1];
+  const anchorY = anchorSlice.near.y;
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
 
   const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
@@ -243,40 +234,32 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const farInner = { x: anchorX + dir * 18, y: farY };
   const farOuter = { x: farInner.x + dir * floorFarWidth, y: farY };
 
+  // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [nearInner, nearOuter, farOuter, farInner];
-  const floorSvg = `
-    <polygon data-branch="${side}" data-layer="floor" points="${joinPoints(
-      floorPoints,
-    )}" fill="url(#corridor-floor-grad)" />`;
+  const floorSvg = `<polygon data-branch="${side}" data-layer="floor"
+    points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" />`;
 
+  // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
     { x: nearInner.x, y: anchorY },
     { x: farInner.x, y: farY },
     { x: farInner.x, y: 0 },
     { x: nearInner.x, y: 0 },
   ];
-  const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
-    innerWallPoints,
-  )}" fill="${COLOR_WALL}" />`;
+  const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner"
+    points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" />`;
 
+  // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
     { x: nearOuter.x, y: anchorY },
     { x: farOuter.x, y: farY },
     { x: farOuter.x, y: 0 },
     { x: nearOuter.x, y: 0 },
   ];
-  const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
-    outerWallPoints,
-  )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
+  const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer"
+    points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
 
-  const guideTarget = { x: isLeft ? -80 : WIDTH + 80, y: farY - 8 };
-  const guideStarts = [nearInner, nearOuter];
-  const guides = guideStarts.map(
-    (start, idx) =>
-      `<line data-branch-guide="${side}" data-guide-index="${idx}" x1="${start.x}" y1="${start.y}" x2="${guideTarget.x}" y2="${guideTarget.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="0.32" stroke-width="0.9" />`,
-  );
-
-  return [floorSvg, innerWallSvg, outerWallSvg, ...guides].join('\n');
+  return [floorSvg, innerWallSvg, outerWallSvg].join('\n');
 }
 
 function renderView(
@@ -290,49 +273,10 @@ function renderView(
   parts.push(renderFloorSlices(slices));
   parts.push(renderCorridorWalls(slices, variant, openings));
 
-  // junction/goal の左右分岐を本線床・壁の後に配置し、前壁より手前に描く。
-  // openings.* 側では slice2 の本線側面壁を省き、分岐通路で穴を埋める。
-  const anchorSlice = slices[1];
-  const anchor: BranchAnchor = {
-    anchorY: anchorSlice.near.y,
-    anchorFarY: anchorSlice.far.y,
-    anchorXLeft: anchorSlice.near.left,
-    anchorXRight: anchorSlice.near.right,
-    anchorFarLeft: anchorSlice.far.left,
-    anchorFarRight: anchorSlice.far.right,
-  };
-  const branchMasks: string[] = [];
-  const branchSections: string[] = [];
   if (variant === 'junction' || variant === 'goal') {
-    // openings.* が true の側だけ slice2 の壁 1 枚ぶんを消し、その穴に横通路を差し込む
-    if (openings.left) {
-      branchMasks.push(
-        `<polygon data-overlay="junction-mask-left" points="${joinPoints([
-          { x: anchor.anchorXLeft, y: anchor.anchorY },
-          { x: anchor.anchorFarLeft, y: anchor.anchorFarY },
-          { x: anchor.anchorFarLeft, y: 0 },
-          { x: anchor.anchorXLeft, y: 0 },
-        ])}" fill="none" />`,
-      );
-    }
-    if (openings.right) {
-      branchMasks.push(
-        `<polygon data-overlay="junction-mask-right" points="${joinPoints([
-          { x: anchor.anchorFarRight, y: anchor.anchorFarY },
-          { x: anchor.anchorXRight, y: anchor.anchorY },
-          { x: anchor.anchorXRight, y: 0 },
-          { x: anchor.anchorFarRight, y: 0 },
-        ])}" fill="none" />`,
-      );
-    }
-    if (openings.left) {
-      branchSections.push(renderSideBranch('left', slices));
-    }
-    if (openings.right) {
-      branchSections.push(renderSideBranch('right', slices));
-    }
+    if (openings.left) parts.push(renderSideBranch('left', slices));
+    if (openings.right) parts.push(renderSideBranch('right', slices));
   }
-  parts.push(...branchSections);
 
   if (variant === 'junction') {
     if (!openings.forward) {
@@ -346,7 +290,6 @@ function renderView(
       parts.push(renderFrontWall(stops, 3, variant));
     }
   }
-  parts.push(...branchMasks);
 
   return parts.join('\n');
 }
