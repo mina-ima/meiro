@@ -25,9 +25,6 @@ const COLOR_FLOOR_LINE = '#d8c6aa';
 const COLOR_WALL = '#8a5f3f';
 const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
-const COLOR_BRANCH_FLOOR_BASE = COLOR_FLOOR_BASE;
-const COLOR_BRANCH_FLOOR_DARK = COLOR_FLOOR_FAR;
-const COLOR_BRANCH_WALL = '#744c32';
 const COLOR_BRANCH_GUIDE = '#c6b59b';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
@@ -214,6 +211,16 @@ function renderGoalPortal(stop: SliceStop): string {
   return `<rect data-goal-portal="true" x="${left}" y="${top}" width="${width}" height="${height}" fill="${COLOR_PORTAL}" stroke="${COLOR_PORTAL_FRAME}" stroke-width="3" />`;
 }
 
+function renderFloorGradient(): string {
+  return `
+    <defs>
+      <linearGradient id="corridor-floor-grad" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_VANISH_Y}">
+        <stop offset="0%" stop-color="${COLOR_FLOOR_BASE}" />
+        <stop offset="100%" stop-color="${COLOR_FLOOR_FAR}" />
+      </linearGradient>
+    </defs>`;
+}
+
 // junction/goal の左右分岐:
 // slice2 の床ライン(anchorY)を入口とし、左右 90 度に曲がる横通路を
 // グレーの床＋左右の壁で描画する。
@@ -226,7 +233,7 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
 
   const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const floorNearWidth = mainWidth * 0.65;
+  const floorNearWidth = mainWidth * 0.6;
   const floorFarWidth = floorNearWidth * 0.7;
   const depth = 28;
 
@@ -237,18 +244,10 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const farOuter = { x: farInner.x + dir * floorFarWidth, y: farY };
 
   const floorPoints = [nearInner, nearOuter, farOuter, farInner];
-  const gradientId = `branch-floor-gradient-${side}`;
-  const floorGradient = `
-    <defs>
-      <linearGradient id="${gradientId}" x1="0" y1="${anchorY}" x2="0" y2="${farY}">
-        <stop offset="0%" stop-color="${COLOR_BRANCH_FLOOR_BASE}" />
-        <stop offset="100%" stop-color="${COLOR_BRANCH_FLOOR_DARK}" />
-      </linearGradient>
-    </defs>`;
-  const floorSvg = `${floorGradient}
+  const floorSvg = `
     <polygon data-branch="${side}" data-layer="floor" points="${joinPoints(
       floorPoints,
-    )}" fill="url(#${gradientId})" />`;
+    )}" fill="url(#corridor-floor-grad)" />`;
 
   const innerWallPoints = [
     { x: nearInner.x, y: anchorY },
@@ -258,7 +257,7 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   ];
   const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
     innerWallPoints,
-  )}" fill="${COLOR_BRANCH_WALL}" />`;
+  )}" fill="${COLOR_WALL}" />`;
 
   const outerWallPoints = [
     { x: nearOuter.x, y: anchorY },
@@ -268,7 +267,7 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   ];
   const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
     outerWallPoints,
-  )}" fill="${COLOR_BRANCH_WALL}" fill-opacity="0.85" />`;
+  )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
 
   const guideTarget = { x: isLeft ? -80 : WIDTH + 80, y: farY - 8 };
   const guideStarts = [nearInner, nearOuter];
@@ -287,6 +286,7 @@ function renderView(
   stops: SliceStop[],
 ): string {
   const parts: string[] = [];
+  parts.push(renderFloorGradient());
   parts.push(renderFloorSlices(slices));
   parts.push(renderCorridorWalls(slices, variant, openings));
 
