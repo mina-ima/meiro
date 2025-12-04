@@ -204,105 +204,47 @@ function renderGoalPortal(stop: SliceStop): string {
 }
 
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
-  // junction 用の左右分岐: slice2 の床ラインから左右に 90 度曲がる横通路を描く
-  // 分岐床は本線床より手前に出さず、メイン通路の壁端から穴を開けて奥に2層の床＋壁を重ねる
+  // junction/goal の分岐: slice2 の壁 1 枚ぶんを消し、その穴に横通路の床と壁をぴったりはめ込む
   const isLeft = side === 'left';
-  const direction = isLeft ? -1 : 1;
   const anchorSlice = slices[1];
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
   const floorY = anchorSlice.near.y;
-  const corridorWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const vanish = {
-    x: isLeft ? -WIDTH * 0.32 - 20 : WIDTH + WIDTH * 0.32 + 20,
-    y: Math.max(FLOOR_VANISH_Y, floorY - 14),
-  };
+  const dir = isLeft ? -1 : 1;
 
-  const depthBase = Math.max(20, (anchorSlice.near.y - anchorSlice.far.y) * 1.25);
-  const nearWidth0 = corridorWidth * 0.58;
-  const nearWidth1 = nearWidth0 * 0.76;
-  const layers = [
-    {
-      nearWidth: nearWidth0,
-      depth: depthBase,
-      innerRatio: 0.36,
-      bend: 0.08,
-    },
-    {
-      nearWidth: nearWidth1,
-      depth: depthBase + 12,
-      innerRatio: 0.42,
-      bend: 0.12,
-    },
-  ];
+  const nearInner = { x: anchorX, y: floorY };
+  const nearOuter = { x: anchorX + dir * 80, y: floorY };
+  const farInner = { x: anchorX + dir * 30, y: floorY - 25 };
+  const farOuter = { x: anchorX + dir * 80, y: floorY - 25 };
 
   const parts: string[] = [];
-  layers.forEach((layer, idx) => {
-    const nearYOffset = idx === 0 ? 0 : Math.min(6, layer.depth * 0.18);
-    const nearY = floorY - nearYOffset;
-    const nearInner = { x: anchorX, y: nearY };
-    const nearOuter = { x: anchorX + direction * layer.nearWidth, y: nearY };
 
-    const farY = nearY - layer.depth;
-    const farInnerBase = anchorX + direction * (layer.nearWidth * layer.innerRatio + 10 + idx * 5);
-    const farInner = {
-      x: lerp(farInnerBase, vanish.x, layer.bend + idx * 0.02),
-      y: farY,
-    };
-    const farOuterTarget = anchorX + direction * (layer.nearWidth + 16 + idx * 5);
-    const farOuter = {
-      x: lerp(farOuterTarget, vanish.x, layer.bend + 0.22 + idx * 0.06),
-      y: farY,
-    };
+  const floorPoints = [nearInner, nearOuter, farOuter, farInner];
+  parts.push(
+    `<polygon data-branch="${side}" data-layer="floor" points="${joinPoints(
+      floorPoints,
+    )}" fill="${COLOR_BRANCH_FLOOR}" />`,
+  );
 
-    const floorPoints = [nearInner, nearOuter, farOuter, farInner];
-    const floorFill = mixColor(COLOR_BRANCH_FLOOR, COLOR_BG, 0.16 + idx * 0.14);
+  const innerWall = [nearInner, farInner, { x: farInner.x, y: 0 }, { x: nearInner.x, y: 0 }];
+  parts.push(
+    `<polygon data-branch-wall="${side}" data-branch-position="inner" points="${joinPoints(
+      innerWall,
+    )}" fill="${COLOR_BRANCH_WALL}" />`,
+  );
+
+  const outerWall = [nearOuter, farOuter, { x: farOuter.x, y: 0 }, { x: nearOuter.x, y: 0 }];
+  parts.push(
+    `<polygon data-branch-wall="${side}" data-branch-position="outer" points="${joinPoints(
+      outerWall,
+    )}" fill="${COLOR_BRANCH_WALL}" fill-opacity="0.9" />`,
+  );
+
+  const guideTarget = { x: isLeft ? -100 : WIDTH + 100, y: floorY - 30 };
+  const guideStarts = [nearInner, nearOuter];
+  guideStarts.forEach((start, idx) => {
     parts.push(
-      `<polygon data-branch="${side}" data-layer="floor" data-slice="${idx + 1}" points="${joinPoints(
-        floorPoints,
-      )}" fill="${floorFill}" />`,
+      `<line data-branch-guide="${side}" data-guide-index="${idx}" x1="${start.x}" y1="${start.y}" x2="${guideTarget.x}" y2="${guideTarget.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="0.32" stroke-width="0.9" />`,
     );
-
-    const wallHeightNear = 46 - idx * 6;
-    const wallHeightFar = Math.max(18, wallHeightNear - 12 - idx * 2);
-    const innerWall = [
-      nearInner,
-      farInner,
-      { x: farInner.x, y: Math.max(0, farY - wallHeightFar) },
-      { x: nearInner.x, y: Math.max(0, nearY - wallHeightNear) },
-    ];
-    const outerWall = [
-      nearOuter,
-      farOuter,
-      {
-        x: farOuter.x,
-        y: Math.max(0, farY - Math.max(14, wallHeightFar * 0.82)),
-      },
-      {
-        x: nearOuter.x,
-        y: Math.max(0, nearY - Math.max(16, wallHeightNear * 0.9)),
-      },
-    ];
-    const innerWallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.26 + idx * 0.08);
-    const outerWallFill = mixColor(COLOR_BRANCH_WALL, COLOR_BG, 0.34 + idx * 0.08);
-    parts.push(
-      `<polygon data-branch-wall="${side}" data-branch-position="inner" data-slice="${idx + 1}" points="${joinPoints(
-        innerWall,
-      )}" fill="${innerWallFill}" fill-opacity="${0.72 - idx * 0.08}" />`,
-    );
-    parts.push(
-      `<polygon data-branch-wall="${side}" data-branch-position="outer" data-slice="${idx + 1}" points="${joinPoints(
-        outerWall,
-      )}" fill="${outerWallFill}" fill-opacity="${0.64 - idx * 0.08}" />`,
-    );
-
-    const guideCount = 2 + idx;
-    for (let g = 1; g <= guideCount; g += 1) {
-      const u = g / (guideCount + 1);
-      const x = lerp(nearInner.x, nearOuter.x, u);
-      parts.push(
-        `<line data-branch-guide="${side}" data-slice="${idx + 1}" x1="${x}" y1="${nearY}" x2="${vanish.x}" y2="${vanish.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="${0.3 - idx * 0.08}" stroke-width="0.9" />`,
-      );
-    }
   });
 
   return parts.join('\n');
@@ -322,74 +264,44 @@ function renderView(
   const anchorLeft = anchorSlice.near.left;
   const anchorRight = anchorSlice.near.right;
   const anchorY = anchorSlice.near.y;
-  const cutWidth = Math.max(2, Math.min(4.5, (anchorRight - anchorLeft) * 0.02));
-  const hasSideBranch = openings.left || openings.right;
-  const maskWidth = Math.min(5.5, cutWidth + 2.5);
-
-  // openings.* が true の側だけ壁を切り欠き、消した壁の代わりに分岐通路の床と壁を差し込む
-  const branchCuts: string[] = [];
+  const maskWidth = 3;
   const branchMasks: string[] = [];
-  if (openings.left) {
-    branchCuts.push(
-      `<polygon data-overlay="branch-cut-left" points="${joinPoints([
-        { x: anchorLeft - cutWidth * 0.2, y: 0 },
-        { x: anchorLeft + cutWidth * 0.9, y: 0 },
-        { x: anchorLeft + cutWidth * 0.45, y: anchorY },
-        { x: anchorLeft - cutWidth * 0.75, y: anchorY },
-      ])}" fill="${COLOR_BG}" />`,
-    );
-    branchMasks.push(
-      `<polygon data-overlay="junction-mask-left" points="${joinPoints([
-        { x: anchorLeft - maskWidth * 1.1, y: 0 },
-        { x: anchorLeft - maskWidth * 0.35, y: 0 },
-        { x: anchorLeft - maskWidth * 0.35, y: anchorY },
-        { x: anchorLeft - maskWidth * 1.1, y: anchorY },
-      ])}" fill="${COLOR_BG}" />`,
-    );
-  }
-  if (openings.right) {
-    branchCuts.push(
-      `<polygon data-overlay="branch-cut-right" points="${joinPoints([
-        { x: anchorRight - cutWidth * 0.9, y: 0 },
-        { x: anchorRight + cutWidth * 0.2, y: 0 },
-        { x: anchorRight + cutWidth * 0.75, y: anchorY },
-        { x: anchorRight - cutWidth * 0.45, y: anchorY },
-      ])}" fill="${COLOR_BG}" />`,
-    );
-    branchMasks.push(
-      `<polygon data-overlay="junction-mask-right" points="${joinPoints([
-        { x: anchorRight + maskWidth * 0.35, y: 0 },
-        { x: anchorRight + maskWidth * 1.1, y: 0 },
-        { x: anchorRight + maskWidth * 1.1, y: anchorY },
-        { x: anchorRight + maskWidth * 0.35, y: anchorY },
-      ])}" fill="${COLOR_BG}" />`,
-    );
+  if (variant === 'junction' || variant === 'goal') {
+    // openings.* が true の側だけ slice2 の壁を細く消し、その穴に横通路を差し込む
+    if (openings.left) {
+      branchMasks.push(
+        `<polygon data-overlay="junction-mask-left" points="${joinPoints([
+          { x: anchorLeft, y: 0 },
+          { x: anchorLeft + maskWidth, y: 0 },
+          { x: anchorLeft + maskWidth, y: anchorY },
+          { x: anchorLeft, y: anchorY },
+        ])}" fill="${COLOR_BG}" />`,
+      );
+    }
+    if (openings.right) {
+      branchMasks.push(
+        `<polygon data-overlay="junction-mask-right" points="${joinPoints([
+          { x: anchorRight - maskWidth, y: 0 },
+          { x: anchorRight, y: 0 },
+          { x: anchorRight, y: anchorY },
+          { x: anchorRight - maskWidth, y: anchorY },
+        ])}" fill="${COLOR_BG}" />`,
+      );
+    }
+    parts.push(...branchMasks);
+    if (openings.left) {
+      parts.push(renderSideBranch('left', slices));
+    }
+    if (openings.right) {
+      parts.push(renderSideBranch('right', slices));
+    }
   }
 
   if (variant === 'junction') {
-    // junction: 分岐している側だけ細い帯をマスクし、そこに横通路の床と壁を差し込む
-    if (hasSideBranch) {
-      parts.push(...branchCuts, ...branchMasks);
-      if (openings.left) {
-        parts.push(renderSideBranch('left', slices));
-      }
-      if (openings.right) {
-        parts.push(renderSideBranch('right', slices));
-      }
-    }
     if (!openings.forward) {
       parts.push(renderFrontWall(stops, 3, variant));
     }
   } else if (variant === 'goal') {
-    if (hasSideBranch) {
-      parts.push(...branchCuts, ...branchMasks);
-      if (openings.left) {
-        parts.push(renderSideBranch('left', slices));
-      }
-      if (openings.right) {
-        parts.push(renderSideBranch('right', slices));
-      }
-    }
     parts.push(renderFrontWall(stops, 4, variant));
     parts.push(renderGoalPortal(stops[4]));
   } else {

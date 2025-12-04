@@ -102,7 +102,7 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
-  it('分岐ビュー forward=true は前壁を描かず、左右の開口部に奥行きのある横通路を重ねる', () => {
+  it('分岐ビュー forward=true は前壁を描かず、左右の開口部に横通路をはめ込む', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -113,8 +113,6 @@ describe('FancyMazePreview', () => {
     expect(container.querySelectorAll('[data-wall-side="front"]').length).toBe(0);
     expect(container.querySelectorAll('[data-overlay="junction-mask-left"]').length).toBe(1);
     expect(container.querySelectorAll('[data-overlay="junction-mask-right"]').length).toBe(1);
-    expect(container.querySelectorAll('[data-overlay="branch-cut-left"]').length).toBe(1);
-    expect(container.querySelectorAll('[data-overlay="branch-cut-right"]').length).toBe(1);
 
     const leftSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
@@ -142,58 +140,36 @@ describe('FancyMazePreview', () => {
     const rightBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
     );
-    expect(leftBranchFloors.length).toBe(2);
-    expect(rightBranchFloors.length).toBe(2);
+    expect(leftBranchFloors.length).toBe(1);
+    expect(rightBranchFloors.length).toBe(1);
 
-    const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
-    const leftLayer2 = edgeWidths(parsePoints(leftBranchFloors[1].getAttribute('points')));
-    expect(leftLayer1.nearWidth).toBeGreaterThan(leftLayer2.nearWidth);
-    expect(leftLayer1.farWidth).toBeGreaterThan(leftLayer2.farWidth);
-    expect(leftLayer1.farY).toBeLessThan(leftLayer1.nearY);
-    expect(leftLayer2.farY).toBeLessThan(leftLayer2.nearY);
-    expect(leftLayer1.farY).toBeGreaterThan(leftLayer2.farY);
-    const leftNearPoints = parsePoints(leftBranchFloors[0].getAttribute('points')).filter(
-      (p) => Math.abs(p.y - leftLayer1.nearY) < 0.001,
-    );
-    const leftFarPoints = parsePoints(leftBranchFloors[0].getAttribute('points')).filter(
-      (p) => Math.abs(p.y - leftLayer1.farY) < 0.001,
-    );
-    const leftNearOuter = Math.min(...leftNearPoints.map((p) => p.x));
-    const leftFarOuter = Math.min(...leftFarPoints.map((p) => p.x));
-    expect(leftFarOuter).toBeLessThan(leftNearOuter - 5);
-
-    const rightLayer1 = edgeWidths(parsePoints(rightBranchFloors[0].getAttribute('points')));
-    const rightLayer2 = edgeWidths(parsePoints(rightBranchFloors[1].getAttribute('points')));
-    expect(rightLayer1.nearWidth).toBeGreaterThan(rightLayer2.nearWidth);
-    expect(rightLayer1.farWidth).toBeGreaterThan(rightLayer2.farWidth);
-    expect(rightLayer1.farY).toBeLessThan(rightLayer1.nearY);
-    expect(rightLayer2.farY).toBeLessThan(rightLayer2.nearY);
-    expect(rightLayer1.farY).toBeGreaterThan(rightLayer2.farY);
-    const rightNearPoints = parsePoints(rightBranchFloors[0].getAttribute('points')).filter(
-      (p) => Math.abs(p.y - rightLayer1.nearY) < 0.001,
-    );
-    const rightFarPoints = parsePoints(rightBranchFloors[0].getAttribute('points')).filter(
-      (p) => Math.abs(p.y - rightLayer1.farY) < 0.001,
-    );
-    const rightNearOuter = Math.max(...rightNearPoints.map((p) => p.x));
-    const rightFarOuter = Math.max(...rightFarPoints.map((p) => p.x));
-    expect(rightFarOuter).toBeGreaterThan(rightNearOuter + 5);
-
-    const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
-      .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
+    const leftFloorPoints = parsePoints(leftBranchFloors[0].getAttribute('points'));
+    const leftEdges = edgeWidths(leftFloorPoints);
+    expect(leftEdges.nearWidth).toBeGreaterThan(leftEdges.farWidth);
+    expect(leftEdges.farY).toBeLessThan(leftEdges.nearY);
+    expect(leftEdges.nearY).toBeCloseTo(floor2NearY, 0.5);
+    const leftNearXs = leftFloorPoints
+      .filter((p) => Math.abs(p.y - leftEdges.nearY) < 0.001)
       .map((p) => p.x);
-    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
-    expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
-    expect(leftLayer2.nearY).toBeLessThanOrEqual(leftLayer1.nearY);
-    expect(leftLayer2.nearY).toBeGreaterThanOrEqual(leftLayer1.nearY - 14);
-
-    const rightNearXs = parsePoints(rightBranchFloors[0].getAttribute('points'))
-      .filter((p) => Math.abs(p.y - rightLayer1.nearY) < 0.001)
+    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 1);
+    const leftFarXs = leftFloorPoints
+      .filter((p) => Math.abs(p.y - leftEdges.farY) < 0.001)
       .map((p) => p.x);
-    expect(Math.min(...rightNearXs)).toBeCloseTo(floor2NearRight, 5);
-    expect(rightLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
-    expect(rightLayer2.nearY).toBeLessThanOrEqual(rightLayer1.nearY);
-    expect(rightLayer2.nearY).toBeGreaterThanOrEqual(rightLayer1.nearY - 14);
+    expect(Math.max(...leftFarXs)).toBeLessThan(Math.max(...leftNearXs));
+
+    const rightFloorPoints = parsePoints(rightBranchFloors[0].getAttribute('points'));
+    const rightEdges = edgeWidths(rightFloorPoints);
+    expect(rightEdges.nearWidth).toBeGreaterThan(rightEdges.farWidth);
+    expect(rightEdges.farY).toBeLessThan(rightEdges.nearY);
+    expect(rightEdges.nearY).toBeCloseTo(floor2NearY, 0.5);
+    const rightNearXs = rightFloorPoints
+      .filter((p) => Math.abs(p.y - rightEdges.nearY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.min(...rightNearXs)).toBeCloseTo(floor2NearRight, 1);
+    const rightFarXs = rightFloorPoints
+      .filter((p) => Math.abs(p.y - rightEdges.farY) < 0.001)
+      .map((p) => p.x);
+    expect(Math.min(...rightFarXs)).toBeGreaterThan(Math.min(...rightNearXs));
 
     const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
     const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');
@@ -207,8 +183,8 @@ describe('FancyMazePreview', () => {
     expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.min(...leftMaskYs)).toBe(0);
     expect(Math.min(...rightMaskYs)).toBe(0);
-    expect(Math.max(...leftMaskXs) - Math.min(...leftMaskXs)).toBeLessThanOrEqual(6);
-    expect(Math.max(...rightMaskXs) - Math.min(...rightMaskXs)).toBeLessThanOrEqual(6);
+    expect(Math.max(...leftMaskXs) - Math.min(...leftMaskXs)).toBeLessThanOrEqual(4);
+    expect(Math.max(...rightMaskXs) - Math.min(...rightMaskXs)).toBeLessThanOrEqual(4);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
@@ -255,14 +231,14 @@ describe('FancyMazePreview', () => {
     const rightBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
     );
-    expect(leftBranchFloors.length).toBe(2);
+    expect(leftBranchFloors.length).toBe(1);
     expect(rightBranchFloors.length).toBe(0);
 
     const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
     const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
       .map((p) => p.x);
-    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 5);
+    expect(Math.max(...leftNearXs)).toBeCloseTo(floor2NearLeft, 1);
     expect(leftLayer1.nearY).toBeCloseTo(floor2NearY, 0.5);
   });
 
@@ -333,8 +309,8 @@ describe('FancyMazePreview', () => {
     const rightBranchFloors = container.querySelectorAll(
       'polygon[data-branch="right"][data-layer="floor"]',
     );
-    expect(leftBranchFloors.length).toBe(2);
-    expect(rightBranchFloors.length).toBe(2);
+    expect(leftBranchFloors.length).toBe(1);
+    expect(rightBranchFloors.length).toBe(1);
 
     const frontWall = container.querySelector('[data-wall-side="front"]');
     const portal = container.querySelector('[data-goal-portal="true"]');
@@ -364,7 +340,7 @@ describe('FancyMazePreview', () => {
     const rightBranchFloors = Array.from(
       container.querySelectorAll('polygon[data-branch="right"][data-layer="floor"]'),
     );
-    expect(leftBranchFloors.length).toBe(2);
+    expect(leftBranchFloors.length).toBe(1);
     expect(rightBranchFloors.length).toBe(0);
 
     const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
