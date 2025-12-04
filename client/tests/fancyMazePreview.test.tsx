@@ -182,8 +182,10 @@ describe('FancyMazePreview', () => {
     expect(rightInnerWall).not.toBeNull();
     const leftWallPoints = parsePoints(leftInnerWall?.getAttribute('points') ?? '');
     const rightWallPoints = parsePoints(rightInnerWall?.getAttribute('points') ?? '');
+    expect(leftWallPoints[0]?.x).toBeCloseTo(floor2NearLeft, 0.01);
     expect(leftWallPoints[0]?.y).toBeCloseTo(floor2NearY, 0.01);
     expect(leftWallPoints[1]?.y).toBeCloseTo(floor2NearY - 28, 0.1);
+    expect(rightWallPoints[0]?.x).toBeCloseTo(floor2NearRight, 0.01);
     expect(rightWallPoints[0]?.y).toBeCloseTo(floor2NearY, 0.01);
     expect(rightWallPoints[1]?.y).toBeCloseTo(floor2NearY - 28, 0.1);
   });

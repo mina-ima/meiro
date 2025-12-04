@@ -211,10 +211,9 @@ function renderFloorGradient(): string {
     </defs>`;
 }
 
-// junction/goal の左右分岐:
-// slice2 の床ライン(anchorY)の角から左右に 90 度に曲がる横通路を、
-// グレー床＋左右の壁(内側/外側)で描画する。
-// 分岐側では slice2 の本線側面壁を描かず、この横通路で穴を完全に埋める。
+// junction の左右分岐:
+// slice2 の床稜線(anchorY)の角(anchorX)から横通路の床を描き始め、
+// 分岐のために外した slice2 の本線側面壁の奥から分岐通路の内側壁を立ち上げる。
 function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;

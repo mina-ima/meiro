@@ -243,6 +243,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2025-12-04): FancyMazePreview junction/goal の slice2 アンカー（anchorXLeft/right, anchorY/anchorFarY）で壁1枚ぶんを丸ごとマスクし、横通路の床と内外壁をアンカー揃えのL字で埋める。分岐床は near 幅 > far 幅のまま左右消失点へ強く収束させ、マスク幅=壁幅を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で検証
 * 更新メモ(2026-01-10): FancyMazePreview junction/goal の描画順を床→壁→分岐床→分岐壁→前壁→マスクに整理し、分岐床を4頂点に絞って slice2 床ラインと揃えたうえで奥壁を farY から天井まで立ち上げるよう再調整（マスクは最後に配置しつつ分岐を覆わない）。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でレイヤー順と座標を回帰
 * 更新メモ(2026-01-11): FancyMazePreview junction/goal の分岐を slice2 角(anchorX/anchorY)起点の床1枚＋内外壁2枚に簡素化し、branch マスク/ガイドを廃止。描画順を床→壁→分岐→前壁に統一し、openings 側では slice2 の側面壁だけを非表示にしてL字通路で穴を埋める（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+* 更新メモ(2026-01-12): FancyMazePreview junction の分岐床 near 側を必ず slice2 床稜線(anchorY)の角(anchorX)から描き始め、内側壁の起点も同じ座標に揃えて「外した slice2 壁の奥から壁が伸びる」見た目を固定。`client/tests/fancyMazePreview.test.tsx` に anchorX との一致検証を追加
 
 ### 8.2 オーナー
 
