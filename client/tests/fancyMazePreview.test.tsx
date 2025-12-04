@@ -38,6 +38,11 @@ function edgeWidths(points: { x: number; y: number }[]) {
   return { nearWidth, farWidth, nearY, farY };
 }
 
+function centerX(points: { x: number; y: number }[], y: number) {
+  const atY = points.filter((p) => Math.abs(p.y - y) < 0.001);
+  return atY.reduce((sum, p) => sum + p.x, 0) / atY.length;
+}
+
 describe('FancyMazePreview', () => {
   it('4枚の床スライスが奥ほど狭くなり、収束点を共有する', () => {
     const { container } = renderPreview('start', {
@@ -183,8 +188,14 @@ describe('FancyMazePreview', () => {
     expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.min(...leftMaskYs)).toBe(0);
     expect(Math.min(...rightMaskYs)).toBe(0);
-    expect(Math.max(...leftMaskXs) - Math.min(...leftMaskXs)).toBeLessThanOrEqual(4);
-    expect(Math.max(...rightMaskXs) - Math.min(...rightMaskXs)).toBeLessThanOrEqual(4);
+    const leftWallXs = parsePoints(leftSlice2Walls[0].getAttribute('points')).map((p) => p.x);
+    const rightWallXs = parsePoints(rightSlice2Walls[0].getAttribute('points')).map((p) => p.x);
+    const leftMaskWidth = Math.max(...leftMaskXs) - Math.min(...leftMaskXs);
+    const rightMaskWidth = Math.max(...rightMaskXs) - Math.min(...rightMaskXs);
+    const leftWallWidth = Math.max(...leftWallXs) - Math.min(...leftWallXs);
+    const rightWallWidth = Math.max(...rightWallXs) - Math.min(...rightWallXs);
+    expect(leftMaskWidth).toBeCloseTo(leftWallWidth, 0.5);
+    expect(rightMaskWidth).toBeCloseTo(rightWallWidth, 0.5);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
@@ -201,6 +212,84 @@ describe('FancyMazePreview', () => {
     expect(leftVanishYs.size).toBe(1);
     expect(rightVanishXs.size).toBe(1);
     expect(rightVanishYs.size).toBe(1);
+  });
+
+  it('分岐ビュー 左開放の切り欠きはslice2の壁幅いっぱいに揃い、枝通路の壁も同じ床ラインから立ち上がる', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: false,
+      backward: false,
+    });
+
+    const leftWallSlice2 = container.querySelector(
+      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
+    );
+    const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
+    const branchInnerWall = container.querySelector(
+      '[data-branch-wall="left"][data-branch-position="inner"]',
+    );
+    expect(leftWallSlice2).not.toBeNull();
+    expect(leftMask).not.toBeNull();
+    expect(branchInnerWall).not.toBeNull();
+
+    const wallPoints = parsePoints(leftWallSlice2?.getAttribute('points') ?? null);
+    const wallNearY = Math.max(...wallPoints.map((p) => p.y));
+    const wallFarY = Math.min(...wallPoints.map((p) => p.y));
+    const wallNearX = wallPoints.find((p) => Math.abs(p.y - wallNearY) < 0.01)?.x ?? 0;
+    const wallFarX = wallPoints.find((p) => Math.abs(p.y - wallFarY) < 0.01)?.x ?? 0;
+
+    const maskPoints = parsePoints(leftMask?.getAttribute('points') ?? '');
+    const maskXs = maskPoints.map((p) => p.x);
+    const maskYs = maskPoints.map((p) => p.y);
+    expect(Math.max(...maskYs)).toBeCloseTo(wallNearY, 0.1);
+    expect(Math.min(...maskYs)).toBe(0);
+    expect(maskXs.some((x) => Math.abs(x - wallNearX) < 0.2)).toBe(true);
+    expect(maskXs.some((x) => Math.abs(x - wallFarX) < 0.2)).toBe(true);
+
+    const branchPoints = parsePoints(branchInnerWall?.getAttribute('points') ?? null);
+    const branchNearY = Math.max(...branchPoints.map((p) => p.y));
+    const branchNearXs = branchPoints
+      .filter((p) => Math.abs(p.y - branchNearY) < 0.001)
+      .map((p) => p.x);
+    expect(branchNearY).toBeCloseTo(wallNearY, 0.1);
+    expect(branchNearXs.some((x) => Math.abs(x - wallNearX) < 0.5)).toBe(true);
+  });
+
+  it('分岐床はslice2の床ラインを起点に強く横へ伸び、遠ざかるほど横方向への移動が大きい', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: false,
+      backward: false,
+    });
+
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floorPoints = parsePoints(floorSlice2?.getAttribute('points') ?? null);
+    const anchorY = Math.max(...floorPoints.map((p) => p.y));
+    const anchorXLeft = Math.min(
+      ...floorPoints.filter((p) => Math.abs(p.y - anchorY) < 0.001).map((p) => p.x),
+    );
+
+    const branchFloor = container.querySelector(
+      'polygon[data-branch="left"][data-layer="floor"]',
+    );
+    expect(branchFloor).not.toBeNull();
+    const branchPoints = parsePoints(branchFloor?.getAttribute('points') ?? null);
+    const nearY = Math.max(...branchPoints.map((p) => p.y));
+    const farY = Math.min(...branchPoints.map((p) => p.y));
+    expect(nearY).toBeCloseTo(anchorY, 0.5);
+
+    const nearCenterX = centerX(branchPoints, nearY);
+    const farCenterX = centerX(branchPoints, farY);
+    const dx = Math.abs(farCenterX - nearCenterX);
+    const dy = Math.abs(farY - nearY);
+    expect(dx).toBeGreaterThan(dy * 1.4);
+    expect(farCenterX).toBeLessThan(nearCenterX);
+
+    const minX = Math.min(...branchPoints.map((p) => p.x));
+    expect(minX).toBeLessThan(anchorXLeft - 40);
   });
 
   it('分岐ビュー 左だけ開いている場合は右壁を切らず、左の穴だけを分岐通路で埋める', () => {

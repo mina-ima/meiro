@@ -183,6 +183,7 @@
 - 更新メモ(2026-01-07): FancyMazePreview junction/goal で openings.* が true の側だけ細い branch マスクを入れ、穴の内側を分岐床+側壁で埋めて黒抜けを解消。非開口側の壁は保持し、分岐壁を天井付近まで伸ばして短い横通路感を強調（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-08): FancyMazePreview junction/goal の分岐床とガイドを slice2 床ライン基準で左右90度に振り、開口側だけの細いマスクに限定して黒帯を除去。非開口側の壁は触らず、横通路の太さと左右対称性を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰
 - 更新メモ(2026-01-09): FancyMazePreview junction/goal の開口を slice2 壁1枚幅のマスクだけで開け、穴の内側に床1枚＋内外壁のL字横通路をはめ込む。非開口側の壁は無傷のまま（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+- 更新メモ(2025-12-04): FancyMazePreview junction/goal の slice2 アンカーで壁1枚ぶんを丸ごとマスクし、横通路床と内外壁をアンカー揃えのL字で埋める。near 幅 > far 幅のまま左右消失点へ強く収束する床形状を `client/tests/fancyMazePreview.test.tsx` で検証
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
@@ -382,6 +383,6 @@
 
 ## 25. FancyMazePreview 分岐表示の微調整（2026-01-07）
 - [x] junction/goal の branch マスク幅を細帯にし、手前の壁を残したまま切れ目だけを黒で抜く  
-  - DoD: `client/src/views/FancyMazePreview.ts` のマスク座標を anchorX 付近の数px 幅にし、`client/tests/fancyMazePreview.test.tsx` が通る
+  - DoD: slice2 アンカー（anchorXLeft/right, anchorY/anchorFarY）を基準に開口側の壁1枚ぶんをマスクし、横通路の床/内外壁を同じアンカーでL字配置する。分岐床は near 幅 > far 幅のまま左右の消失点に向かうジオメトリとし、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` が通る
 - [x] 横通路の壁高さを天井付近まで引き上げ、左右90度の廊下感を強調  
   - DoD: branch-wall のポリゴン上端が床から十分離れ、tests での分岐床・ガイドの性質が維持される

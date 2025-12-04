@@ -240,6 +240,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-07): FancyMazePreview junction/goal で openings.* が true の側だけ細い branch マスクを入れ、穴の内側を分岐床+側壁で埋めて黒抜けを解消。非開口側の壁は保持し、分岐壁を天井付近まで伸ばして短い横通路感を強調（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-08): FancyMazePreview junction/goal の分岐床とガイドを slice2 床ライン基準で左右90度に振り、開口側だけの細いマスクに限定して黒帯を除去。非開口側の壁は触らず、横通路の太さと左右対称性を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰
 * 更新メモ(2026-01-09): FancyMazePreview junction/goal で slice2 壁1枚幅のマスクだけを開口側に重ね、穴の内側に床1枚＋内外壁のL字横通路をはめ込む。非開口側の壁は無傷のまま（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+* 更新メモ(2025-12-04): FancyMazePreview junction/goal の slice2 アンカー（anchorXLeft/right, anchorY/anchorFarY）で壁1枚ぶんを丸ごとマスクし、横通路の床と内外壁をアンカー揃えのL字で埋める。分岐床は near 幅 > far 幅のまま左右消失点へ強く収束させ、マスク幅=壁幅を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で検証
 
 ### 8.2 オーナー
 
