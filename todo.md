@@ -184,6 +184,7 @@
 - 更新メモ(2026-01-08): FancyMazePreview junction/goal の分岐床とガイドを slice2 床ライン基準で左右90度に振り、開口側だけの細いマスクに限定して黒帯を除去。非開口側の壁は触らず、横通路の太さと左右対称性を `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰
 - 更新メモ(2026-01-09): FancyMazePreview junction/goal の開口を slice2 壁1枚幅のマスクだけで開け、穴の内側に床1枚＋内外壁のL字横通路をはめ込む。非開口側の壁は無傷のまま（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2025-12-04): FancyMazePreview junction/goal の slice2 アンカーで壁1枚ぶんを丸ごとマスクし、横通路床と内外壁をアンカー揃えのL字で埋める。near 幅 > far 幅のまま左右消失点へ強く収束する床形状を `client/tests/fancyMazePreview.test.tsx` で検証
+- 更新メモ(2026-01-10): FancyMazePreview junction/goal の描画順を床→壁→分岐床→分岐壁→前壁→マスクに整理し、分岐床を4頂点の床ポリゴンに揃えて slice2 床ラインから奥側へ90度折れ、奥壁を farY から天井まで伸ばすよう再調整（マスクは最後に置き分岐を覆わない）。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でレイヤー順と座標を回帰
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

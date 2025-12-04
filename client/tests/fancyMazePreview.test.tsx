@@ -149,6 +149,7 @@ describe('FancyMazePreview', () => {
     expect(rightBranchFloors.length).toBe(1);
 
     const leftFloorPoints = parsePoints(leftBranchFloors[0].getAttribute('points'));
+    expect(leftFloorPoints.length).toBe(4);
     const leftEdges = edgeWidths(leftFloorPoints);
     expect(leftEdges.nearWidth).toBeGreaterThan(leftEdges.farWidth);
     expect(leftEdges.farY).toBeLessThan(leftEdges.nearY);
@@ -163,6 +164,7 @@ describe('FancyMazePreview', () => {
     expect(Math.max(...leftFarXs)).toBeLessThan(Math.max(...leftNearXs));
 
     const rightFloorPoints = parsePoints(rightBranchFloors[0].getAttribute('points'));
+    expect(rightFloorPoints.length).toBe(4);
     const rightEdges = edgeWidths(rightFloorPoints);
     expect(rightEdges.nearWidth).toBeGreaterThan(rightEdges.farWidth);
     expect(rightEdges.farY).toBeLessThan(rightEdges.nearY);
@@ -196,6 +198,25 @@ describe('FancyMazePreview', () => {
     const rightWallWidth = Math.max(...rightWallXs) - Math.min(...rightWallXs);
     expect(leftMaskWidth).toBeCloseTo(leftWallWidth, 0.5);
     expect(rightMaskWidth).toBeCloseTo(rightWallWidth, 0.5);
+
+    const groupChildren = Array.from(container.querySelector('g')?.children ?? []);
+    const indexOfSelector = (selector: string) =>
+      groupChildren.findIndex((node) => node.matches(selector));
+    const maxIndexOfSelector = (selector: string) =>
+      groupChildren.reduce(
+        (max, node, idx) => (node.matches(selector) ? Math.max(max, idx) : max),
+        -1,
+      );
+    const leftFloorIndex = indexOfSelector('polygon[data-branch="left"][data-layer="floor"]');
+    const rightFloorIndex = indexOfSelector('polygon[data-branch="right"][data-layer="floor"]');
+    const leftWallIndex = maxIndexOfSelector('[data-branch-wall="left"]');
+    const rightWallIndex = maxIndexOfSelector('[data-branch-wall="right"]');
+    const leftMaskIndex = indexOfSelector('[data-overlay="junction-mask-left"]');
+    const rightMaskIndex = indexOfSelector('[data-overlay="junction-mask-right"]');
+    expect(leftMaskIndex).toBeGreaterThan(leftFloorIndex);
+    expect(rightMaskIndex).toBeGreaterThan(rightFloorIndex);
+    expect(leftMaskIndex).toBeGreaterThan(leftWallIndex);
+    expect(rightMaskIndex).toBeGreaterThan(rightWallIndex);
 
     const branchWallsLeft = Array.from(container.querySelectorAll('[data-branch-wall="left"]'));
     const branchWallsRight = Array.from(container.querySelectorAll('[data-branch-wall="right"]'));
