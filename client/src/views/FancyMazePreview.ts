@@ -25,7 +25,8 @@ const COLOR_FLOOR_LINE = '#d8c6aa';
 const COLOR_WALL = '#8a5f3f';
 const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
-const COLOR_BRANCH_FLOOR = '#6b4a30';
+const COLOR_BRANCH_FLOOR_BASE = '#666a70';
+const COLOR_BRANCH_FLOOR_DARK = '#32353a';
 const COLOR_BRANCH_WALL = '#744c32';
 const COLOR_BRANCH_GUIDE = '#c6b59b';
 const COLOR_PORTAL = '#d7ecff';
@@ -216,8 +217,10 @@ function renderSideBranch(
   side: 'left' | 'right',
   slices: SliceGeometry[],
 ): { floor: string; walls: string[]; guides: string[] } {
-  // junction の左右分岐: slice2 の床ラインを基準に、左右 90 度に曲がる横通路を1枚の床＋2枚の壁で描く。
-  // 分岐側では slice2 の本線側面壁を描かず、穴の中を分岐床と分岐壁で完全に埋める。
+  // junction / goal の左右分岐:
+  // slice2 の床ライン(anchorY)から左右 90 度に曲がる横通路を、
+  // グレーの床(グラデーション)とその上に立つ側面壁で描く。
+  // 分岐床は必ず本線床より手前に出ず、床 → 壁の順で描画して奥側に壁が来るようにする。
   const anchorSlice = slices[1];
   const anchorY = anchorSlice.near.y;
   const isLeft = side === 'left';
@@ -236,9 +239,18 @@ function renderSideBranch(
   const farOuter = { x: farInner.x + dir * floorFarWidth, y: farY };
 
   const floorPoints = [nearInner, nearOuter, farOuter, farInner];
-  const floorSvg = `<polygon data-branch="${side}" data-layer="floor" points="${joinPoints(
-    floorPoints,
-  )}" fill="${COLOR_BRANCH_FLOOR}" />`;
+  const gradientId = `branch-floor-gradient-${side}`;
+  const floorGradient = `
+    <defs>
+      <linearGradient id="${gradientId}" x1="0" y1="${anchorY}" x2="0" y2="${farY}">
+        <stop offset="0%" stop-color="${COLOR_BRANCH_FLOOR_BASE}" />
+        <stop offset="100%" stop-color="${COLOR_BRANCH_FLOOR_DARK}" />
+      </linearGradient>
+    </defs>`;
+  const floorSvg = `${floorGradient}
+    <polygon data-branch="${side}" data-layer="floor" points="${joinPoints(
+      floorPoints,
+    )}" fill="url(#${gradientId})" />`;
 
   const innerWallPoints = [
     { x: nearInner.x, y: anchorY },
