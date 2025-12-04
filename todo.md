@@ -187,6 +187,7 @@
 - 更新メモ(2026-01-10): FancyMazePreview junction/goal の描画順を床→壁→分岐床→分岐壁→前壁→マスクに整理し、分岐床を4頂点の床ポリゴンに揃えて slice2 床ラインから奥側へ90度折れ、奥壁を farY から天井まで伸ばすよう再調整（マスクは最後に置き分岐を覆わない）。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でレイヤー順と座標を回帰
 - 更新メモ(2026-01-11): FancyMazePreview junction/goal の分岐を slice2 角(anchorX/anchorY)起点の床1枚＋内外壁2枚に簡素化し、branch マスク/ガイドを廃止。描画順を床→壁→分岐→前壁に統一し、openings 側では slice2 の側面壁だけを非表示にしてL字通路で穴を埋める（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-12): FancyMazePreview junction の分岐床 near 側を slice2 床稜線(anchorY)の角(anchorX)から開始し、内側壁の起点も同じ座標に揃えて「外した slice2 壁の奥から壁が生える」ことをテストで回帰（`client/tests/fancyMazePreview.test.tsx` に anchorX 検証を追加）
+- 更新メモ(2026-01-13): FancyMazePreview junction/goal の分岐床 near 側を slice2 床稜線(anchorY)にぴったり合わせ、内側壁の下辺も anchorX/anchorY→farY を共有させて本線壁との重なりを解消。描画順を床→壁→分岐床→分岐壁に限定し、`client/tests/fancyMazePreview.test.tsx` で anchorY/anchorX と壁起点の一致を厳密に確認
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

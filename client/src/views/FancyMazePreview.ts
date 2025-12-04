@@ -40,6 +40,12 @@ type SliceGeometry = {
   far: SliceStop;
 };
 
+type BranchAnchor = {
+  anchorY: number;
+  anchorXLeft: number;
+  anchorXRight: number;
+};
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -206,32 +212,32 @@ function renderFloorGradient(): string {
     <defs>
       <linearGradient id="corridor-floor-grad" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_VANISH_Y}">
         <stop offset="0%" stop-color="${COLOR_FLOOR_BASE}" />
-        <stop offset="100%" stop-color="${COLOR_FLOOR_FAR}" />
-      </linearGradient>
+      <stop offset="100%" stop-color="${COLOR_FLOOR_FAR}" />
+    </linearGradient>
     </defs>`;
 }
 
 // junction の左右分岐:
-// slice2 の床稜線(anchorY)の角(anchorX)から横通路の床を描き始め、
-// 分岐のために外した slice2 の本線側面壁の奥から分岐通路の内側壁を立ち上げる。
-function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
+// slice2 の床稜線(anchorY)の角(anchorX)から分岐床を開始し、
+// 分岐で外した slice2 の壁の奥側から分岐通路の内側壁を立ち上げる。
+function renderSideBranch(side: 'left' | 'right', anchor: BranchAnchor): string {
+  const { anchorY, anchorXLeft, anchorXRight } = anchor;
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;
 
-  const anchorSlice = slices[1];
-  const anchorY = anchorSlice.near.y;
-  const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
+  const anchorX = isLeft ? anchorXLeft : anchorXRight;
 
-  const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const floorNearWidth = mainWidth * 0.6;
-  const floorFarWidth = floorNearWidth * 0.7;
+  const mainWidth = anchorXRight - anchorXLeft;
+  const widthNear = mainWidth * 0.6;
+  const widthFar = widthNear * 0.7;
   const depth = 28;
+  const innerShift = 18;
 
   const nearInner = { x: anchorX, y: anchorY };
-  const nearOuter = { x: anchorX + dir * floorNearWidth, y: anchorY };
+  const nearOuter = { x: anchorX + dir * widthNear, y: anchorY };
   const farY = anchorY - depth;
-  const farInner = { x: anchorX + dir * 18, y: farY };
-  const farOuter = { x: farInner.x + dir * floorFarWidth, y: farY };
+  const farInner = { x: anchorX + dir * innerShift, y: farY };
+  const farOuter = { x: farInner.x + dir * widthFar, y: farY };
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [nearInner, nearOuter, farOuter, farInner];
@@ -239,22 +245,12 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
     points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" />`;
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
-  const innerWallPoints = [
-    { x: nearInner.x, y: anchorY },
-    { x: farInner.x, y: farY },
-    { x: farInner.x, y: 0 },
-    { x: nearInner.x, y: 0 },
-  ];
+  const innerWallPoints = [nearInner, farInner, { x: farInner.x, y: 0 }, { x: nearInner.x, y: 0 }];
   const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner"
     points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" />`;
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
-  const outerWallPoints = [
-    { x: nearOuter.x, y: anchorY },
-    { x: farOuter.x, y: farY },
-    { x: farOuter.x, y: 0 },
-    { x: nearOuter.x, y: 0 },
-  ];
+  const outerWallPoints = [nearOuter, farOuter, { x: farOuter.x, y: 0 }, { x: nearOuter.x, y: 0 }];
   const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer"
     points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
 
@@ -267,14 +263,20 @@ function renderView(
   slices: SliceGeometry[],
   stops: SliceStop[],
 ): string {
+  const anchorSlice = slices[1];
+  const anchor: BranchAnchor = {
+    anchorY: anchorSlice.near.y,
+    anchorXLeft: anchorSlice.near.left,
+    anchorXRight: anchorSlice.near.right,
+  };
   const parts: string[] = [];
   parts.push(renderFloorGradient());
   parts.push(renderFloorSlices(slices));
   parts.push(renderCorridorWalls(slices, variant, openings));
 
   if (variant === 'junction' || variant === 'goal') {
-    if (openings.left) parts.push(renderSideBranch('left', slices));
-    if (openings.right) parts.push(renderSideBranch('right', slices));
+    if (openings.left) parts.push(renderSideBranch('left', anchor));
+    if (openings.right) parts.push(renderSideBranch('right', anchor));
   }
 
   if (variant === 'junction') {

@@ -127,6 +127,7 @@ describe('FancyMazePreview', () => {
     const floor2NearRight = Math.max(
       ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
     );
+    const anchorY = floor2NearY;
 
     const leftBranchFloor = container.querySelector('polygon[data-branch="left"][data-layer="floor"]');
     const rightBranchFloor = container.querySelector(
@@ -138,17 +139,20 @@ describe('FancyMazePreview', () => {
     const assertBranch = (side: 'left' | 'right', element: Element | null, anchorNearX: number) => {
       const branchPoints = parsePoints(element?.getAttribute('points') ?? '');
       expect(branchPoints.length).toBe(4);
+      expect(branchPoints[0]?.x).toBeCloseTo(anchorNearX, 0.001);
+      expect(branchPoints[0]?.y).toBeCloseTo(anchorY, 0.001);
+      expect(branchPoints[1]?.y).toBeCloseTo(anchorY, 0.001);
       const edges = edgeWidths(branchPoints);
       expect(edges.nearWidth).toBeGreaterThan(edges.farWidth);
       expect(edges.farY).toBeLessThan(edges.nearY);
-      expect(edges.nearY).toBeCloseTo(floor2NearY, 0.01);
+      expect(edges.nearY).toBeCloseTo(anchorY, 0.001);
       const nearXs = branchPoints
         .filter((p) => Math.abs(p.y - edges.nearY) < 0.001)
         .map((p) => p.x);
       if (side === 'left') {
-        expect(Math.max(...nearXs)).toBeCloseTo(anchorNearX, 0.01);
+        expect(Math.max(...nearXs)).toBeCloseTo(anchorNearX, 0.001);
       } else {
-        expect(Math.min(...nearXs)).toBeCloseTo(anchorNearX, 0.01);
+        expect(Math.min(...nearXs)).toBeCloseTo(anchorNearX, 0.001);
       }
       const farXs = branchPoints
         .filter((p) => Math.abs(p.y - edges.farY) < 0.001)
@@ -182,12 +186,12 @@ describe('FancyMazePreview', () => {
     expect(rightInnerWall).not.toBeNull();
     const leftWallPoints = parsePoints(leftInnerWall?.getAttribute('points') ?? '');
     const rightWallPoints = parsePoints(rightInnerWall?.getAttribute('points') ?? '');
-    expect(leftWallPoints[0]?.x).toBeCloseTo(floor2NearLeft, 0.01);
-    expect(leftWallPoints[0]?.y).toBeCloseTo(floor2NearY, 0.01);
-    expect(leftWallPoints[1]?.y).toBeCloseTo(floor2NearY - 28, 0.1);
-    expect(rightWallPoints[0]?.x).toBeCloseTo(floor2NearRight, 0.01);
-    expect(rightWallPoints[0]?.y).toBeCloseTo(floor2NearY, 0.01);
-    expect(rightWallPoints[1]?.y).toBeCloseTo(floor2NearY - 28, 0.1);
+    expect(leftWallPoints[0]?.x).toBeCloseTo(floor2NearLeft, 0.001);
+    expect(leftWallPoints[0]?.y).toBeCloseTo(anchorY, 0.001);
+    expect(leftWallPoints[1]?.y).toBeCloseTo(anchorY - 28, 0.01);
+    expect(rightWallPoints[0]?.x).toBeCloseTo(floor2NearRight, 0.001);
+    expect(rightWallPoints[0]?.y).toBeCloseTo(anchorY, 0.001);
+    expect(rightWallPoints[1]?.y).toBeCloseTo(anchorY - 28, 0.01);
   });
 
   it('分岐ビュー 左開放の切り欠きはslice2の壁幅いっぱいに揃い、枝通路の壁も同じ床ラインから立ち上がる', () => {
