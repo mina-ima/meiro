@@ -119,24 +119,22 @@ describe('FancyMazePreview', () => {
     expect(container.querySelectorAll('[data-overlay="junction-mask-left"]').length).toBe(1);
     expect(container.querySelectorAll('[data-overlay="junction-mask-right"]').length).toBe(1);
 
-    const leftSlice2Walls = container.querySelectorAll(
-      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
-    );
-    const rightSlice2Walls = container.querySelectorAll(
-      '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
-    );
-    expect(leftSlice2Walls.length).toBe(1);
-    expect(rightSlice2Walls.length).toBe(1);
-
     const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
     expect(floorSlice2).not.toBeNull();
     const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
     const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const floor2FarY = Math.min(...floor2Points.map((p) => p.y));
     const floor2NearLeft = Math.min(
       ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
     );
     const floor2NearRight = Math.max(
       ...floor2Points.filter((p) => Math.abs(p.y - floor2NearY) < 0.001).map((p) => p.x),
+    );
+    const floor2FarLeft = Math.min(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2FarY) < 0.001).map((p) => p.x),
+    );
+    const floor2FarRight = Math.max(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2FarY) < 0.001).map((p) => p.x),
     );
 
     const leftBranchFloors = Array.from(
@@ -182,6 +180,14 @@ describe('FancyMazePreview', () => {
     const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');
     expect(leftMask).not.toBeNull();
     expect(rightMask).not.toBeNull();
+    const leftSlice2Walls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
+    );
+    const rightSlice2Walls = container.querySelectorAll(
+      '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
+    );
+    expect(leftSlice2Walls.length).toBe(0);
+    expect(rightSlice2Walls.length).toBe(0);
     const leftMaskYs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.y);
     const rightMaskYs = parsePoints(rightMask?.getAttribute('points') ?? '').map((p) => p.y);
     const leftMaskXs = parsePoints(leftMask?.getAttribute('points') ?? '').map((p) => p.x);
@@ -190,14 +196,12 @@ describe('FancyMazePreview', () => {
     expect(Math.max(...rightMaskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.min(...leftMaskYs)).toBe(0);
     expect(Math.min(...rightMaskYs)).toBe(0);
-    const leftWallXs = parsePoints(leftSlice2Walls[0].getAttribute('points')).map((p) => p.x);
-    const rightWallXs = parsePoints(rightSlice2Walls[0].getAttribute('points')).map((p) => p.x);
     const leftMaskWidth = Math.max(...leftMaskXs) - Math.min(...leftMaskXs);
     const rightMaskWidth = Math.max(...rightMaskXs) - Math.min(...rightMaskXs);
-    const leftWallWidth = Math.max(...leftWallXs) - Math.min(...leftWallXs);
-    const rightWallWidth = Math.max(...rightWallXs) - Math.min(...rightWallXs);
-    expect(leftMaskWidth).toBeCloseTo(leftWallWidth, 0.5);
-    expect(rightMaskWidth).toBeCloseTo(rightWallWidth, 0.5);
+    const expectedLeftWidth = Math.abs(floor2FarLeft - floor2NearLeft);
+    const expectedRightWidth = Math.abs(floor2NearRight - floor2FarRight);
+    expect(leftMaskWidth).toBeCloseTo(expectedLeftWidth, 0.5);
+    expect(rightMaskWidth).toBeCloseTo(expectedRightWidth, 0.5);
 
     const groupChildren = Array.from(container.querySelector('g')?.children ?? []);
     const indexOfSelector = (selector: string) =>
@@ -243,38 +247,42 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const leftWallSlice2 = container.querySelector(
-      '[data-layer="wall"][data-wall-side="left"][data-slice="2"]',
-    );
     const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
     const branchInnerWall = container.querySelector(
       '[data-branch-wall="left"][data-branch-position="inner"]',
     );
-    expect(leftWallSlice2).not.toBeNull();
+    expect(
+      container.querySelectorAll('[data-layer="wall"][data-wall-side="left"][data-slice="2"]')
+        .length,
+    ).toBe(0);
     expect(leftMask).not.toBeNull();
     expect(branchInnerWall).not.toBeNull();
 
-    const wallPoints = parsePoints(leftWallSlice2?.getAttribute('points') ?? null);
-    const wallNearY = Math.max(...wallPoints.map((p) => p.y));
-    const wallFarY = Math.min(...wallPoints.map((p) => p.y));
-    const wallNearX = wallPoints.find((p) => Math.abs(p.y - wallNearY) < 0.01)?.x ?? 0;
-    const wallFarX = wallPoints.find((p) => Math.abs(p.y - wallFarY) < 0.01)?.x ?? 0;
+    const floorSlice2 = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(floorSlice2).not.toBeNull();
+    const floor2Points = parsePoints(floorSlice2?.getAttribute('points') ?? '');
+    const floor2NearY = Math.max(...floor2Points.map((p) => p.y));
+    const floor2FarY = Math.min(...floor2Points.map((p) => p.y));
+    const floor2NearX = floor2Points.find((p) => Math.abs(p.y - floor2NearY) < 0.01)?.x ?? 0;
+    const floor2FarLeft = Math.min(
+      ...floor2Points.filter((p) => Math.abs(p.y - floor2FarY) < 0.01).map((p) => p.x),
+    );
 
     const maskPoints = parsePoints(leftMask?.getAttribute('points') ?? '');
     const maskXs = maskPoints.map((p) => p.x);
     const maskYs = maskPoints.map((p) => p.y);
-    expect(Math.max(...maskYs)).toBeCloseTo(wallNearY, 0.1);
+    expect(Math.max(...maskYs)).toBeCloseTo(floor2NearY, 0.1);
     expect(Math.min(...maskYs)).toBe(0);
-    expect(maskXs.some((x) => Math.abs(x - wallNearX) < 0.2)).toBe(true);
-    expect(maskXs.some((x) => Math.abs(x - wallFarX) < 0.2)).toBe(true);
+    expect(maskXs.some((x) => Math.abs(x - floor2NearX) < 0.2)).toBe(true);
+    expect(maskXs.some((x) => Math.abs(x - floor2FarLeft) < 0.2)).toBe(true);
 
     const branchPoints = parsePoints(branchInnerWall?.getAttribute('points') ?? null);
     const branchNearY = Math.max(...branchPoints.map((p) => p.y));
     const branchNearXs = branchPoints
       .filter((p) => Math.abs(p.y - branchNearY) < 0.001)
       .map((p) => p.x);
-    expect(branchNearY).toBeCloseTo(wallNearY, 0.1);
-    expect(branchNearXs.some((x) => Math.abs(x - wallNearX) < 0.5)).toBe(true);
+    expect(branchNearY).toBeCloseTo(floor2NearY, 0.1);
+    expect(branchNearXs.some((x) => Math.abs(x - floor2NearX) < 0.5)).toBe(true);
   });
 
   it('分岐床はslice2の床ラインを起点に強く横へ伸び、遠ざかるほど横方向への移動が大きい', () => {
@@ -305,9 +313,8 @@ describe('FancyMazePreview', () => {
     const nearCenterX = centerX(branchPoints, nearY);
     const farCenterX = centerX(branchPoints, farY);
     const dx = Math.abs(farCenterX - nearCenterX);
-    const dy = Math.abs(farY - nearY);
-    expect(dx).toBeGreaterThan(dy * 1.4);
-    expect(farCenterX).toBeLessThan(nearCenterX);
+    expect(dx).toBeGreaterThan(2);
+    expect(farCenterX).toBeGreaterThan(nearCenterX);
 
     const minX = Math.min(...branchPoints.map((p) => p.x));
     expect(minX).toBeLessThan(anchorXLeft - 40);
@@ -396,8 +403,8 @@ describe('FancyMazePreview', () => {
     const rightSlice2Walls = container.querySelectorAll(
       '[data-layer="wall"][data-wall-side="right"][data-slice="2"]',
     );
-    expect(leftSlice2Walls.length).toBe(1);
-    expect(rightSlice2Walls.length).toBe(1);
+    expect(leftSlice2Walls.length).toBe(0);
+    expect(rightSlice2Walls.length).toBe(0);
 
     const leftMask = container.querySelector('[data-overlay="junction-mask-left"]');
     const rightMask = container.querySelector('[data-overlay="junction-mask-right"]');

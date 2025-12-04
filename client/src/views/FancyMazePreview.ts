@@ -19,14 +19,14 @@ const FLOOR_NEAR_WIDTH = WIDTH * 0.82;
 const FLOOR_FAR_WIDTH = WIDTH * 0.35;
 
 const COLOR_BG = '#050608';
-const COLOR_FLOOR = '#7b5b3a';
-const COLOR_FLOOR_FAR = '#3e2a18';
+const COLOR_FLOOR_BASE = '#70757d';
+const COLOR_FLOOR_FAR = '#3a3d44';
 const COLOR_FLOOR_LINE = '#d8c6aa';
 const COLOR_WALL = '#8a5f3f';
 const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
-const COLOR_BRANCH_FLOOR_BASE = '#666a70';
-const COLOR_BRANCH_FLOOR_DARK = '#32353a';
+const COLOR_BRANCH_FLOOR_BASE = COLOR_FLOOR_BASE;
+const COLOR_BRANCH_FLOOR_DARK = COLOR_FLOOR_FAR;
 const COLOR_BRANCH_WALL = '#744c32';
 const COLOR_BRANCH_GUIDE = '#c6b59b';
 const COLOR_PORTAL = '#d7ecff';
@@ -104,7 +104,7 @@ function renderFloorSlices(slices: SliceGeometry[]): string {
   const parts: string[] = [];
   slices.forEach((slice) => {
     const t = slice.index / SLICE_COUNT;
-    const fill = mixColor(COLOR_FLOOR, COLOR_FLOOR_FAR, t * 0.8);
+    const fill = mixColor(COLOR_FLOOR_BASE, COLOR_FLOOR_FAR, t * 0.9);
     const points = [
       { x: slice.near.left, y: slice.near.y },
       { x: slice.near.right, y: slice.near.y },
@@ -172,14 +172,15 @@ function renderCorridorWalls(
   const parts: string[] = [];
   slices.forEach((slice) => {
     const isBranchingVariant = variant === 'junction' || variant === 'goal';
-    // junction/goal でも壁スライスは素直に描き、後段の openings.* に応じたマスクで切り欠きを作る
-    if (isBranchingVariant && openings) {
+    const skipLeft = isBranchingVariant && openings?.left && slice.index === 2;
+    const skipRight = isBranchingVariant && openings?.right && slice.index === 2;
+
+    if (!skipLeft) {
       parts.push(renderWallSlice('left', slice));
-      parts.push(renderWallSlice('right', slice));
-      return;
     }
-    parts.push(renderWallSlice('left', slice));
-    parts.push(renderWallSlice('right', slice));
+    if (!skipRight) {
+      parts.push(renderWallSlice('right', slice));
+    }
   });
   return parts.join('\n');
 }
@@ -213,29 +214,26 @@ function renderGoalPortal(stop: SliceStop): string {
   return `<rect data-goal-portal="true" x="${left}" y="${top}" width="${width}" height="${height}" fill="${COLOR_PORTAL}" stroke="${COLOR_PORTAL_FRAME}" stroke-width="3" />`;
 }
 
-function renderSideBranch(
-  side: 'left' | 'right',
-  slices: SliceGeometry[],
-): { floor: string; walls: string[]; guides: string[] } {
-  // junction / goal の左右分岐:
-  // slice2 の床ライン(anchorY)から左右 90 度に曲がる横通路を、
-  // グレーの床(グラデーション)とその上に立つ側面壁で描く。
-  // 分岐床は必ず本線床より手前に出ず、床 → 壁の順で描画して奥側に壁が来るようにする。
+// junction/goal の左右分岐:
+// slice2 の床ライン(anchorY)を入口とし、左右 90 度に曲がる横通路を
+// グレーの床＋左右の壁で描画する。
+// 分岐側では slice2 の本線側面壁を描かず、穴の中を分岐通路の床と壁で完全に埋める。
+function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
   const anchorSlice = slices[1];
   const anchorY = anchorSlice.near.y;
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;
   const anchorX = isLeft ? anchorSlice.near.left : anchorSlice.near.right;
+
   const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const depth = mainWidth * 0.12;
-  const farY = anchorY - depth;
   const floorNearWidth = mainWidth * 0.65;
-  const floorFarWidth = floorNearWidth * 0.68;
-  const farInnerShift = mainWidth * 0.28;
+  const floorFarWidth = floorNearWidth * 0.7;
+  const depth = 28;
 
   const nearInner = { x: anchorX, y: anchorY };
   const nearOuter = { x: anchorX + dir * floorNearWidth, y: anchorY };
-  const farInner = { x: anchorX + dir * farInnerShift, y: farY };
+  const farY = anchorY - depth;
+  const farInner = { x: anchorX + dir * 18, y: farY };
   const farOuter = { x: farInner.x + dir * floorFarWidth, y: farY };
 
   const floorPoints = [nearInner, nearOuter, farOuter, farInner];
@@ -272,18 +270,14 @@ function renderSideBranch(
     outerWallPoints,
   )}" fill="${COLOR_BRANCH_WALL}" fill-opacity="0.85" />`;
 
-  const guideTarget = { x: isLeft ? -80 : WIDTH + 80, y: anchorY - 40 };
+  const guideTarget = { x: isLeft ? -80 : WIDTH + 80, y: farY - 8 };
   const guideStarts = [nearInner, nearOuter];
   const guides = guideStarts.map(
     (start, idx) =>
       `<line data-branch-guide="${side}" data-guide-index="${idx}" x1="${start.x}" y1="${start.y}" x2="${guideTarget.x}" y2="${guideTarget.y}" stroke="${COLOR_BRANCH_GUIDE}" stroke-opacity="0.32" stroke-width="0.9" />`,
   );
 
-  return {
-    floor: floorSvg,
-    walls: [innerWallSvg, outerWallSvg],
-    guides,
-  };
+  return [floorSvg, innerWallSvg, outerWallSvg, ...guides].join('\n');
 }
 
 function renderView(
@@ -296,6 +290,8 @@ function renderView(
   parts.push(renderFloorSlices(slices));
   parts.push(renderCorridorWalls(slices, variant, openings));
 
+  // junction/goal の左右分岐を本線床・壁の後に配置し、前壁より手前に描く。
+  // openings.* 側では slice2 の本線側面壁を省き、分岐通路で穴を埋める。
   const anchorSlice = slices[1];
   const anchor: BranchAnchor = {
     anchorY: anchorSlice.near.y,
@@ -306,9 +302,7 @@ function renderView(
     anchorFarRight: anchorSlice.far.right,
   };
   const branchMasks: string[] = [];
-  const branchFloors: string[] = [];
-  const branchWalls: string[] = [];
-  const branchGuides: string[] = [];
+  const branchSections: string[] = [];
   if (variant === 'junction' || variant === 'goal') {
     // openings.* が true の側だけ slice2 の壁 1 枚ぶんを消し、その穴に横通路を差し込む
     if (openings.left) {
@@ -332,21 +326,13 @@ function renderView(
       );
     }
     if (openings.left) {
-      const leftBranch = renderSideBranch('left', slices);
-      branchFloors.push(leftBranch.floor);
-      branchWalls.push(...leftBranch.walls);
-      branchGuides.push(...leftBranch.guides);
+      branchSections.push(renderSideBranch('left', slices));
     }
     if (openings.right) {
-      const rightBranch = renderSideBranch('right', slices);
-      branchFloors.push(rightBranch.floor);
-      branchWalls.push(...rightBranch.walls);
-      branchGuides.push(...rightBranch.guides);
+      branchSections.push(renderSideBranch('right', slices));
     }
   }
-  parts.push(...branchFloors);
-  parts.push(...branchWalls);
-  parts.push(...branchGuides);
+  parts.push(...branchSections);
 
   if (variant === 'junction') {
     if (!openings.forward) {
