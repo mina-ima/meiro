@@ -192,6 +192,7 @@
 - 更新メモ(2026-01-15): FancyMazePreview junction を固定座標のL字通路ポリゴン描画に置き換え、分岐有無のスモーク検証だけに簡略化（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-20): FancyMazePreview junction を renderJunctionCrossView に置き換え、固定十字路（メイン床＋左右壁＋左右分岐床/壁＋奥壁）を描画するシンプルなジオメトリに再設計。テストは主要パーツ存在のスモーク検証に絞り、開口有無だけを確認（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-21): FancyMazePreview junction/goal をスライスベースの描画に戻し、slice2 anchorX/anchorY から分岐床と内外壁を描画。描画順を床→壁→分岐→前壁にそろえ、`client/tests/fancyMazePreview.test.tsx` で anchorY と inner wall 起点の一致を確認
+- 更新メモ(2026-01-23): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter を本線 slice2 床角と同座標に固定し、内側壁の起点も nearInner と共有。openings 側の slice2 壁非表示を維持しつつ、branch 床/内壁が本線床稜線から連続して伸びることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で厳密化
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

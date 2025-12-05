@@ -122,10 +122,54 @@ describe('FancyMazePreview', () => {
     const rightBranchFloor = container.querySelector('polygon[data-branch="right"][data-layer="floor"]');
     expect(leftBranchFloor).not.toBeNull();
     expect(rightBranchFloor).not.toBeNull();
-    const leftNearY = Math.max(...parsePoints(leftBranchFloor?.getAttribute('points')).map((p) => p.y));
-    const rightNearY = Math.max(...parsePoints(rightBranchFloor?.getAttribute('points')).map((p) => p.y));
-    expect(leftNearY).toBeCloseTo(anchorY, 3);
-    expect(rightNearY).toBeCloseTo(anchorY, 3);
+
+    expect(
+      container.querySelectorAll('[data-layer="wall"][data-wall-side="left"][data-slice="2"]')
+        .length,
+    ).toBe(0);
+    expect(
+      container.querySelectorAll('[data-layer="wall"][data-wall-side="right"][data-slice="2"]')
+        .length,
+    ).toBe(0);
+
+    const leftBranchPoints = parsePoints(leftBranchFloor?.getAttribute('points'));
+    const rightBranchPoints = parsePoints(rightBranchFloor?.getAttribute('points'));
+    const leftNearY = Math.max(...leftBranchPoints.map((p) => p.y));
+    const rightNearY = Math.max(...rightBranchPoints.map((p) => p.y));
+    const leftNearPoints = leftBranchPoints.filter((p) => Math.abs(p.y - leftNearY) < 0.001);
+    const rightNearPoints = rightBranchPoints.filter((p) => Math.abs(p.y - rightNearY) < 0.001);
+    const vanishX = 160; // WIDTH / 2
+    const leftNearInner =
+      leftNearPoints.length === 1
+        ? leftNearPoints[0]
+        : leftNearPoints.reduce((closest, point) =>
+            Math.abs(point.x - vanishX) < Math.abs(closest.x - vanishX) ? point : closest,
+          );
+    const rightNearInner =
+      rightNearPoints.length === 1
+        ? rightNearPoints[0]
+        : rightNearPoints.reduce((closest, point) =>
+            Math.abs(point.x - vanishX) < Math.abs(closest.x - vanishX) ? point : closest,
+          );
+    const leftNearOuter =
+      leftNearPoints.length === 1
+        ? leftNearPoints[0]
+        : leftNearPoints.reduce((farthest, point) =>
+            Math.abs(point.x - vanishX) > Math.abs(farthest.x - vanishX) ? point : farthest,
+          );
+    const rightNearOuter =
+      rightNearPoints.length === 1
+        ? rightNearPoints[0]
+        : rightNearPoints.reduce((farthest, point) =>
+            Math.abs(point.x - vanishX) > Math.abs(farthest.x - vanishX) ? point : farthest,
+          );
+
+    expect(leftNearInner.x).toBe(anchorXLeft);
+    expect(leftNearInner.y).toBe(anchorY);
+    expect(leftNearOuter.y).toBe(anchorY);
+    expect(rightNearInner.x).toBe(anchorXRight);
+    expect(rightNearInner.y).toBe(anchorY);
+    expect(rightNearOuter.y).toBe(anchorY);
 
     const leftInnerWall = container.querySelector(
       '[data-branch-wall="left"][data-branch-position="inner"]',
@@ -137,10 +181,10 @@ describe('FancyMazePreview', () => {
     expect(rightInnerWall).not.toBeNull();
     const leftInnerPoints = parsePoints(leftInnerWall?.getAttribute('points'));
     const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
-    expect(leftInnerPoints[0].x).toBeCloseTo(anchorXLeft, 3);
-    expect(leftInnerPoints[0].y).toBeCloseTo(anchorY, 3);
-    expect(rightInnerPoints[0].x).toBeCloseTo(anchorXRight, 3);
-    expect(rightInnerPoints[0].y).toBeCloseTo(anchorY, 3);
+    expect(leftInnerPoints[0].x).toBe(leftNearInner.x);
+    expect(leftInnerPoints[0].y).toBe(leftNearInner.y);
+    expect(rightInnerPoints[0].x).toBe(rightNearInner.x);
+    expect(rightInnerPoints[0].y).toBe(rightNearInner.y);
   });
 
   it('分岐ビューはopeningsに応じて片側だけ枝通路を描画する', () => {

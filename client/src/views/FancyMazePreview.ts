@@ -40,6 +40,13 @@ type SliceGeometry = {
   far: SliceStop;
 };
 
+type FloorCorners = {
+  nearLeft: { x: number; y: number };
+  nearRight: { x: number; y: number };
+  farLeft: { x: number; y: number };
+  farRight: { x: number; y: number };
+};
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -157,10 +164,11 @@ function renderCorridorWalls(
   openings?: Openings,
 ): string {
   const parts: string[] = [];
+  const isJunctionOrGoal = variant === 'junction' || variant === 'goal';
   slices.forEach((slice) => {
-    const isBranchingVariant = variant === 'junction' || variant === 'goal';
-    const skipLeft = isBranchingVariant && openings?.left && slice.index === 2;
-    const skipRight = isBranchingVariant && openings?.right && slice.index === 2;
+    const i = slice.index;
+    const skipLeft = isJunctionOrGoal && openings?.left && i === 2;
+    const skipRight = isJunctionOrGoal && openings?.right && i === 2;
 
     if (!skipLeft) {
       parts.push(renderWallSlice('left', slice));
@@ -211,10 +219,24 @@ function renderFloorGradient(): string {
     </defs>`;
 }
 
+function getMainFloorCornersForJunction(slices: SliceGeometry[]): FloorCorners {
+  const anchorSlice = slices[1];
+  return {
+    nearLeft: { x: anchorSlice.near.left, y: anchorSlice.near.y },
+    nearRight: { x: anchorSlice.near.right, y: anchorSlice.near.y },
+    farLeft: { x: anchorSlice.far.left, y: anchorSlice.far.y },
+    farRight: { x: anchorSlice.far.right, y: anchorSlice.far.y },
+  };
+}
+
 // junction / goal 分岐: slice2 の床ラインを基準に、メイン通路の壁1枚分を切り取り、
 // その穴に横方向へ90度に曲がる短い通路（床＋左右の壁）をはめ込む。
 // 床は本線と同じグリッドで、奥に行くほど狭く・高くなるように台形で構成する。
-function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): string {
+function renderSideBranch(
+  side: 'left' | 'right',
+  slices: SliceGeometry[],
+  mainCorners: FloorCorners,
+): string {
   // junction/goal の左右分岐:
   // slice2 の床稜線(anchorY)の角(anchorX)から分岐床を開始し、
   // 分岐で外した slice2 の本線側面壁の奥から分岐通路の内側壁を立ち上げる。
@@ -222,21 +244,18 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
   const dir = isLeft ? -1 : 1;
 
   const anchorSlice = slices[1];
-  const anchorY = anchorSlice.near.y;
-  const anchorXLeft = anchorSlice.near.left;
-  const anchorXRight = anchorSlice.near.right;
-  const anchorX = isLeft ? anchorXLeft : anchorXRight;
+  const mainNear = isLeft ? mainCorners.nearLeft : mainCorners.nearRight;
 
   const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
   const widthNear = mainWidth * 0.6;
   const widthFar = widthNear * 0.7;
   const depth = 28;
-  const farY = anchorY - depth;
+  const farY = mainNear.y - depth;
   const innerShift = 10;
 
-  const nearInner = { x: anchorX, y: anchorY };
-  const nearOuter = { x: anchorX + dir * widthNear, y: anchorY };
-  const farInner = { x: anchorX + dir * innerShift, y: farY };
+  const nearInner = { x: mainNear.x, y: mainNear.y };
+  const nearOuter = { x: mainNear.x + dir * widthNear, y: mainNear.y };
+  const farInner = { x: mainNear.x + dir * innerShift, y: farY };
   const farOuter = { x: farInner.x + dir * widthFar, y: farY };
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
@@ -246,18 +265,18 @@ function renderSideBranch(side: 'left' | 'right', slices: SliceGeometry[]): stri
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
-    { x: anchorX, y: anchorY },
-    { x: farInner.x, y: farY },
+    { x: nearInner.x, y: nearInner.y },
+    { x: farInner.x, y: farInner.y },
     { x: farInner.x, y: 0 },
-    { x: anchorX, y: 0 },
+    { x: nearInner.x, y: 0 },
   ];
   const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner"
     points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" />`;
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
-    { x: nearOuter.x, y: anchorY },
-    { x: farOuter.x, y: farY },
+    { x: nearOuter.x, y: nearOuter.y },
+    { x: farOuter.x, y: farOuter.y },
     { x: farOuter.x, y: 0 },
     { x: nearOuter.x, y: 0 },
   ];
@@ -280,9 +299,10 @@ function renderView(
   parts.push(renderCorridorWalls(slices, variant, openings));
 
   if (isBranchingVariant) {
+    const mainCorners = getMainFloorCornersForJunction(slices);
     // junction / goal 分岐: slice2 の床ラインから壁を1枚だけ抜き、横方向への短い通路をL字に挿し込む。
-    if (openings.left) parts.push(renderSideBranch('left', slices));
-    if (openings.right) parts.push(renderSideBranch('right', slices));
+    if (openings.left) parts.push(renderSideBranch('left', slices, mainCorners));
+    if (openings.right) parts.push(renderSideBranch('right', slices, mainCorners));
   }
 
   if (variant === 'goal') {
