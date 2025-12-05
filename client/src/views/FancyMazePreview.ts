@@ -153,9 +153,10 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
   return [wallPolygon, ...lines].join('\n');
 }
 
-// junction は 4スライスジオメトリではなく、固定ジオメトリのL字通路で描画する。
-// メイン通路の床と左右壁、左右の分岐床＋分岐壁、正面の奥壁を単純なポリゴンで構成する。
-function renderFixedJunctionView(openings: Openings): string {
+// junction (分岐ビュー):
+// スライスベースのジオメトリではなく、固定座標の十字路を描画する。
+// メイン通路の床と左右壁に加え、左右に90度に曲がる短い横通路を床＋側面壁で追加する。
+function renderJunctionCrossView(openings: Openings): string {
   const floorBottomY = HEIGHT - 10;
   const floorTopY = HEIGHT * 0.45;
   const floorNearLeft = 40;
@@ -165,140 +166,128 @@ function renderFixedJunctionView(openings: Openings): string {
 
   const parts: string[] = [];
 
-  const mainFloorPoints = [
+  const floorPoints = [
     { x: floorNearLeft, y: floorBottomY },
     { x: floorNearRight, y: floorBottomY },
     { x: floorFarRight, y: floorTopY },
     { x: floorFarLeft, y: floorTopY },
   ];
   parts.push(
-    `<polygon data-junction-element="main-floor" points="${joinPoints(
-      mainFloorPoints,
-    )}" fill="${COLOR_FLOOR}" />`,
+    `<polygon data-main-floor="true" points="${joinPoints(floorPoints)}" fill="${COLOR_FLOOR}" />`,
   );
 
   const leftWallPoints = [
     { x: floorNearLeft, y: floorBottomY },
-    { x: floorNearLeft, y: 0 },
-    { x: floorFarLeft, y: 0 },
     { x: floorFarLeft, y: floorTopY },
+    { x: floorFarLeft, y: 0 },
+    { x: floorNearLeft, y: 0 },
   ];
   parts.push(
-    `<polygon data-junction-element="left-wall" points="${joinPoints(
-      leftWallPoints,
-    )}" fill="${COLOR_WALL}" />`,
+    `<polygon data-main-wall="left" points="${joinPoints(leftWallPoints)}" fill="${COLOR_WALL}" />`,
   );
 
   const rightWallPoints = [
     { x: floorNearRight, y: floorBottomY },
-    { x: floorNearRight, y: 0 },
-    { x: floorFarRight, y: 0 },
     { x: floorFarRight, y: floorTopY },
+    { x: floorFarRight, y: 0 },
+    { x: floorNearRight, y: 0 },
   ];
   parts.push(
-    `<polygon data-junction-element="right-wall" points="${joinPoints(
-      rightWallPoints,
-    )}" fill="${COLOR_WALL}" />`,
+    `<polygon data-main-wall="right" points="${joinPoints(rightWallPoints)}" fill="${COLOR_WALL}" />`,
   );
 
-  const branchDepth = 40;
-  const branchWidthNear = 80;
-  const branchWidthFar = 60;
+  const branchDepth = 30;
+  const branchNearY = HEIGHT - 30;
+  const branchFarY = branchNearY - branchDepth;
 
   if (openings.left) {
-    const leftBranchNearY = floorBottomY - 10;
-    const leftBranchFarY = leftBranchNearY - branchDepth;
-
-    const leftBranchNearInner = { x: floorNearLeft, y: leftBranchNearY };
-    const leftBranchNearOuter = { x: floorNearLeft - branchWidthNear, y: leftBranchNearY };
-    const leftBranchFarOuter = { x: floorNearLeft - branchWidthFar, y: leftBranchFarY };
-    const leftBranchFarInner = { x: floorNearLeft + 10, y: leftBranchFarY };
+    const branchNearInnerX = floorNearLeft;
+    const branchNearOuterX = floorNearLeft - 80;
+    const branchFarOuterX = branchNearOuterX + 20;
+    const branchFarInnerX = branchNearInnerX + 10;
 
     const leftBranchFloorPoints = [
-      leftBranchNearInner,
-      leftBranchNearOuter,
-      leftBranchFarOuter,
-      leftBranchFarInner,
+      { x: branchNearInnerX, y: branchNearY },
+      { x: branchNearOuterX, y: branchNearY },
+      { x: branchFarOuterX, y: branchFarY },
+      { x: branchFarInnerX, y: branchFarY },
     ];
     parts.push(
-      `<polygon data-junction-branch="left" data-junction-part="floor" points="${joinPoints(
+      `<polygon data-branch="left" points="${joinPoints(
         leftBranchFloorPoints,
       )}" fill="${COLOR_FLOOR}" />`,
     );
 
     const leftInnerWallPoints = [
-      leftBranchNearInner,
-      leftBranchFarInner,
-      { x: leftBranchFarInner.x, y: 0 },
-      { x: leftBranchNearInner.x, y: 0 },
+      { x: branchNearInnerX, y: branchNearY },
+      { x: branchFarInnerX, y: branchFarY },
+      { x: branchFarInnerX, y: 0 },
+      { x: branchNearInnerX, y: 0 },
     ];
     parts.push(
-      `<polygon data-junction-branch="left" data-junction-part="inner-wall" points="${joinPoints(
+      `<polygon data-branch-wall="left" data-position="inner" points="${joinPoints(
         leftInnerWallPoints,
       )}" fill="${COLOR_WALL}" />`,
     );
 
     const leftOuterWallPoints = [
-      leftBranchNearOuter,
-      leftBranchFarOuter,
-      { x: leftBranchFarOuter.x, y: 0 },
-      { x: leftBranchNearOuter.x, y: 0 },
+      { x: branchNearOuterX, y: branchNearY },
+      { x: branchFarOuterX, y: branchFarY },
+      { x: branchFarOuterX, y: 0 },
+      { x: branchNearOuterX, y: 0 },
     ];
     parts.push(
-      `<polygon data-junction-branch="left" data-junction-part="outer-wall" points="${joinPoints(
+      `<polygon data-branch-wall="left" data-position="outer" points="${joinPoints(
         leftOuterWallPoints,
-      )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`,
+      )}" fill="${COLOR_WALL}" />`,
     );
   }
 
   if (openings.right) {
-    const rightBranchNearY = floorBottomY - 10;
-    const rightBranchFarY = rightBranchNearY - branchDepth;
-
-    const rightBranchNearInner = { x: floorNearRight, y: rightBranchNearY };
-    const rightBranchNearOuter = { x: floorNearRight + branchWidthNear, y: rightBranchNearY };
-    const rightBranchFarOuter = { x: floorNearRight + branchWidthFar, y: rightBranchFarY };
-    const rightBranchFarInner = { x: floorNearRight - 10, y: rightBranchFarY };
+    const branchNearInnerX = floorNearRight;
+    const branchNearOuterX = floorNearRight + 80;
+    const branchFarOuterX = branchNearOuterX - 20;
+    const branchFarInnerX = branchNearInnerX - 10;
 
     const rightBranchFloorPoints = [
-      rightBranchNearInner,
-      rightBranchNearOuter,
-      rightBranchFarOuter,
-      rightBranchFarInner,
+      { x: branchNearInnerX, y: branchNearY },
+      { x: branchNearOuterX, y: branchNearY },
+      { x: branchFarOuterX, y: branchFarY },
+      { x: branchFarInnerX, y: branchFarY },
     ];
     parts.push(
-      `<polygon data-junction-branch="right" data-junction-part="floor" points="${joinPoints(
+      `<polygon data-branch="right" points="${joinPoints(
         rightBranchFloorPoints,
       )}" fill="${COLOR_FLOOR}" />`,
     );
 
     const rightInnerWallPoints = [
-      rightBranchNearInner,
-      rightBranchFarInner,
-      { x: rightBranchFarInner.x, y: 0 },
-      { x: rightBranchNearInner.x, y: 0 },
+      { x: branchNearInnerX, y: branchNearY },
+      { x: branchFarInnerX, y: branchFarY },
+      { x: branchFarInnerX, y: 0 },
+      { x: branchNearInnerX, y: 0 },
     ];
     parts.push(
-      `<polygon data-junction-branch="right" data-junction-part="inner-wall" points="${joinPoints(
+      `<polygon data-branch-wall="right" data-position="inner" points="${joinPoints(
         rightInnerWallPoints,
       )}" fill="${COLOR_WALL}" />`,
     );
 
     const rightOuterWallPoints = [
-      rightBranchNearOuter,
-      rightBranchFarOuter,
-      { x: rightBranchFarOuter.x, y: 0 },
-      { x: rightBranchNearOuter.x, y: 0 },
+      { x: branchNearOuterX, y: branchNearY },
+      { x: branchFarOuterX, y: branchFarY },
+      { x: branchFarOuterX, y: 0 },
+      { x: branchNearOuterX, y: 0 },
     ];
     parts.push(
-      `<polygon data-junction-branch="right" data-junction-part="outer-wall" points="${joinPoints(
+      `<polygon data-branch-wall="right" data-position="outer" points="${joinPoints(
         rightOuterWallPoints,
-      )}" fill="${COLOR_WALL}" fill-opacity="0.9" />`,
+      )}" fill="${COLOR_WALL}" />`,
     );
   }
 
   parts.push(
-    `<rect data-junction-element="back-wall" x="${floorFarLeft}" y="0" width="${
+    `<rect data-back-wall="true" x="${floorFarLeft}" y="0" width="${
       floorFarRight - floorFarLeft
     }" height="${floorTopY}" fill="${COLOR_WALL_DARK}" />`,
   );
@@ -413,7 +402,8 @@ function renderView(
   stops: SliceStop[],
 ): string {
   if (variant === 'junction') {
-    return renderFixedJunctionView(openings);
+    // PlayerView -> createPerspectivePreviewSvg -> createFancyMazePreviewSvg -> renderView の経路で、junction はここから固定ジオメトリを描画する。
+    return renderJunctionCrossView(openings);
   }
 
   const parts: string[] = [];

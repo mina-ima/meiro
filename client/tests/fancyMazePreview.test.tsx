@@ -102,7 +102,7 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
-  it('分岐ビューは固定ジオメトリのメイン通路と奥壁を描画する', () => {
+  it('分岐ビューは十字路の基本要素（メイン床・左右壁・左右枝床・左右枝壁）を描画する', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -110,28 +110,26 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    expect(container.querySelector('polygon[data-junction-element="main-floor"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-junction-element="left-wall"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-junction-element="right-wall"]')).not.toBeNull();
-    expect(container.querySelector('rect[data-junction-element="back-wall"]')).not.toBeNull();
+    expect(container.querySelector('polygon[data-main-floor="true"]')).not.toBeNull();
+    expect(container.querySelector('polygon[data-main-wall="left"]')).not.toBeNull();
+    expect(container.querySelector('polygon[data-main-wall="right"]')).not.toBeNull();
+    expect(container.querySelector('polygon[data-branch="left"]')).not.toBeNull();
+    expect(container.querySelector('polygon[data-branch="right"]')).not.toBeNull();
+    expect(container.querySelector('[data-branch-wall="left"]')).not.toBeNull();
+    expect(container.querySelector('[data-branch-wall="right"]')).not.toBeNull();
   });
 
-  it('分岐ビューはopeningsに応じて左右の枝通路のみ描画する', () => {
+  it('分岐ビューはopeningsに応じて片側だけ枝通路を描画する', () => {
     const leftOnly = renderPreview('junction', {
       forward: true,
       left: true,
       right: false,
       backward: false,
     });
-    expect(
-      leftOnly.container.querySelector('polygon[data-junction-branch="left"][data-junction-part="floor"]'),
-    ).not.toBeNull();
-    expect(
-      leftOnly.container.querySelector('polygon[data-junction-branch="right"][data-junction-part="floor"]'),
-    ).toBeNull();
-    expect(
-      leftOnly.container.querySelector('polygon[data-junction-branch="left"][data-junction-part="inner-wall"]'),
-    ).not.toBeNull();
+    expect(leftOnly.container.querySelector('polygon[data-branch="left"]')).not.toBeNull();
+    expect(leftOnly.container.querySelector('[data-branch-wall="left"]')).not.toBeNull();
+    expect(leftOnly.container.querySelector('polygon[data-branch="right"]')).toBeNull();
+    expect(leftOnly.container.querySelector('[data-branch-wall="right"]')).toBeNull();
 
     const rightOnly = renderPreview('junction', {
       forward: true,
@@ -139,15 +137,10 @@ describe('FancyMazePreview', () => {
       right: true,
       backward: false,
     });
-    expect(
-      rightOnly.container.querySelector('polygon[data-junction-branch="right"][data-junction-part="floor"]'),
-    ).not.toBeNull();
-    expect(
-      rightOnly.container.querySelector('polygon[data-junction-branch="left"][data-junction-part="floor"]'),
-    ).toBeNull();
-    expect(
-      rightOnly.container.querySelector('polygon[data-junction-branch="right"][data-junction-part="outer-wall"]'),
-    ).not.toBeNull();
+    expect(rightOnly.container.querySelector('polygon[data-branch="right"]')).not.toBeNull();
+    expect(rightOnly.container.querySelector('[data-branch-wall="right"]')).not.toBeNull();
+    expect(rightOnly.container.querySelector('polygon[data-branch="left"]')).toBeNull();
+    expect(rightOnly.container.querySelector('[data-branch-wall="left"]')).toBeNull();
   });
 
   it('ゴールビューは最奥の前壁スライスにポータルを設置する', () => {
