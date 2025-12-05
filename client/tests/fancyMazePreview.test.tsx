@@ -16,7 +16,7 @@ function renderPreview(
   return render(<div dangerouslySetInnerHTML={{ __html: svg }} />);
 }
 
-function parsePoints(pointsAttr: string | null) {
+function parsePoints(pointsAttr: string | null | undefined) {
   if (!pointsAttr) return [];
   return pointsAttr
     .trim()
@@ -102,7 +102,7 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
-  it('分岐ビューは十字路の基本要素（メイン床・左右壁・左右枝床・左右枝壁）を描画する', () => {
+  it('分岐ビューは slice2 の床稜線から左右分岐を繋げる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -110,13 +110,37 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    expect(container.querySelector('polygon[data-main-floor="true"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-main-wall="left"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-main-wall="right"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-branch="left"]')).not.toBeNull();
-    expect(container.querySelector('polygon[data-branch="right"]')).not.toBeNull();
-    expect(container.querySelector('[data-branch-wall="left"]')).not.toBeNull();
-    expect(container.querySelector('[data-branch-wall="right"]')).not.toBeNull();
+    const slice2Floor = container.querySelector('polygon[data-layer="floor"][data-slice="2"]');
+    expect(slice2Floor).not.toBeNull();
+    const slice2Points = parsePoints(slice2Floor?.getAttribute('points') ?? '');
+    const anchorY = Math.max(...slice2Points.map((p) => p.y));
+    const nearPoints = slice2Points.filter((p) => Math.abs(p.y - anchorY) < 0.001);
+    const anchorXLeft = Math.min(...nearPoints.map((p) => p.x));
+    const anchorXRight = Math.max(...nearPoints.map((p) => p.x));
+
+    const leftBranchFloor = container.querySelector('polygon[data-branch="left"][data-layer="floor"]');
+    const rightBranchFloor = container.querySelector('polygon[data-branch="right"][data-layer="floor"]');
+    expect(leftBranchFloor).not.toBeNull();
+    expect(rightBranchFloor).not.toBeNull();
+    const leftNearY = Math.max(...parsePoints(leftBranchFloor?.getAttribute('points')).map((p) => p.y));
+    const rightNearY = Math.max(...parsePoints(rightBranchFloor?.getAttribute('points')).map((p) => p.y));
+    expect(leftNearY).toBeCloseTo(anchorY, 3);
+    expect(rightNearY).toBeCloseTo(anchorY, 3);
+
+    const leftInnerWall = container.querySelector(
+      '[data-branch-wall="left"][data-branch-position="inner"]',
+    );
+    const rightInnerWall = container.querySelector(
+      '[data-branch-wall="right"][data-branch-position="inner"]',
+    );
+    expect(leftInnerWall).not.toBeNull();
+    expect(rightInnerWall).not.toBeNull();
+    const leftInnerPoints = parsePoints(leftInnerWall?.getAttribute('points'));
+    const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
+    expect(leftInnerPoints[0].x).toBeCloseTo(anchorXLeft, 3);
+    expect(leftInnerPoints[0].y).toBeCloseTo(anchorY, 3);
+    expect(rightInnerPoints[0].x).toBeCloseTo(anchorXRight, 3);
+    expect(rightInnerPoints[0].y).toBeCloseTo(anchorY, 3);
   });
 
   it('分岐ビューはopeningsに応じて片側だけ枝通路を描画する', () => {
