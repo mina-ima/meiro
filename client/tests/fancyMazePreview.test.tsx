@@ -355,9 +355,10 @@ describe('FancyMazePreview', () => {
     expect(portal).not.toBeNull();
   });
 
-  it('分岐床の手前端はスライス2の床ラインに揃い、壁の内側から連続する', () => {
+  it('分岐床の手前端はアンカーの床ラインに揃い、内側角がアンカー座標に一致する', () => {
     const stops = buildSliceStops();
     const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchorWidth = anchor.right - anchor.left;
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -372,24 +373,32 @@ describe('FancyMazePreview', () => {
     expect(leftBranch).not.toBeNull();
     expect(rightBranch).not.toBeNull();
 
-    const checkBranch = (points: { x: number; y: number }[], anchorX: number) => {
-      expect(points.length).toBeGreaterThan(0);
-      const nearY = Math.max(...points.map((p) => p.y));
-      const farY = Math.min(...points.map((p) => p.y));
-      const nearXs = points.filter((p) => Math.abs(p.y - nearY) < 0.001).map((p) => p.x);
-      expect(nearY).toBeCloseTo(anchor.y, 0.5);
-      const maxNearX = Math.max(...nearXs);
-      const minNearX = Math.min(...nearXs);
-      const expectedInner = anchorX < VIEW_WIDTH / 2 ? maxNearX : minNearX;
-      expect(expectedInner).toBeCloseTo(anchorX, 0.5);
-      expect(points.some((p) => Math.abs(p.x - anchorX) < 0.5 && Math.abs(p.y - anchor.y) < 0.5)).toBe(
-        true,
-      );
-      expect(farY).toBeLessThan(nearY);
+    const assertBranch = (metrics: ReturnType<typeof branchMetrics>, anchorX: number) => {
+      expect(metrics.nearY).toBeGreaterThanOrEqual(anchor.y - 0.6);
+      expect(metrics.nearY).toBeLessThanOrEqual(anchor.y + 0.6);
+      expect(metrics.farY).toBeLessThan(metrics.nearY);
+      const anchorInner = anchorX < VIEW_WIDTH / 2 ? metrics.nearMaxX : metrics.nearMinX;
+      expect(Math.abs(anchorInner - anchorX)).toBeLessThanOrEqual(0.3);
     };
 
-    checkBranch(parsePoints(leftBranch?.getAttribute('points')), anchor.left);
-    checkBranch(parsePoints(rightBranch?.getAttribute('points')), anchor.right);
+    const leftMetrics = branchMetrics(parsePoints(leftBranch?.getAttribute('points')));
+    const rightMetrics = branchMetrics(parsePoints(rightBranch?.getAttribute('points')));
+    expect(Math.abs(leftMetrics.nearMaxX - anchor.left)).toBeLessThanOrEqual(0.3);
+    expect(Math.abs(rightMetrics.nearMinX - anchor.right)).toBeLessThanOrEqual(0.3);
+    expect(anchor.left - leftMetrics.nearMinX).toBeLessThan(anchorWidth * 0.4);
+    expect(rightMetrics.nearMaxX - anchor.right).toBeLessThan(anchorWidth * 0.4);
+    assertBranch(leftMetrics, anchor.left);
+    assertBranch(rightMetrics, anchor.right);
+    expect(
+      parsePoints(leftBranch?.getAttribute('points')).some(
+        (p) => Math.abs(p.x - anchor.left) < 0.3 && Math.abs(p.y - anchor.y) < 0.3,
+      ),
+    ).toBe(true);
+    expect(
+      parsePoints(rightBranch?.getAttribute('points')).some(
+        (p) => Math.abs(p.x - anchor.right) < 0.3 && Math.abs(p.y - anchor.y) < 0.3,
+      ),
+    ).toBe(true);
   });
 
   it('分岐床は壁より後ろで描画され、壁が手前で床を隠せるDOM順になっている', () => {
@@ -464,7 +473,7 @@ describe('FancyMazePreview', () => {
     assertBranch('[data-role="branch-floor-right"]', anchor.right, 'right');
   });
 
-  it('分岐壁は枝位置から奥に向かってのみ伸び、手前のメイン通路に食い込まない', () => {
+  it('分岐壁の根元はアンカー座標と一致し、床と連続して奥へ伸びる', () => {
     const stops = buildSliceStops();
     const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
     const { container } = renderPreview('junction', {
@@ -486,8 +495,10 @@ describe('FancyMazePreview', () => {
     const assertWall = (points: { x: number; y: number }[], anchorX: number) => {
       expect(points.length).toBeGreaterThan(0);
       const baseY = Math.max(...points.map((p) => p.y));
-      expect(baseY).toBeCloseTo(anchor.y, 0.5);
-      expect(points).toContainEqual({ x: anchorX, y: anchor.y });
+      expect(Math.abs(baseY - anchor.y)).toBeLessThanOrEqual(0.3);
+      expect(
+        points.some((p) => Math.abs(p.x - anchorX) < 0.3 && Math.abs(p.y - anchor.y) < 0.3),
+      ).toBe(true);
       expect(Math.min(...points.map((p) => p.y))).toBeLessThan(baseY);
     };
 

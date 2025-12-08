@@ -256,6 +256,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-26): FancyMazePreview junction/goal の BRANCH_* を控えめに戻し、消失点補正を外して分岐床が slice2 より手前に出ないよう調整。分岐パースのテストを緩和し、メイン床の見通しを優先（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-27): FancyMazePreview junction/goal の描画順を床→分岐床→壁→前壁に整理し、分岐床が左右のメイン壁や分岐壁の上に帯状にかぶらないようDOM順を修正（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` にDOM順テストを追加）
 * 更新メモ(2026-01-28): FancyMazePreview junction/goal の分岐床を anchor 起点の短い台形に再調整し、遠方でわずかに外へ逃がす側方シフトを追加。goal ではポータル光の床グローを重ね、テストに nearY>=anchor・farY<nearY・farXの外向きシフトを確認するアサーションを追加（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+* 更新メモ(2026-01-29): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter と内外壁の根元を slice2 アンカー(stop.y/left/right)に厳密に揃え、near 側をアンカー深度に固定し far 側だけ BRANCH_DEPTH_DELTA で奥行きを取るよう調整。branchMetrics で anchorStop との nearY/X 一致と壁根元の座標一致を検証（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 
 ### 8.2 オーナー
 

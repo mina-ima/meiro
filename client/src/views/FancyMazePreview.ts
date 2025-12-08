@@ -304,20 +304,33 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
   const direction = isLeft ? -1 : 1;
   const nearDepth = anchorDepth;
   const farDepth = Math.min(SLICE_COUNT, anchorDepth + BRANCH_DEPTH_DELTA);
-  const anchorX = isLeft ? -0.5 : 0.5;
+  const anchorStop = corridorStopAt(nearDepth);
+  const farStop = corridorStopAt(farDepth);
+  const anchorWidth = anchorStop.right - anchorStop.left;
+  const farWidth = farStop.right - farStop.left;
+  const anchorEdgeX = isLeft ? anchorStop.left : anchorStop.right;
+  const farEdgeXBase = isLeft ? farStop.left : farStop.right;
 
-  const branchNearInner = projectFloorPoint(anchorX, nearDepth);
-  const branchNearOuter = projectFloorPoint(anchorX + direction * BRANCH_NEAR_SPAN, nearDepth);
-  const branchFarInner = projectFloorPoint(anchorX + direction * BRANCH_INNER_TAPER, farDepth);
-  const branchFarOuter = projectFloorPoint(
-    anchorX + direction * (BRANCH_NEAR_SPAN + BRANCH_FAR_EXTRA_SPAN),
-    farDepth,
-  );
-
-  // 遠方でほんの少しだけ外側へずらし、“横通路”の伸びを見せる
-  const lateralShift = direction * BRANCH_FAR_LATERAL_SHIFT;
-  branchFarInner.x += lateralShift * 0.35;
-  branchFarOuter.x += lateralShift;
+  // アンカー位置を厳密に基準とした分岐床の角
+  const branchNearInner = { x: anchorEdgeX, y: anchorStop.y };
+  const branchNearOuter = {
+    x: anchorEdgeX + direction * (anchorWidth * BRANCH_NEAR_SPAN),
+    y: anchorStop.y,
+  };
+  const branchFarInner = {
+    x:
+      farEdgeXBase +
+      direction * (farWidth * BRANCH_INNER_TAPER) +
+      direction * BRANCH_FAR_LATERAL_SHIFT * 0.35,
+    y: farStop.y,
+  };
+  const branchFarOuter = {
+    x:
+      farEdgeXBase +
+      direction * (farWidth * (BRANCH_NEAR_SPAN + BRANCH_FAR_EXTRA_SPAN)) +
+      direction * BRANCH_FAR_LATERAL_SHIFT,
+    y: farStop.y,
+  };
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
