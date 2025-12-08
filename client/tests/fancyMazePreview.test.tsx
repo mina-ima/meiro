@@ -442,6 +442,16 @@ describe('FancyMazePreview', () => {
       expect(nearY).toBeGreaterThanOrEqual(anchor.y - 0.01);
       expect(nearY).toBeCloseTo(anchor.y, 0.5);
       expect(farY).toBeLessThan(nearY);
+      const nearXs = points.filter((p) => Math.abs(p.y - nearY) < 0.001).map((p) => p.x);
+      const farXs = points.filter((p) => Math.abs(p.y - farY) < 0.001).map((p) => p.x);
+
+      if (selector.includes('left')) {
+        expect(Math.min(...farXs)).toBeLessThan(Math.min(...nearXs));
+        expect(Math.max(...farXs)).toBeLessThan(Math.max(...nearXs));
+      } else {
+        expect(Math.max(...farXs)).toBeGreaterThan(Math.max(...nearXs));
+        expect(Math.min(...farXs)).toBeGreaterThan(Math.min(...nearXs));
+      }
 
     };
 

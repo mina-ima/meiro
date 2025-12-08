@@ -39,8 +39,9 @@ const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 const BRANCH_ANCHOR_SLICE_INDEX = 2;
 const BRANCH_WORLD_WIDTH = 0.95; // メイン通路幅とほぼ同じ太さで外に伸ばす
-const BRANCH_WORLD_LENGTH = 1.3; // 奥行き。アンカーより手前に出さないよう控えめに
+const BRANCH_WORLD_LENGTH = 1; // 奥行きは短め。アンカーより手前に出さない
 const BRANCH_TAPER = 0.18; // 遠方でわずかに絞る
+const BRANCH_FAR_LATERAL_SHIFT = 26; // 遠方でわずかに外へ寄せて“横通路”感を出す
 
 type SliceStop = {
   y: number;
@@ -256,8 +257,13 @@ function renderFloorGradient(): string {
     <defs>
       <linearGradient id="corridor-floor-grad" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_VANISH_Y}">
         <stop offset="0%" stop-color="${COLOR_FLOOR_BASE}" />
-      <stop offset="100%" stop-color="${COLOR_FLOOR_FAR}" />
-    </linearGradient>
+        <stop offset="100%" stop-color="${COLOR_FLOOR_FAR}" />
+      </linearGradient>
+      <linearGradient id="goal-floor-glow" x1="0" y1="${FLOOR_NEAR_Y}" x2="0" y2="${FLOOR_VANISH_Y}">
+        <stop offset="0%" stop-color="${COLOR_PORTAL}" stop-opacity="0" />
+        <stop offset="70%" stop-color="${COLOR_PORTAL}" stop-opacity="0" />
+        <stop offset="100%" stop-color="${COLOR_PORTAL}" stop-opacity="0.25" />
+      </linearGradient>
     </defs>`;
 }
 
@@ -271,6 +277,18 @@ function renderMainFloor(mainFloor: FloorCorners): string {
   return `<polygon data-layer="floor" data-role="main-floor" points="${joinPoints(
     mainFloorPoints,
   )}" fill="url(#corridor-floor-grad)" />`;
+}
+
+function renderGoalFloorGlow(mainFloor: FloorCorners): string {
+  const points = [
+    { x: mainFloor.nearLeft.x, y: mainFloor.nearLeft.y },
+    { x: mainFloor.nearRight.x, y: mainFloor.nearRight.y },
+    { x: mainFloor.farRight.x, y: mainFloor.farRight.y },
+    { x: mainFloor.farLeft.x, y: mainFloor.farLeft.y },
+  ];
+  return `<polygon data-layer="floor" data-role="goal-floor-glow" points="${joinPoints(
+    points,
+  )}" fill="url(#goal-floor-glow)" />`;
 }
 
 type BranchParts = {
@@ -292,6 +310,11 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
   const branchNearOuter = projectFloorPoint(outerX, nearDepth);
   const branchFarInner = projectFloorPoint(anchorX + taper * 0.6, farDepth);
   const branchFarOuter = projectFloorPoint(outerX + taper, farDepth);
+
+  // 遠方でほんの少しだけ外側へずらし、“横通路”の伸びを見せる
+  const lateralShift = (isLeft ? -1 : 1) * BRANCH_FAR_LATERAL_SHIFT;
+  branchFarInner.x += lateralShift * 0.35;
+  branchFarOuter.x += lateralShift;
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
@@ -397,6 +420,7 @@ function renderGoalView(
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
+  parts.push(renderGoalFloorGlow(mainFloor));
   parts.push(...branchParts.floors);
   parts.push(renderCorridorWalls(slices, 'goal', openings));
   parts.push(...branchParts.walls);
