@@ -10,12 +10,14 @@ const dummyDirections: Direction[] = [];
 
 const VIEW_WIDTH = 320;
 const VIEW_HEIGHT = 180;
+const SLICE_COUNT = 4;
 const VIEW_FLOOR_Y = VIEW_HEIGHT - 10;
 const VIEW_HORIZON_Y = VIEW_HEIGHT * 0.35;
 const VIEW_FLOOR_NEAR_LEFT = 40;
 const VIEW_FLOOR_NEAR_RIGHT = VIEW_WIDTH - 40;
 const VIEW_FLOOR_FAR_LEFT = VIEW_WIDTH * 0.5 - 60;
 const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
+const BRANCH_ANCHOR_SLICE_INDEX = 2;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -45,6 +47,31 @@ function edgeWidths(points: { x: number; y: number }[]) {
   const nearWidth = Math.max(...nearXs) - Math.min(...nearXs);
   const farWidth = Math.max(...farXs) - Math.min(...farXs);
   return { nearWidth, farWidth, nearY, farY };
+}
+
+function buildSliceStops() {
+  const stops: { y: number; left: number; right: number }[] = [];
+  for (let i = 0; i <= SLICE_COUNT; i += 1) {
+    const t = i / SLICE_COUNT;
+    stops.push({
+      y: VIEW_FLOOR_Y + (VIEW_HORIZON_Y - VIEW_FLOOR_Y) * t,
+      left: VIEW_FLOOR_NEAR_LEFT + (VIEW_FLOOR_FAR_LEFT - VIEW_FLOOR_NEAR_LEFT) * t,
+      right: VIEW_FLOOR_NEAR_RIGHT + (VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_NEAR_RIGHT) * t,
+    });
+  }
+  return stops;
+}
+
+function projectFloorPointForTest(x: number, depth: number) {
+  const t = depth / SLICE_COUNT;
+  const width =
+    VIEW_FLOOR_NEAR_RIGHT -
+    VIEW_FLOOR_NEAR_LEFT +
+    (VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_FAR_LEFT - (VIEW_FLOOR_NEAR_RIGHT - VIEW_FLOOR_NEAR_LEFT)) * t;
+  return {
+    x: VIEW_WIDTH / 2 + x * width,
+    y: VIEW_FLOOR_Y + (VIEW_HORIZON_Y - VIEW_FLOOR_Y) * t,
+  };
 }
 
 describe('FancyMazePreview', () => {
@@ -85,12 +112,12 @@ describe('FancyMazePreview', () => {
     const mainFloor = container.querySelector('polygon[data-role="main-floor"]');
     expect(mainFloor).not.toBeNull();
     const points = parsePoints(mainFloor?.getAttribute('points'));
-    expect(points).toEqual([
-      { x: VIEW_FLOOR_NEAR_LEFT, y: VIEW_FLOOR_Y },
-      { x: VIEW_FLOOR_NEAR_RIGHT, y: VIEW_FLOOR_Y },
-      { x: VIEW_FLOOR_FAR_RIGHT, y: VIEW_HORIZON_Y },
-      { x: VIEW_FLOOR_FAR_LEFT, y: VIEW_HORIZON_Y },
-    ]);
+    expect(points[0]).toEqual({ x: VIEW_FLOOR_NEAR_LEFT, y: VIEW_FLOOR_Y });
+    expect(points[1]).toEqual({ x: VIEW_FLOOR_NEAR_RIGHT, y: VIEW_FLOOR_Y });
+    expect(points[2].x).toBeCloseTo(VIEW_FLOOR_FAR_RIGHT, 0.01);
+    expect(points[2].y).toBeCloseTo(VIEW_HORIZON_Y, 0.01);
+    expect(points[3].x).toBeCloseTo(VIEW_FLOOR_FAR_LEFT, 0.01);
+    expect(points[3].y).toBeCloseTo(VIEW_HORIZON_Y, 0.01);
   });
 
   it('左右壁のレンガ行数はスライスが進むほど増える', () => {
@@ -140,7 +167,7 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const branchNearY = VIEW_FLOOR_Y - 8;
+    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
     const leftBranchFloor = container.querySelector(
       'polygon[data-branch="left"][data-layer="floor"]',
     );
@@ -154,10 +181,10 @@ describe('FancyMazePreview', () => {
     const rightBranchPoints = parsePoints(rightBranchFloor?.getAttribute('points'));
     const leftNearY = Math.max(...leftBranchPoints.map((p) => p.y));
     const rightNearY = Math.max(...rightBranchPoints.map((p) => p.y));
-    expect(leftNearY).toBeCloseTo(branchNearY, 0.01);
-    expect(rightNearY).toBeCloseTo(branchNearY, 0.01);
-    expect(leftBranchPoints).toContainEqual({ x: VIEW_FLOOR_NEAR_LEFT, y: branchNearY });
-    expect(rightBranchPoints).toContainEqual({ x: VIEW_FLOOR_NEAR_RIGHT, y: branchNearY });
+    expect(leftNearY).toBeCloseTo(anchorStop.y, 0.01);
+    expect(rightNearY).toBeCloseTo(anchorStop.y, 0.01);
+    expect(leftBranchPoints).toContainEqual({ x: anchorStop.left, y: anchorStop.y });
+    expect(rightBranchPoints).toContainEqual({ x: anchorStop.right, y: anchorStop.y });
 
     expect(
       container.querySelectorAll('[data-layer="wall"][data-wall-side="left"][data-slice="2"]')
@@ -179,8 +206,8 @@ describe('FancyMazePreview', () => {
 
     const leftInnerPoints = parsePoints(leftInnerWall?.getAttribute('points'));
     const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
-    expect(leftInnerPoints[0]).toEqual({ x: VIEW_FLOOR_NEAR_LEFT, y: branchNearY });
-    expect(rightInnerPoints[0]).toEqual({ x: VIEW_FLOOR_NEAR_RIGHT, y: branchNearY });
+    expect(leftInnerPoints[0]).toEqual({ x: anchorStop.left, y: anchorStop.y });
+    expect(rightInnerPoints[0]).toEqual({ x: anchorStop.right, y: anchorStop.y });
   });
 
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
@@ -267,15 +294,15 @@ describe('FancyMazePreview', () => {
     expect(leftSlice2Walls.length).toBe(1);
     expect(rightSlice2Walls.length).toBe(1);
 
-    const branchNearY = VIEW_FLOOR_Y - 8;
+    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
     const leftNearY = Math.max(
       ...parsePoints(leftBranchFloors[0].getAttribute('points')).map((p) => p.y),
     );
     const rightNearY = Math.max(
       ...parsePoints(rightBranchFloors[0].getAttribute('points')).map((p) => p.y),
     );
-    expect(leftNearY).toBeCloseTo(branchNearY, 0.01);
-    expect(rightNearY).toBeCloseTo(branchNearY, 0.01);
+    expect(leftNearY).toBeCloseTo(anchorStop.y, 0.01);
+    expect(rightNearY).toBeCloseTo(anchorStop.y, 0.01);
 
     const frontWall = container.querySelector('[data-wall-side="front"]');
     const portal = container.querySelector('[data-goal-portal="true"]');
@@ -308,15 +335,84 @@ describe('FancyMazePreview', () => {
     expect(leftBranchFloors.length).toBe(1);
     expect(rightBranchFloors.length).toBe(0);
 
-    const branchNearY = VIEW_FLOOR_Y - 8;
+    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
     const leftLayer1 = edgeWidths(parsePoints(leftBranchFloors[0].getAttribute('points')));
-    expect(leftLayer1.nearY).toBeCloseTo(branchNearY, 0.5);
+    expect(leftLayer1.nearY).toBeCloseTo(anchorStop.y, 0.5);
     const leftNearXs = parsePoints(leftBranchFloors[0].getAttribute('points'))
       .filter((p) => Math.abs(p.y - leftLayer1.nearY) < 0.001)
       .map((p) => p.x);
-    expect(Math.min(...leftNearXs)).toBeCloseTo(VIEW_FLOOR_NEAR_LEFT - 80, 5);
+    const expectedOuterNear = projectFloorPointForTest(-0.5 - 1, BRANCH_ANCHOR_SLICE_INDEX).x;
+    expect(Math.min(...leftNearXs)).toBeCloseTo(expectedOuterNear, 5);
 
     const portal = container.querySelector('[data-goal-portal="true"]');
     expect(portal).not.toBeNull();
+  });
+
+  it('分岐床の手前端はスライス2の床ラインに揃い、壁の内側から連続する', () => {
+    const stops = buildSliceStops();
+    const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftBranch = container.querySelector<SVGPolygonElement>('[data-role="branch-floor-left"]');
+    const rightBranch = container.querySelector<SVGPolygonElement>(
+      '[data-role="branch-floor-right"]',
+    );
+    expect(leftBranch).not.toBeNull();
+    expect(rightBranch).not.toBeNull();
+
+    const checkBranch = (points: { x: number; y: number }[], anchorX: number) => {
+      expect(points.length).toBeGreaterThan(0);
+      const nearY = Math.max(...points.map((p) => p.y));
+      const farY = Math.min(...points.map((p) => p.y));
+      const nearXs = points.filter((p) => Math.abs(p.y - nearY) < 0.001).map((p) => p.x);
+      expect(nearY).toBeCloseTo(anchor.y, 0.5);
+      const maxNearX = Math.max(...nearXs);
+      const minNearX = Math.min(...nearXs);
+      const expectedInner = anchorX < VIEW_WIDTH / 2 ? maxNearX : minNearX;
+      expect(expectedInner).toBeCloseTo(anchorX, 0.5);
+      expect(points.some((p) => Math.abs(p.x - anchorX) < 0.5 && Math.abs(p.y - anchor.y) < 0.5)).toBe(
+        true,
+      );
+      expect(farY).toBeLessThan(nearY);
+    };
+
+    checkBranch(parsePoints(leftBranch?.getAttribute('points')), anchor.left);
+    checkBranch(parsePoints(rightBranch?.getAttribute('points')), anchor.right);
+  });
+
+  it('分岐壁は枝位置から奥に向かってのみ伸び、手前のメイン通路に食い込まない', () => {
+    const stops = buildSliceStops();
+    const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftWall = container.querySelector<SVGPolygonElement>(
+      '[data-role="branch-wall-left-inner"]',
+    );
+    const rightWall = container.querySelector<SVGPolygonElement>(
+      '[data-role="branch-wall-right-inner"]',
+    );
+    expect(leftWall).not.toBeNull();
+    expect(rightWall).not.toBeNull();
+
+    const assertWall = (points: { x: number; y: number }[], anchorX: number) => {
+      expect(points.length).toBeGreaterThan(0);
+      const baseY = Math.max(...points.map((p) => p.y));
+      expect(baseY).toBeCloseTo(anchor.y, 0.5);
+      expect(points).toContainEqual({ x: anchorX, y: anchor.y });
+      expect(Math.min(...points.map((p) => p.y))).toBeLessThan(baseY);
+    };
+
+    assertWall(parsePoints(leftWall?.getAttribute('points')), anchor.left);
+    assertWall(parsePoints(rightWall?.getAttribute('points')), anchor.right);
   });
 });

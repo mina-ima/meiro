@@ -24,6 +24,9 @@ const FLOOR_NEAR_Y = VIEW_FLOOR_Y;
 const FLOOR_VANISH_Y = VIEW_HORIZON_Y;
 const VANISH_POINT = { x: WIDTH / 2, y: VIEW_HORIZON_Y };
 const FLOOR_FAR_WIDTH = VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_FAR_LEFT;
+const CORRIDOR_NEAR_WIDTH = VIEW_FLOOR_NEAR_RIGHT - VIEW_FLOOR_NEAR_LEFT;
+const CORRIDOR_FAR_WIDTH = VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_FAR_LEFT;
+const VIEW_CENTER_X = WIDTH / 2;
 
 const COLOR_BG = '#050608';
 const COLOR_FLOOR_BASE = '#70757d';
@@ -55,17 +58,12 @@ type FloorCorners = {
   farRight: { x: number; y: number };
 };
 
-function getMainFloorCorners(): FloorCorners {
-  return {
-    nearLeft: { x: VIEW_FLOOR_NEAR_LEFT, y: VIEW_FLOOR_Y },
-    nearRight: { x: VIEW_FLOOR_NEAR_RIGHT, y: VIEW_FLOOR_Y },
-    farRight: { x: VIEW_FLOOR_FAR_RIGHT, y: VIEW_HORIZON_Y },
-    farLeft: { x: VIEW_FLOOR_FAR_LEFT, y: VIEW_HORIZON_Y },
-  };
-}
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function mixColor(base: string, overlay: string, t: number): string {
@@ -86,14 +84,36 @@ function joinPoints(points: { x: number; y: number }[]): string {
   return points.map((p) => `${p.x},${p.y}`).join(' ');
 }
 
-function buildSliceStops(mainFloor: FloorCorners): SliceStop[] {
+function projectFloorPoint(x: number, depth: number): { x: number; y: number } {
+  const t = clamp(depth / SLICE_COUNT, 0, 1);
+  const width = lerp(CORRIDOR_NEAR_WIDTH, CORRIDOR_FAR_WIDTH, t);
+  return {
+    x: VIEW_CENTER_X + x * width,
+    y: lerp(FLOOR_NEAR_Y, FLOOR_VANISH_Y, t),
+  };
+}
+
+function corridorStopAt(depth: number): SliceStop {
+  const left = projectFloorPoint(-0.5, depth);
+  const right = projectFloorPoint(0.5, depth);
+  return { y: left.y, left: left.x, right: right.x };
+}
+
+function getMainFloorCorners(): FloorCorners {
+  const near = corridorStopAt(0);
+  const far = corridorStopAt(SLICE_COUNT);
+  return {
+    nearLeft: { x: near.left, y: near.y },
+    nearRight: { x: near.right, y: near.y },
+    farRight: { x: far.right, y: far.y },
+    farLeft: { x: far.left, y: far.y },
+  };
+}
+
+function buildSliceStops(): SliceStop[] {
   const stops: SliceStop[] = [];
   for (let i = 0; i <= SLICE_COUNT; i += 1) {
-    const t = i / SLICE_COUNT;
-    const y = lerp(mainFloor.nearLeft.y, mainFloor.farLeft.y, t);
-    const left = lerp(mainFloor.nearLeft.x, mainFloor.farLeft.x, t);
-    const right = lerp(mainFloor.nearRight.x, mainFloor.farRight.x, t);
-    stops.push({ y, left, right });
+    stops.push(corridorStopAt(i));
   }
   return stops;
 }
@@ -256,25 +276,23 @@ type BranchParts = {
   outerWall: string;
 };
 
-// junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
-function renderSideBranch(side: 'left' | 'right'): BranchParts {
-  const isLeft = side === 'left';
-  const branchDepth = 30;
-  const branchNearY = VIEW_FLOOR_Y - 8;
-  const branchFarY = branchNearY - branchDepth;
+const BRANCH_WORLD_WIDTH = 1; // メイン通路1本分の幅で横に伸ばす
+const BRANCH_WORLD_LENGTH = 1.35; // 奥行き（深さ）
+const BRANCH_TAPER = 0.15; // 遠くでやや細く見せるためのオフセット
 
-  const branchNearInner = isLeft
-    ? { x: VIEW_FLOOR_NEAR_LEFT, y: branchNearY }
-    : { x: VIEW_FLOOR_NEAR_RIGHT, y: branchNearY };
-  const branchNearOuter = isLeft
-    ? { x: VIEW_FLOOR_NEAR_LEFT - 80, y: branchNearY }
-    : { x: VIEW_FLOOR_NEAR_RIGHT + 80, y: branchNearY };
-  const branchFarOuter = isLeft
-    ? { x: VIEW_FLOOR_NEAR_LEFT - 60, y: branchFarY }
-    : { x: VIEW_FLOOR_NEAR_RIGHT + 60, y: branchFarY };
-  const branchFarInner = isLeft
-    ? { x: VIEW_FLOOR_NEAR_LEFT + 10, y: branchFarY }
-    : { x: VIEW_FLOOR_NEAR_RIGHT - 10, y: branchFarY };
+// junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
+function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchParts {
+  const isLeft = side === 'left';
+  const nearDepth = anchorDepth;
+  const farDepth = Math.min(SLICE_COUNT, anchorDepth + BRANCH_WORLD_LENGTH);
+  const anchorX = isLeft ? -0.5 : 0.5;
+  const outerX = isLeft ? anchorX - BRANCH_WORLD_WIDTH : anchorX + BRANCH_WORLD_WIDTH;
+  const taper = isLeft ? -BRANCH_TAPER : BRANCH_TAPER;
+
+  const branchNearInner = projectFloorPoint(anchorX, nearDepth);
+  const branchNearOuter = projectFloorPoint(outerX, nearDepth);
+  const branchFarInner = projectFloorPoint(anchorX + taper, farDepth);
+  const branchFarOuter = projectFloorPoint(outerX + taper, farDepth);
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
@@ -283,8 +301,8 @@ function renderSideBranch(side: 'left' | 'right'): BranchParts {
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
-    { x: branchNearInner.x, y: branchNearInner.y },
-    { x: branchFarInner.x, y: branchFarInner.y },
+    branchNearInner,
+    branchFarInner,
     { x: branchFarInner.x, y: 0 },
     { x: branchNearInner.x, y: 0 },
   ];
@@ -293,8 +311,8 @@ function renderSideBranch(side: 'left' | 'right'): BranchParts {
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
-    { x: branchNearOuter.x, y: branchNearY },
-    { x: branchFarOuter.x, y: branchFarY },
+    branchNearOuter,
+    branchFarOuter,
     { x: branchFarOuter.x, y: 0 },
     { x: branchNearOuter.x, y: 0 },
   ];
@@ -304,17 +322,20 @@ function renderSideBranch(side: 'left' | 'right'): BranchParts {
   return { floor: floorSvg, innerWall: innerWallSvg, outerWall: outerWallSvg };
 }
 
-function buildBranchParts(openings: Openings): { floors: string[]; walls: string[] } {
+function buildBranchParts(
+  openings: Openings,
+  anchorDepth: number,
+): { floors: string[]; walls: string[] } {
   const floors: string[] = [];
   const walls: string[] = [];
 
   if (openings.left) {
-    const left = renderSideBranch('left');
+    const left = renderSideBranch('left', anchorDepth);
     floors.push(left.floor);
     walls.push(left.innerWall, left.outerWall);
   }
   if (openings.right) {
-    const right = renderSideBranch('right');
+    const right = renderSideBranch('right', anchorDepth);
     floors.push(right.floor);
     walls.push(right.innerWall, right.outerWall);
   }
@@ -347,7 +368,7 @@ function renderJunctionView(
   mainFloor: FloorCorners,
 ): string {
   const parts: string[] = [];
-  const branchParts = buildBranchParts(openings);
+  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
 
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
@@ -373,7 +394,7 @@ function renderGoalView(
   mainFloor: FloorCorners,
 ): string {
   const parts: string[] = [];
-  const branchParts = buildBranchParts(openings);
+  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
@@ -414,7 +435,7 @@ export function createFancyMazePreviewSvg(
   openings: Openings,
 ): string {
   const mainFloor = getMainFloorCorners();
-  const stops = buildSliceStops(mainFloor);
+  const stops = buildSliceStops();
   const slices = buildSliceGeometries(stops);
   const groupAttrs = [
     `data-view-tilt="0.00"`,
