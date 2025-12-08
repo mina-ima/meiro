@@ -38,13 +38,9 @@ const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 const BRANCH_ANCHOR_SLICE_INDEX = 2;
-const BRANCH_WORLD_WIDTH = 0.9; // メイン通路幅の9割だけ外側へ伸ばす
-const BRANCH_WORLD_LENGTH = 1.8; // 奥行き。短すぎると帯に見えるので少し深め
-const BRANCH_OUTER_EXTRA_DEPTH = 0.5; // 外側だけ少し深くしてパースを強調
-const BRANCH_TAPER = 0.3; // 遠方で細く見せる
-const BRANCH_VANISH_DISTANCE = 1.6; // 左右の消失点をセンターからどれだけ離すか（通路幅比）
-const BRANCH_VANISH_INNER_PULL = 0.32; // 内側端をどれだけ消失点へ寄せるか
-const BRANCH_VANISH_OUTER_PULL = 0.65; // 外側端をどれだけ消失点へ寄せるか
+const BRANCH_WORLD_WIDTH = 0.95; // メイン通路幅とほぼ同じ太さで外に伸ばす
+const BRANCH_WORLD_LENGTH = 1.3; // 奥行き。アンカーより手前に出さないよう控えめに
+const BRANCH_TAPER = 0.18; // 遠方でわずかに絞る
 
 type SliceStop = {
   y: number;
@@ -283,38 +279,19 @@ type BranchParts = {
   outerWall: string;
 };
 
-function getBranchVanishX(side: 'left' | 'right'): number {
-  const dir = side === 'left' ? -1 : 1;
-  return VIEW_CENTER_X + dir * CORRIDOR_NEAR_WIDTH * BRANCH_VANISH_DISTANCE;
-}
-
 // junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
 function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchParts {
   const isLeft = side === 'left';
   const nearDepth = anchorDepth;
-  const farDepthInner = Math.min(SLICE_COUNT, anchorDepth + BRANCH_WORLD_LENGTH);
-  const farDepthOuter = Math.min(
-    SLICE_COUNT,
-    anchorDepth + BRANCH_WORLD_LENGTH + BRANCH_OUTER_EXTRA_DEPTH,
-  );
+  const farDepth = Math.min(SLICE_COUNT, anchorDepth + BRANCH_WORLD_LENGTH);
   const anchorX = isLeft ? -0.5 : 0.5;
   const outerX = isLeft ? anchorX - BRANCH_WORLD_WIDTH : anchorX + BRANCH_WORLD_WIDTH;
   const taper = isLeft ? -BRANCH_TAPER : BRANCH_TAPER;
-  const vanishX = getBranchVanishX(side);
 
   const branchNearInner = projectFloorPoint(anchorX, nearDepth);
   const branchNearOuter = projectFloorPoint(outerX, nearDepth);
-  const baseFarInner = projectFloorPoint(anchorX + taper * 0.6, farDepthInner);
-  const baseFarOuter = projectFloorPoint(outerX + taper, farDepthOuter);
-
-  const branchFarInner = {
-    x: lerp(baseFarInner.x, vanishX, BRANCH_VANISH_INNER_PULL),
-    y: baseFarInner.y,
-  };
-  const branchFarOuter = {
-    x: lerp(baseFarOuter.x, vanishX, BRANCH_VANISH_OUTER_PULL),
-    y: baseFarOuter.y,
-  };
+  const branchFarInner = projectFloorPoint(anchorX + taper * 0.6, farDepth);
+  const branchFarOuter = projectFloorPoint(outerX + taper, farDepth);
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];

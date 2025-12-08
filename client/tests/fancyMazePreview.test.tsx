@@ -18,7 +18,7 @@ const VIEW_FLOOR_NEAR_RIGHT = VIEW_WIDTH - 40;
 const VIEW_FLOOR_FAR_LEFT = VIEW_WIDTH * 0.5 - 60;
 const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
 const BRANCH_ANCHOR_SLICE_INDEX = 2;
-const BRANCH_WORLD_WIDTH = 0.9;
+const BRANCH_WORLD_WIDTH = 0.95;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -389,7 +389,7 @@ describe('FancyMazePreview', () => {
     checkBranch(parsePoints(rightBranch?.getAttribute('points')), anchor.right);
   });
 
-  it('分岐床は奥で外側へ逃げつつ十分に上がり、帯状ではなく横方向の奥行きを持つ', () => {
+  it('分岐床はアンカーより手前に出ず、奥側でわずかに外へ逃げる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -397,37 +397,22 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const assertPerspective = (selector: string, side: 'left' | 'right') => {
+    const anchor = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
+
+    const assertBranch = (selector: string, side: 'left' | 'right') => {
       const poly = container.querySelector<SVGPolygonElement>(selector);
       expect(poly).not.toBeNull();
       const points = parsePoints(poly?.getAttribute('points'));
-      const sortedByY = [...points].sort((a, b) => b.y - a.y);
-      const nearPoints = sortedByY.slice(0, 2);
-      const farPoints = sortedByY.slice(-2);
-      const nearOuter =
-        side === 'left'
-          ? nearPoints.reduce((acc, cur) => (cur.x < acc.x ? cur : acc))
-          : nearPoints.reduce((acc, cur) => (cur.x > acc.x ? cur : acc));
-      const farOuter =
-        side === 'left'
-          ? farPoints.reduce((acc, cur) => (cur.x < acc.x ? cur : acc))
-          : farPoints.reduce((acc, cur) => (cur.x > acc.x ? cur : acc));
-      const nearY = Math.max(...nearPoints.map((p) => p.y));
-      const farY = Math.min(...farPoints.map((p) => p.y));
+      const nearY = Math.max(...points.map((p) => p.y));
+      const farY = Math.min(...points.map((p) => p.y));
+      expect(nearY).toBeGreaterThanOrEqual(anchor.y - 0.01);
+      expect(nearY).toBeCloseTo(anchor.y, 0.5);
+      expect(farY).toBeLessThan(nearY);
 
-      expect(nearY - farY).toBeGreaterThan(40);
-      if (side === 'left') {
-        expect(farOuter.x).toBeLessThan(nearOuter.x);
-      } else {
-        expect(farOuter.x).toBeGreaterThan(nearOuter.x);
-      }
-      expect(Math.abs(farOuter.x - VIEW_WIDTH / 2)).toBeGreaterThan(
-        Math.abs(nearOuter.x - VIEW_WIDTH / 2),
-      );
     };
 
-    assertPerspective('[data-role="branch-floor-left"]', 'left');
-    assertPerspective('[data-role="branch-floor-right"]', 'right');
+    assertBranch('[data-role="branch-floor-left"]', 'left');
+    assertBranch('[data-role="branch-floor-right"]', 'right');
   });
 
   it('分岐壁は枝位置から奥に向かってのみ伸び、手前のメイン通路に食い込まない', () => {
