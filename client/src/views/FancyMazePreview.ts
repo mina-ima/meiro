@@ -12,11 +12,18 @@ const WIDTH = 320;
 const HEIGHT = 180;
 const SLICE_COUNT = 4;
 
-const FLOOR_NEAR_Y = HEIGHT * 0.95;
-const FLOOR_VANISH_Y = HEIGHT * 0.32;
-const VANISH_POINT = { x: WIDTH / 2, y: FLOOR_VANISH_Y };
-const FLOOR_NEAR_WIDTH = WIDTH * 0.82;
-const FLOOR_FAR_WIDTH = WIDTH * 0.35;
+// カメラと床・地平線の基準位置（全variant共通）
+const VIEW_FLOOR_Y = HEIGHT - 10; // 手前床のy
+const VIEW_HORIZON_Y = HEIGHT * 0.35; // 地平線（奥の床が接するy）
+const VIEW_FLOOR_NEAR_LEFT = 40;
+const VIEW_FLOOR_NEAR_RIGHT = WIDTH - 40;
+const VIEW_FLOOR_FAR_LEFT = WIDTH * 0.5 - 60;
+const VIEW_FLOOR_FAR_RIGHT = WIDTH * 0.5 + 60;
+
+const FLOOR_NEAR_Y = VIEW_FLOOR_Y;
+const FLOOR_VANISH_Y = VIEW_HORIZON_Y;
+const VANISH_POINT = { x: WIDTH / 2, y: VIEW_HORIZON_Y };
+const FLOOR_FAR_WIDTH = VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_FAR_LEFT;
 
 const COLOR_BG = '#050608';
 const COLOR_FLOOR_BASE = '#70757d';
@@ -27,6 +34,7 @@ const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
+const BRANCH_ANCHOR_SLICE_INDEX = 2;
 
 type SliceStop = {
   y: number;
@@ -46,6 +54,15 @@ type FloorCorners = {
   farLeft: { x: number; y: number };
   farRight: { x: number; y: number };
 };
+
+function getMainFloorCorners(): FloorCorners {
+  return {
+    nearLeft: { x: VIEW_FLOOR_NEAR_LEFT, y: VIEW_FLOOR_Y },
+    nearRight: { x: VIEW_FLOOR_NEAR_RIGHT, y: VIEW_FLOOR_Y },
+    farRight: { x: VIEW_FLOOR_FAR_RIGHT, y: VIEW_HORIZON_Y },
+    farLeft: { x: VIEW_FLOOR_FAR_LEFT, y: VIEW_HORIZON_Y },
+  };
+}
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -69,14 +86,13 @@ function joinPoints(points: { x: number; y: number }[]): string {
   return points.map((p) => `${p.x},${p.y}`).join(' ');
 }
 
-function buildSliceStops(): SliceStop[] {
+function buildSliceStops(mainFloor: FloorCorners): SliceStop[] {
   const stops: SliceStop[] = [];
   for (let i = 0; i <= SLICE_COUNT; i += 1) {
     const t = i / SLICE_COUNT;
-    const y = lerp(FLOOR_NEAR_Y, FLOOR_VANISH_Y, t);
-    const width = lerp(FLOOR_NEAR_WIDTH, FLOOR_FAR_WIDTH, t);
-    const left = VANISH_POINT.x - width / 2;
-    const right = VANISH_POINT.x + width / 2;
+    const y = lerp(mainFloor.nearLeft.y, mainFloor.farLeft.y, t);
+    const left = lerp(mainFloor.nearLeft.x, mainFloor.farLeft.x, t);
+    const right = lerp(mainFloor.nearRight.x, mainFloor.farRight.x, t);
     stops.push({ y, left, right });
   }
   return stops;
@@ -106,7 +122,9 @@ function renderFloorSlices(slices: SliceGeometry[]): string {
       { x: slice.far.left, y: slice.far.y },
     ];
     parts.push(
-      `<polygon data-layer="floor" data-slice="${slice.index}" points="${joinPoints(points)}" fill="${fill}" />`,
+      `<polygon data-layer="floor" data-slice="${slice.index}" points="${joinPoints(
+        points,
+      )}" fill="${fill}" />`,
     );
 
     const guideCount = 3 + slice.index;
@@ -126,7 +144,7 @@ function renderFloorSlices(slices: SliceGeometry[]): string {
   return parts.join('\n');
 }
 
-function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
+function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry, dataRole?: string): string {
   const nearX = side === 'left' ? slice.near.left : slice.near.right;
   const farX = side === 'left' ? slice.far.left : slice.far.right;
   const fill = mixColor(
@@ -135,6 +153,7 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
     slice.index * 0.05,
   );
   const brickRows = 2 + slice.index;
+  const roleAttr = dataRole ? ` data-role="${dataRole}"` : '';
 
   const wallPolygon = `<polygon data-layer="wall" data-wall-side="${side}" data-slice="${slice.index}" data-brick-rows="${brickRows}" points="${joinPoints(
     [
@@ -143,7 +162,7 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry): string {
       { x: farX, y: 0 },
       { x: nearX, y: 0 },
     ],
-  )}" fill="${fill}" fill-opacity="${0.92 - slice.index * 0.05}" />`;
+  )}"${roleAttr} fill="${fill}" fill-opacity="${0.92 - slice.index * 0.05}" />`;
 
   const lines: string[] = [];
   for (let row = 1; row <= brickRows; row += 1) {
@@ -164,17 +183,17 @@ function renderCorridorWalls(
   openings?: Openings,
 ): string {
   const parts: string[] = [];
-  const isJunctionOrGoal = variant === 'junction' || variant === 'goal';
   slices.forEach((slice) => {
     const i = slice.index;
-    const skipLeft = isJunctionOrGoal && openings?.left && i === 2;
-    const skipRight = isJunctionOrGoal && openings?.right && i === 2;
+    const skipLeft = variant === 'junction' && openings?.left && i === BRANCH_ANCHOR_SLICE_INDEX;
+    const skipRight = variant === 'junction' && openings?.right && i === BRANCH_ANCHOR_SLICE_INDEX;
+    const markMainWall = i === 1;
 
     if (!skipLeft) {
-      parts.push(renderWallSlice('left', slice));
+      parts.push(renderWallSlice('left', slice, markMainWall ? 'main-wall-left' : undefined));
     }
     if (!skipRight) {
-      parts.push(renderWallSlice('right', slice));
+      parts.push(renderWallSlice('right', slice, markMainWall ? 'main-wall-right' : undefined));
     }
   });
   return parts.join('\n');
@@ -219,71 +238,151 @@ function renderFloorGradient(): string {
     </defs>`;
 }
 
-function getMainFloorCornersForJunction(slices: SliceGeometry[]): FloorCorners {
-  const anchorSlice = slices[1];
-  return {
-    nearLeft: { x: anchorSlice.near.left, y: anchorSlice.near.y },
-    nearRight: { x: anchorSlice.near.right, y: anchorSlice.near.y },
-    farLeft: { x: anchorSlice.far.left, y: anchorSlice.far.y },
-    farRight: { x: anchorSlice.far.right, y: anchorSlice.far.y },
-  };
+function renderMainFloor(mainFloor: FloorCorners): string {
+  const mainFloorPoints = [
+    { x: mainFloor.nearLeft.x, y: mainFloor.nearLeft.y },
+    { x: mainFloor.nearRight.x, y: mainFloor.nearRight.y },
+    { x: mainFloor.farRight.x, y: mainFloor.farRight.y },
+    { x: mainFloor.farLeft.x, y: mainFloor.farLeft.y },
+  ];
+  return `<polygon data-layer="floor" data-role="main-floor" points="${joinPoints(
+    mainFloorPoints,
+  )}" fill="url(#corridor-floor-grad)" />`;
 }
 
-// junction / goal 分岐: slice2 の床ラインを基準に、メイン通路の壁1枚分を切り取り、
-// その穴に横方向へ90度に曲がる短い通路（床＋左右の壁）をはめ込む。
-// 床は本線と同じグリッドで、奥に行くほど狭く・高くなるように台形で構成する。
-function renderSideBranch(
-  side: 'left' | 'right',
-  slices: SliceGeometry[],
-  mainCorners: FloorCorners,
-): string {
-  // junction/goal の左右分岐:
-  // slice2 の床稜線(anchorY)の角(anchorX)から分岐床を開始し、
-  // 分岐で外した slice2 の本線側面壁の奥から分岐通路の内側壁を立ち上げる。
+type BranchParts = {
+  floor: string;
+  innerWall: string;
+  outerWall: string;
+};
+
+// junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
+function renderSideBranch(side: 'left' | 'right'): BranchParts {
   const isLeft = side === 'left';
-  const dir = isLeft ? -1 : 1;
+  const branchDepth = 30;
+  const branchNearY = VIEW_FLOOR_Y - 8;
+  const branchFarY = branchNearY - branchDepth;
 
-  const anchorSlice = slices[1];
-  const mainNear = isLeft ? mainCorners.nearLeft : mainCorners.nearRight;
-
-  const mainWidth = anchorSlice.near.right - anchorSlice.near.left;
-  const widthNear = mainWidth * 0.6;
-  const widthFar = widthNear * 0.7;
-  const depth = 28;
-  const farY = mainNear.y - depth;
-  const innerShift = 10;
-
-  const nearInner = { x: mainNear.x, y: mainNear.y };
-  const nearOuter = { x: mainNear.x + dir * widthNear, y: mainNear.y };
-  const farInner = { x: mainNear.x + dir * innerShift, y: farY };
-  const farOuter = { x: farInner.x + dir * widthFar, y: farY };
+  const branchNearInner = isLeft
+    ? { x: VIEW_FLOOR_NEAR_LEFT, y: branchNearY }
+    : { x: VIEW_FLOOR_NEAR_RIGHT, y: branchNearY };
+  const branchNearOuter = isLeft
+    ? { x: VIEW_FLOOR_NEAR_LEFT - 80, y: branchNearY }
+    : { x: VIEW_FLOOR_NEAR_RIGHT + 80, y: branchNearY };
+  const branchFarOuter = isLeft
+    ? { x: VIEW_FLOOR_NEAR_LEFT - 60, y: branchFarY }
+    : { x: VIEW_FLOOR_NEAR_RIGHT + 60, y: branchFarY };
+  const branchFarInner = isLeft
+    ? { x: VIEW_FLOOR_NEAR_LEFT + 10, y: branchFarY }
+    : { x: VIEW_FLOOR_NEAR_RIGHT - 10, y: branchFarY };
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
-  const floorPoints = [nearInner, nearOuter, farOuter, farInner];
-  const floorSvg = `<polygon data-branch="${side}" data-layer="floor"
+  const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
+  const floorSvg = `<polygon data-branch="${side}" data-layer="floor" data-role="branch-floor-${side}"
     points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" />`;
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
-    { x: nearInner.x, y: nearInner.y },
-    { x: farInner.x, y: farInner.y },
-    { x: farInner.x, y: 0 },
-    { x: nearInner.x, y: 0 },
+    { x: branchNearInner.x, y: branchNearInner.y },
+    { x: branchFarInner.x, y: branchFarInner.y },
+    { x: branchFarInner.x, y: 0 },
+    { x: branchNearInner.x, y: 0 },
   ];
-  const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner"
+  const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner" data-role="branch-wall-${side}-inner"
     points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" />`;
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
-    { x: nearOuter.x, y: nearOuter.y },
-    { x: farOuter.x, y: farOuter.y },
-    { x: farOuter.x, y: 0 },
-    { x: nearOuter.x, y: 0 },
+    { x: branchNearOuter.x, y: branchNearY },
+    { x: branchFarOuter.x, y: branchFarY },
+    { x: branchFarOuter.x, y: 0 },
+    { x: branchNearOuter.x, y: 0 },
   ];
-  const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer"
+  const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" data-role="branch-wall-${side}-outer"
     points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
 
-  return [floorSvg, innerWallSvg, outerWallSvg].join('\n');
+  return { floor: floorSvg, innerWall: innerWallSvg, outerWall: outerWallSvg };
+}
+
+function buildBranchParts(openings: Openings): { floors: string[]; walls: string[] } {
+  const floors: string[] = [];
+  const walls: string[] = [];
+
+  if (openings.left) {
+    const left = renderSideBranch('left');
+    floors.push(left.floor);
+    walls.push(left.innerWall, left.outerWall);
+  }
+  if (openings.right) {
+    const right = renderSideBranch('right');
+    floors.push(right.floor);
+    walls.push(right.innerWall, right.outerWall);
+  }
+
+  return { floors, walls };
+}
+
+function renderStartView(
+  openings: Openings,
+  slices: SliceGeometry[],
+  stops: SliceStop[],
+  mainFloor: FloorCorners,
+): string {
+  const parts: string[] = [];
+  parts.push(renderMainFloor(mainFloor));
+  parts.push(renderFloorSlices(slices));
+  parts.push(renderCorridorWalls(slices, 'start', openings));
+
+  if (!openings.forward) {
+    parts.push(renderFrontWall(stops, 3, 'start'));
+  }
+
+  return parts.join('\n');
+}
+
+function renderJunctionView(
+  openings: Openings,
+  slices: SliceGeometry[],
+  stops: SliceStop[],
+  mainFloor: FloorCorners,
+): string {
+  const parts: string[] = [];
+  const branchParts = buildBranchParts(openings);
+
+  // 1. 床（メイン通路）
+  parts.push(renderMainFloor(mainFloor));
+  parts.push(renderFloorSlices(slices));
+  // 2. メイン左右壁
+  parts.push(renderCorridorWalls(slices, 'junction', openings));
+  // 3. 左右分岐（床）
+  parts.push(...branchParts.floors);
+  // 4. 左右分岐（壁）
+  parts.push(...branchParts.walls);
+  // 5. 正面奥の壁（必要なら）
+  if (!openings.forward) {
+    parts.push(renderFrontWall(stops, 3, 'junction'));
+  }
+
+  return parts.join('\n');
+}
+
+function renderGoalView(
+  openings: Openings,
+  slices: SliceGeometry[],
+  stops: SliceStop[],
+  mainFloor: FloorCorners,
+): string {
+  const parts: string[] = [];
+  const branchParts = buildBranchParts(openings);
+
+  parts.push(renderMainFloor(mainFloor));
+  parts.push(renderFloorSlices(slices));
+  parts.push(renderCorridorWalls(slices, 'goal', openings));
+  parts.push(...branchParts.floors);
+  parts.push(...branchParts.walls);
+  parts.push(renderFrontWall(stops, 4, 'goal'));
+  parts.push(renderGoalPortal(stops[4]));
+  return parts.join('\n');
 }
 
 function renderView(
@@ -291,25 +390,17 @@ function renderView(
   openings: Openings,
   slices: SliceGeometry[],
   stops: SliceStop[],
+  mainFloor: FloorCorners,
 ): string {
   const parts: string[] = [];
-  const isBranchingVariant = variant === 'junction' || variant === 'goal';
   parts.push(renderFloorGradient());
-  parts.push(renderFloorSlices(slices));
-  parts.push(renderCorridorWalls(slices, variant, openings));
 
-  if (isBranchingVariant) {
-    const mainCorners = getMainFloorCornersForJunction(slices);
-    // junction / goal 分岐: slice2 の床ラインから壁を1枚だけ抜き、横方向への短い通路をL字に挿し込む。
-    if (openings.left) parts.push(renderSideBranch('left', slices, mainCorners));
-    if (openings.right) parts.push(renderSideBranch('right', slices, mainCorners));
-  }
-
-  if (variant === 'goal') {
-    parts.push(renderFrontWall(stops, 4, variant));
-    parts.push(renderGoalPortal(stops[4]));
-  } else if (!openings.forward) {
-    parts.push(renderFrontWall(stops, 3, variant));
+  if (variant === 'junction') {
+    parts.push(renderJunctionView(openings, slices, stops, mainFloor));
+  } else if (variant === 'goal') {
+    parts.push(renderGoalView(openings, slices, stops, mainFloor));
+  } else {
+    parts.push(renderStartView(openings, slices, stops, mainFloor));
   }
 
   return parts.join('\n');
@@ -322,7 +413,8 @@ export function createFancyMazePreviewSvg(
   orientation: Direction,
   openings: Openings,
 ): string {
-  const stops = buildSliceStops();
+  const mainFloor = getMainFloorCorners();
+  const stops = buildSliceStops(mainFloor);
   const slices = buildSliceGeometries(stops);
   const groupAttrs = [
     `data-view-tilt="0.00"`,
@@ -334,12 +426,12 @@ export function createFancyMazePreviewSvg(
     `data-preview-style="fancy"`,
   ].join(' ');
 
-  const content = renderView(variant, openings, slices, stops);
+  const content = renderView(variant, openings, slices, stops, mainFloor);
 
   return `
     <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="${COLOR_BG}" />
-      <g ${groupAttrs}>
+      <g ${groupAttrs}${variant === 'junction' ? ' data-debug-junction="true"' : ''}>
         ${content}
       </g>
     </svg>
