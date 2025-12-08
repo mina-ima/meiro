@@ -372,10 +372,10 @@ function renderJunctionView(
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
-  // 2. メイン左右壁
-  parts.push(renderCorridorWalls(slices, 'junction', openings));
-  // 3. 左右分岐（床）
+  // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
   parts.push(...branchParts.floors);
+  // 3. メイン左右壁
+  parts.push(renderCorridorWalls(slices, 'junction', openings));
   // 4. 左右分岐（壁）
   parts.push(...branchParts.walls);
   // 5. 正面奥の壁（必要なら）
@@ -397,8 +397,8 @@ function renderGoalView(
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
-  parts.push(renderCorridorWalls(slices, 'goal', openings));
   parts.push(...branchParts.floors);
+  parts.push(renderCorridorWalls(slices, 'goal', openings));
   parts.push(...branchParts.walls);
   parts.push(renderFrontWall(stops, 4, 'goal'));
   parts.push(renderGoalPortal(stops[4]));

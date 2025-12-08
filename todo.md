@@ -197,6 +197,7 @@
 - 更新メモ(2026-01-24): FancyMazePreview の start/junction/goal で VIEW_* 定数に基づき床高さ・地平線・床幅を共通化し、junction 分岐をメイン床手前角から伸びる固定座標のL字床＋内外壁に再構成。描画順を床→壁→分岐床→分岐壁→前壁に固定し、data-role を使ったスモークテストを追加（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）。
 - 更新メモ(2026-01-25): FancyMazePreview junction/goal の分岐床を slice2 アンカーのまま奥行きと側方消失点を強調し、farOuter が手前より外側かつ高い位置へ逃げる台形に再設計。BRANCH_* パラメータを整理し、`client/tests/fancyMazePreview.test.tsx` で farY 差分と側方シフトを検証
 - 更新メモ(2026-01-26): FancyMazePreview junction/goal の BRANCH_* を控えめに戻し、消失点補正を外して分岐床が slice2 より手前に出ないよう調整。分岐パースのテストを緩和し、メイン床の見通しを優先（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+- 更新メモ(2026-01-27): FancyMazePreview junction/goal の描画順を床→分岐床→壁→前壁に整理し、分岐床が左右壁の上に灰色帯でかぶらないようDOM順を修正（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` にDOM順テストを追加）
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

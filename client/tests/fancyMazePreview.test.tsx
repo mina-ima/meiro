@@ -389,6 +389,40 @@ describe('FancyMazePreview', () => {
     checkBranch(parsePoints(rightBranch?.getAttribute('points')), anchor.right);
   });
 
+  it('分岐床は壁より後ろで描画され、壁が手前で床を隠せるDOM順になっている', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftBranchFloor = container.querySelector('[data-role="branch-floor-left"]');
+    const rightBranchFloor = container.querySelector('[data-role="branch-floor-right"]');
+    const leftMainWall = container.querySelector('[data-role="main-wall-left"]');
+    const rightMainWall = container.querySelector('[data-role="main-wall-right"]');
+    const leftBranchWall = container.querySelector('[data-role="branch-wall-left-inner"]');
+    const rightBranchWall = container.querySelector('[data-role="branch-wall-right-inner"]');
+    expect(leftBranchFloor).not.toBeNull();
+    expect(rightBranchFloor).not.toBeNull();
+    expect(leftMainWall).not.toBeNull();
+    expect(rightMainWall).not.toBeNull();
+    expect(leftBranchWall).not.toBeNull();
+    expect(rightBranchWall).not.toBeNull();
+
+    const assertBefore = (floor: Element, wall: Element) => {
+      const position = floor.compareDocumentPosition(wall);
+      // 壁が手前に来るよう、床要素が先に描画されていることを確認する
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+      expect(position & Node.DOCUMENT_POSITION_PRECEDING).toBe(0);
+    };
+
+    assertBefore(leftBranchFloor!, leftMainWall!);
+    assertBefore(rightBranchFloor!, rightMainWall!);
+    assertBefore(leftBranchFloor!, leftBranchWall!);
+    assertBefore(rightBranchFloor!, rightBranchWall!);
+  });
+
   it('分岐床はアンカーより手前に出ず、奥側でわずかに外へ逃げる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
@@ -399,7 +433,7 @@ describe('FancyMazePreview', () => {
 
     const anchor = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
 
-    const assertBranch = (selector: string, side: 'left' | 'right') => {
+    const assertBranch = (selector: string) => {
       const poly = container.querySelector<SVGPolygonElement>(selector);
       expect(poly).not.toBeNull();
       const points = parsePoints(poly?.getAttribute('points'));
@@ -411,8 +445,8 @@ describe('FancyMazePreview', () => {
 
     };
 
-    assertBranch('[data-role="branch-floor-left"]', 'left');
-    assertBranch('[data-role="branch-floor-right"]', 'right');
+    assertBranch('[data-role="branch-floor-left"]');
+    assertBranch('[data-role="branch-floor-right"]');
   });
 
   it('分岐壁は枝位置から奥に向かってのみ伸び、手前のメイン通路に食い込まない', () => {
