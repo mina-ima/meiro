@@ -252,6 +252,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-21): FancyMazePreview junction/goal をスライスベースの描画に戻し、slice2 anchorX/anchorY から分岐床と内外壁を開始。描画順を床→壁→分岐→前壁に統一し、`client/tests/fancyMazePreview.test.tsx` で anchorY・inner wall 起点の一致を確認
 * 更新メモ(2026-01-23): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter を本線 slice2 床角と同座標に固定し、内側壁の起点も nearInner と共有。openings 側の slice2 壁非表示を保ったまま、branch 床/内壁が本線床稜線から連続して伸びることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で厳密化
 * 更新メモ(2026-01-24): FancyMazePreview の start/junction/goal で VIEW_* 定数により床高さ・地平線・床幅を共通化し、junction 分岐をメイン床手前角から生える固定座標のL字床＋内外壁で再構成。描画順を床→壁→分岐床→分岐壁→前壁に固定し、data-role を付与したスモークテストで分岐パーツの存在を検証（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）。
+* 更新メモ(2026-01-25): FancyMazePreview junction/goal の分岐床を slice2 アンカー維持のまま奥行きと側方消失点を強化し、farOuter が手前より外側かつ高い位置へ逃げる台形に再設計。BRANCH_* パラメータを整理し、`client/tests/fancyMazePreview.test.tsx` で farY 差分と側方シフトを検証
 
 ### 8.2 オーナー
 
