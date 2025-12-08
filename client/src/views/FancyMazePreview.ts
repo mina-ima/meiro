@@ -38,10 +38,11 @@ const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 const BRANCH_ANCHOR_SLICE_INDEX = 2;
-const BRANCH_WORLD_WIDTH = 0.95; // メイン通路幅とほぼ同じ太さで外に伸ばす
-const BRANCH_WORLD_LENGTH = 1; // 奥行きは短め。アンカーより手前に出さない
-const BRANCH_TAPER = 0.18; // 遠方でわずかに絞る
-const BRANCH_FAR_LATERAL_SHIFT = 26; // 遠方でわずかに外へ寄せて“横通路”感を出す
+const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
+const BRANCH_NEAR_SPAN = 0.2; // アンカー位置で見せる横幅（通路幅に対する比率）
+const BRANCH_FAR_EXTRA_SPAN = 0.1; // 奥側でわずかに広げる
+const BRANCH_INNER_TAPER = 0.04; // 奥側でほんの少し内側へ寄せ、“コの字”の奥行きを見せる
+const BRANCH_FAR_LATERAL_SHIFT = 10; // 遠方でわずかに外へ寄せて“横通路”感を出す
 
 type SliceStop = {
   y: number;
@@ -300,26 +301,28 @@ type BranchParts = {
 // junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
 function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchParts {
   const isLeft = side === 'left';
+  const direction = isLeft ? -1 : 1;
   const nearDepth = anchorDepth;
-  const farDepth = Math.min(SLICE_COUNT, anchorDepth + BRANCH_WORLD_LENGTH);
+  const farDepth = Math.min(SLICE_COUNT, anchorDepth + BRANCH_DEPTH_DELTA);
   const anchorX = isLeft ? -0.5 : 0.5;
-  const outerX = isLeft ? anchorX - BRANCH_WORLD_WIDTH : anchorX + BRANCH_WORLD_WIDTH;
-  const taper = isLeft ? -BRANCH_TAPER : BRANCH_TAPER;
 
   const branchNearInner = projectFloorPoint(anchorX, nearDepth);
-  const branchNearOuter = projectFloorPoint(outerX, nearDepth);
-  const branchFarInner = projectFloorPoint(anchorX + taper * 0.6, farDepth);
-  const branchFarOuter = projectFloorPoint(outerX + taper, farDepth);
+  const branchNearOuter = projectFloorPoint(anchorX + direction * BRANCH_NEAR_SPAN, nearDepth);
+  const branchFarInner = projectFloorPoint(anchorX + direction * BRANCH_INNER_TAPER, farDepth);
+  const branchFarOuter = projectFloorPoint(
+    anchorX + direction * (BRANCH_NEAR_SPAN + BRANCH_FAR_EXTRA_SPAN),
+    farDepth,
+  );
 
   // 遠方でほんの少しだけ外側へずらし、“横通路”の伸びを見せる
-  const lateralShift = (isLeft ? -1 : 1) * BRANCH_FAR_LATERAL_SHIFT;
+  const lateralShift = direction * BRANCH_FAR_LATERAL_SHIFT;
   branchFarInner.x += lateralShift * 0.35;
   branchFarOuter.x += lateralShift;
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
   const floorSvg = `<polygon data-branch="${side}" data-layer="floor" data-role="branch-floor-${side}"
-    points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" />`;
+    points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" stroke="${COLOR_FLOOR_LINE}" stroke-width="0.6" stroke-opacity="0.12" />`;
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
@@ -329,7 +332,7 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
     { x: branchNearInner.x, y: 0 },
   ];
   const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner" data-role="branch-wall-${side}-inner"
-    points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" />`;
+    points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" stroke="${COLOR_WALL_LINE}" stroke-width="0.8" stroke-opacity="0.18" />`;
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
@@ -339,7 +342,7 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
     { x: branchNearOuter.x, y: 0 },
   ];
   const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" data-role="branch-wall-${side}-outer"
-    points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" />`;
+    points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" stroke="${COLOR_WALL_LINE}" stroke-width="0.6" stroke-opacity="0.12" />`;
 
   return { floor: floorSvg, innerWall: innerWallSvg, outerWall: outerWallSvg };
 }
