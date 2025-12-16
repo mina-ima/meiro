@@ -66,6 +66,18 @@ function branchMetrics(points: { x: number; y: number }[]) {
   };
 }
 
+function pointsAlmostEqual(
+  a: { x: number; y: number }[] | null,
+  b: { x: number; y: number }[] | null,
+  tolerance = 0.01,
+) {
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every(
+    (p, i) => Math.abs(p.x - b[i].x) < tolerance && Math.abs(p.y - b[i].y) < tolerance,
+  );
+}
+
 function buildSliceStops() {
   const stops: { y: number; left: number; right: number }[] = [];
   for (let i = 0; i <= SLICE_COUNT; i += 1) {
@@ -231,6 +243,45 @@ describe('FancyMazePreview', () => {
     const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
     expect(leftInnerPoints[0]).toEqual({ x: anchorStop.left, y: anchorStop.y });
     expect(rightInnerPoints[0]).toEqual({ x: anchorStop.right, y: anchorStop.y });
+  });
+
+  it('junctionマスクは開口側の壁スライス形状に一致するポリゴンでくり抜く', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const targetSliceIndex = BRANCH_ANCHOR_SLICE_INDEX + 1;
+    const leftWallSlice = container.querySelector(
+      `[data-layer="wall"][data-wall-side="left"][data-slice="${targetSliceIndex}"]`,
+    );
+    const rightWallSlice = container.querySelector(
+      `[data-layer="wall"][data-wall-side="right"][data-slice="${targetSliceIndex}"]`,
+    );
+    expect(leftWallSlice).not.toBeNull();
+    expect(rightWallSlice).not.toBeNull();
+
+    const assertMaskMatchesSlice = (
+      side: 'left' | 'right',
+      wallPoints: { x: number; y: number }[],
+    ) => {
+      const maskPolys = Array.from(
+        container.querySelectorAll(
+          `mask[data-junction-mask="true"][data-mask-side="${side}"] polygon[data-branch-wall-mask-slice]`,
+        ),
+      );
+      expect(maskPolys.length).toBeGreaterThan(0);
+      const sliceIndexes = new Set(maskPolys.map((p) => p.getAttribute('data-branch-wall-mask-slice')));
+      expect(sliceIndexes.has(String(targetSliceIndex))).toBe(true);
+
+      const maskPointSets = maskPolys.map((p) => parsePoints(p.getAttribute('points')));
+      expect(maskPointSets.some((pts) => pointsAlmostEqual(pts, wallPoints))).toBe(true);
+    };
+
+    assertMaskMatchesSlice('left', parsePoints(leftWallSlice?.getAttribute('points')));
+    assertMaskMatchesSlice('right', parsePoints(rightWallSlice?.getAttribute('points')));
   });
 
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {

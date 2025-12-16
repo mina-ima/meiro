@@ -201,6 +201,7 @@
 - 更新メモ(2026-01-28): FancyMazePreview junction/goal の分岐床を anchor 起点の短い台形に再調整し、遠方でわずかに外へ逃がす側方シフトを追加。goal ではポータル光の床グローを重ね、テストに nearY>=anchor・farY<nearY・farXの外向きシフトを確認するアサーションを追加（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-29): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter と内外壁の根元を slice2 アンカー(stop.y/left/right)に厳密に揃え、near 側をアンカー深度に固定し far 側だけ BRANCH_DEPTH_DELTA で奥行きを取るよう調整。branchMetrics で anchorStop との nearY/X 一致と壁根元の座標一致を検証（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-30): FancyMazePreview junction/goal で slice 単位の壁抜けを廃止し、branch ジオメトリから開口ポリゴンを定義した mask を左右メイン壁のグループに適用。柱が残らない連続開口にし、テストをマスク存在と mask 属性検証へ差し替え（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+- 更新メモ(2026-01-31): FancyMazePreview junction/goal の branch マスクを壁スライス形状の階段ポリゴンにし、data-branch-wall-mask-slice を付与してメイン壁と同じパースで開口。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でスライス形状一致を検証
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
@@ -400,6 +401,6 @@
 
 ## 25. FancyMazePreview 分岐表示の微調整（2026-01-07）
 - [x] junction/goal の branch マスク幅を細帯にし、手前の壁を残したまま切れ目だけを黒で抜く  
-  - DoD: slice2 アンカー（anchorXLeft/right, anchorY/anchorFarY）を基準に開口側の壁1枚ぶんをマスクし、横通路の床/内外壁を同じアンカーでL字配置する。分岐床は near 幅 > far 幅のまま左右の消失点に向かうジオメトリとし、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` が通る
+  - DoD: anchorDepth 以降の開口側壁スライスをそのまま黒塗りする階段ポリゴン（data-branch-wall-mask-slice 付き）を defs に用意し、junction/goal 共通でメイン壁と同じパースの開口を作る。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でマスク適用とスライス形状一致を検証
 - [x] 横通路の壁高さを天井付近まで引き上げ、左右90度の廊下感を強調  
   - DoD: branch-wall のポリゴン上端が床から十分離れ、tests での分岐床・ガイドの性質が維持される

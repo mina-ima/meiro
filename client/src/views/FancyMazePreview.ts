@@ -435,7 +435,10 @@ function buildBranchParts(
   return { floors, walls, geometries };
 }
 
-function buildBranchWallMasks(geometries: BranchGeometry[]): {
+function buildBranchWallMasks(
+  geometries: BranchGeometry[],
+  slices: SliceGeometry[],
+): {
   defs: string[];
   maskIds: Partial<Record<'left' | 'right', string>>;
 } {
@@ -445,16 +448,28 @@ function buildBranchWallMasks(geometries: BranchGeometry[]): {
   geometries.forEach((geometry) => {
     const maskId = `junction-wall-mask-${geometry.side}`;
     maskIds[geometry.side] = maskId;
-    const openingPoints = [
-      { x: geometry.anchorEdgeX, y: geometry.anchorStop.y },
-      { x: geometry.farEdgeX, y: geometry.farStop.y },
-      { x: geometry.farEdgeX, y: 0 },
-      { x: geometry.anchorEdgeX, y: 0 },
-    ];
+    const openSlices = slices.filter((slice) => {
+      const nearDepth = slice.index - 1;
+      const farDepth = slice.index;
+      return nearDepth < geometry.farDepth && farDepth > geometry.anchorDepth;
+    });
+    const openingPolygons = openSlices.map((slice) => {
+      const nearX = geometry.side === 'left' ? slice.near.left : slice.near.right;
+      const farX = geometry.side === 'left' ? slice.far.left : slice.far.right;
+      const points = [
+        { x: nearX, y: slice.near.y },
+        { x: farX, y: slice.far.y },
+        { x: farX, y: 0 },
+        { x: nearX, y: 0 },
+      ];
+      return `<polygon data-branch-wall-mask-slice="${slice.index}" points="${joinPoints(
+        points,
+      )}" fill="black" />`;
+    });
     defs.push(
       `<mask id="${maskId}" data-junction-mask="true" data-mask-side="${geometry.side}">
         <rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="white" />
-        <polygon points="${joinPoints(openingPoints)}" fill="black" />
+        ${openingPolygons.join('\n')}
       </mask>`,
     );
   });
@@ -488,7 +503,7 @@ function renderJunctionView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
-  const wallMasks = buildBranchWallMasks(branchParts.geometries);
+  const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
 
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
@@ -519,7 +534,7 @@ function renderGoalView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
-  const wallMasks = buildBranchWallMasks(branchParts.geometries);
+  const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
