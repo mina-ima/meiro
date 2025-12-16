@@ -203,6 +203,7 @@
 - 更新メモ(2026-01-30): FancyMazePreview junction/goal で slice 単位の壁抜けを廃止し、branch ジオメトリから開口ポリゴンを定義した mask を左右メイン壁のグループに適用。柱が残らない連続開口にし、テストをマスク存在と mask 属性検証へ差し替え（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-31): FancyMazePreview junction/goal の branch マスクを壁スライス形状の階段ポリゴンにし、data-branch-wall-mask-slice を付与してメイン壁と同じパースで開口。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でスライス形状一致を検証
 - 更新メモ(2026-02-01): FancyMazePreview junction/goal の BRANCH_ANCHOR を slice1 手前(depth 0.5)に繰り上げ、開口マスクが slice1 から始まって柱が残らないよう調整。壁スライス形状のマスクと data-branch-wall-mask-slice を維持し、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で開口開始位置を検証
+- 更新メモ(2026-02-02): FancyMazePreview junction で正面壁描画を廃止し、forward=false 時は黒いキャップのみで閉塞を示す専用描画に変更。左右開口を分岐床/壁で優先的に見せ、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で前壁非表示とキャップ存在を回帰
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）

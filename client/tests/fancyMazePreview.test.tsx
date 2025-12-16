@@ -173,6 +173,31 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
+  it('junctionビューではforward=falseでも前壁を描かず、暗転で閉塞を示しつつ左右開口を見せる', () => {
+    const { container } = renderPreview('junction', {
+      forward: false,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    expect(container.querySelector('[data-wall-side="front"]')).toBeNull();
+
+    const cap = container.querySelector('[data-role="junction-forward-cap"]');
+    expect(cap).not.toBeNull();
+
+    expect(container.querySelector('[data-role="branch-floor-left"]')).not.toBeNull();
+    expect(container.querySelector('[data-role="branch-floor-right"]')).not.toBeNull();
+
+    // 左右のメイン壁は残しつつ、前方に壁がせり出さないことを確認する
+    expect(
+      container.querySelector('[data-layer="wall"][data-wall-side="left"][data-slice="2"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-layer="wall"][data-wall-side="right"][data-slice="2"]'),
+    ).not.toBeNull();
+  });
+
   it('junctionビューはメイン床の手前角からL字の分岐を伸ばし、分岐側のメイン壁に開口マスクを適用する', () => {
     const { container } = renderPreview('junction', {
       forward: true,

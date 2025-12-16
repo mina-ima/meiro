@@ -260,6 +260,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-30): FancyMazePreview junction/goal で slice 単位の壁欠損をやめ、branch ジオメトリから開口ポリゴンを生成する mask を左右壁グループに適用。開口位置の柱をなくし、テストをマスク存在と mask 属性検証に置き換え（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-31): FancyMazePreview junction/goal の branch マスクを壁スライス形状の階段ポリゴンにし、data-branch-wall-mask-slice を付与してメイン壁と同じパースでくり抜く。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でスライス形状一致を検証
 * 更新メモ(2026-02-01): FancyMazePreview junction/goal の BRANCH_ANCHOR を slice1 手前（depth 0.5）に繰り上げ、開口マスクに slice1 を含めて手前の柱を除去。壁スライス形状のマスクと data-branch-wall-mask-slice は維持しつつ、開口が前から抜けることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
+* 更新メモ(2026-02-02): FancyMazePreview junction で正面壁描画を廃止し、forward=false 時は黒いキャップのみで閉塞を示す専用描画に変更。左右開口を分岐床/壁で優先的に見せ、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で前壁非表示とキャップ存在を回帰
 
 ### 8.2 オーナー
 

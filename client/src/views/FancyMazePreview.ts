@@ -258,6 +258,11 @@ function renderFrontWall(
   )}" fill="${baseColor}" />`;
 }
 
+function renderJunctionForwardCap(stop: SliceStop): string {
+  const width = stop.right - stop.left;
+  return `<rect data-role="junction-forward-cap" x="${stop.left}" y="0" width="${width}" height="${stop.y}" fill="${COLOR_BG}" fill-opacity="0.85" />`;
+}
+
 function renderGoalPortal(stop: SliceStop): string {
   const width = (stop.right - stop.left) * 0.45;
   const left = (stop.left + stop.right) / 2 - width / 2;
@@ -519,9 +524,9 @@ function renderJunctionView(
   parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
   // 4. 左右分岐（壁）
   parts.push(...branchParts.walls);
-  // 5. 正面奥の壁（必要なら）
+  // 5. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
   if (!openings.forward) {
-    parts.push(renderFrontWall(stops, 3, 'junction'));
+    parts.push(renderJunctionForwardCap(stops[3]));
   }
 
   return parts.join('\n');
