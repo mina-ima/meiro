@@ -261,6 +261,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-31): FancyMazePreview junction/goal の branch マスクを壁スライス形状の階段ポリゴンにし、data-branch-wall-mask-slice を付与してメイン壁と同じパースでくり抜く。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でスライス形状一致を検証
 * 更新メモ(2026-02-01): FancyMazePreview junction/goal の BRANCH_ANCHOR を slice1 手前（depth 0.5）に繰り上げ、開口マスクに slice1 を含めて手前の柱を除去。壁スライス形状のマスクと data-branch-wall-mask-slice は維持しつつ、開口が前から抜けることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
 * 更新メモ(2026-02-02): FancyMazePreview junction で正面壁描画を廃止し、forward=false 時は黒いキャップのみで閉塞を示す専用描画に変更。左右開口を分岐床/壁で優先的に見せ、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で前壁非表示とキャップ存在を回帰
+* 更新メモ(2026-02-03): FancyMazePreview junction に開口フィル(branch-opening-fill)を追加し、メイン壁の穴越しに暗い横通路面が見えるよう描画順を 床→分岐床→開口フィル→マスク→壁→分岐壁→キャップ に整理。開口フィルはマスクと同じスライス形状・data-open-slice を持ち、COLOR_BG に壁色を 0.3 混ぜた暗色で塗布（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で開口フィル存在と形状一致を検証）
 
 ### 8.2 オーナー
 

@@ -313,6 +313,49 @@ describe('FancyMazePreview', () => {
     assertMaskMatchesWallSlices('right');
   });
 
+  it('junctionビューは開口スライスに沿ってbranch-opening-fillを描き、forward=falseでも残す', () => {
+    const openings = { forward: true, left: true, right: true, backward: false };
+    const { container } = renderPreview('junction', openings);
+
+    const assertFillMatchesMask = (side: 'left' | 'right') => {
+      const fills = Array.from(
+        container.querySelectorAll(`[data-role="branch-opening-fill-${side}"]`),
+      );
+      expect(fills.length).toBeGreaterThan(0);
+
+      const maskPolys = Array.from(
+        container.querySelectorAll(
+          `mask[data-junction-mask="true"][data-mask-side="${side}"] polygon[data-branch-wall-mask-slice]`,
+        ),
+      );
+      expect(maskPolys.length).toBeGreaterThan(0);
+
+      const fillSlices = new Set(fills.map((poly) => poly.getAttribute('data-open-slice')));
+      const maskSlices = new Set(maskPolys.map((poly) => poly.getAttribute('data-branch-wall-mask-slice')));
+      expect(fillSlices).toEqual(maskSlices);
+
+      maskPolys.forEach((maskPoly) => {
+        const sliceIndex = maskPoly.getAttribute('data-branch-wall-mask-slice');
+        const fillPoly = fills.find((poly) => poly.getAttribute('data-open-slice') === sliceIndex);
+        expect(fillPoly).toBeDefined();
+        expect(
+          pointsAlmostEqual(
+            parsePoints(fillPoly?.getAttribute('points')),
+            parsePoints(maskPoly.getAttribute('points')),
+          ),
+        ).toBe(true);
+      });
+    };
+
+    assertFillMatchesMask('left');
+    assertFillMatchesMask('right');
+
+    const closed = renderPreview('junction', { ...openings, forward: false });
+    expect(closed.container.querySelector('[data-role="junction-forward-cap"]')).not.toBeNull();
+    expect(closed.container.querySelector('[data-role="branch-opening-fill-left"]')).not.toBeNull();
+    expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
+  });
+
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
     const { container } = renderPreview('junction', {
       forward: true,

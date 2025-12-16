@@ -37,6 +37,7 @@ const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
+const COLOR_BRANCH_OPENING_FILL = mixColor(COLOR_BG, COLOR_WALL_FAR, 0.3);
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
 const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5; // 手前スライスの前半から分岐を開始し、柱を含めて開口する
 const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
@@ -330,6 +331,12 @@ type BranchGeometry = {
   farEdgeX: number;
 };
 
+type BranchOpeningShape = {
+  side: 'left' | 'right';
+  sliceIndex: number;
+  points: { x: number; y: number }[];
+};
+
 function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): BranchGeometry {
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
@@ -447,9 +454,11 @@ function buildBranchWallMasks(
 ): {
   defs: string[];
   maskIds: Partial<Record<'left' | 'right', string>>;
+  openingShapes: BranchOpeningShape[];
 } {
   const defs: string[] = [];
   const maskIds: Partial<Record<'left' | 'right', string>> = {};
+  const openingShapes: BranchOpeningShape[] = [];
 
   geometries.forEach((geometry) => {
     const maskId = `junction-wall-mask-${geometry.side}`;
@@ -468,6 +477,7 @@ function buildBranchWallMasks(
         { x: farX, y: 0 },
         { x: nearX, y: 0 },
       ];
+      openingShapes.push({ side: geometry.side, sliceIndex: slice.index, points });
       return `<polygon data-branch-wall-mask-slice="${slice.index}" points="${joinPoints(
         points,
       )}" fill="black" />`;
@@ -480,7 +490,15 @@ function buildBranchWallMasks(
     );
   });
 
-  return { defs, maskIds };
+  return { defs, maskIds, openingShapes };
+}
+
+function renderBranchOpeningFills(openings: BranchOpeningShape[]): string[] {
+  return openings.map((opening) => {
+    return `<polygon data-role="branch-opening-fill-${opening.side}" data-open-slice="${opening.sliceIndex}"
+      points="${joinPoints(opening.points)}" fill="${COLOR_BRANCH_OPENING_FILL}" fill-opacity="0.92"
+      stroke="${COLOR_WALL_LINE}" stroke-width="0.4" stroke-opacity="0.08" />`;
+  });
 }
 
 function renderStartView(
@@ -510,21 +528,24 @@ function renderJunctionView(
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
+  const branchOpeningFills = renderBranchOpeningFills(wallMasks.openingShapes);
 
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
   // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
   parts.push(...branchParts.floors);
-  // 2.5 開口用マスク定義（壁より前に置き、メイン壁をくり抜く）
+  // 2.5 開口の奥行きを示すフィル（壁の前、マスク定義より前に置く）
+  parts.push(...branchOpeningFills);
+  // 3 開口用マスク定義（壁より前に置き、メイン壁をくり抜く）
   if (wallMasks.defs.length > 0) {
     parts.push(`<defs>${wallMasks.defs.join('\n')}</defs>`);
   }
-  // 3. メイン左右壁
+  // 4. メイン左右壁
   parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
-  // 4. 左右分岐（壁）
+  // 5. 左右分岐（壁）
   parts.push(...branchParts.walls);
-  // 5. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
+  // 6. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
   if (!openings.forward) {
     parts.push(renderJunctionForwardCap(stops[3]));
   }
