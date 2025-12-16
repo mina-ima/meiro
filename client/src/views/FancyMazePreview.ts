@@ -37,7 +37,8 @@ const COLOR_WALL_FAR = '#3c2417';
 const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
-const BRANCH_ANCHOR_SLICE_INDEX = 2;
+const BRANCH_ANCHOR_SLICE_INDEX = 1;
+const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5; // 手前スライスの前半から分岐を開始し、柱を含めて開口する
 const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
 const BRANCH_NEAR_SPAN = 0.2; // アンカー位置で見せる横幅（通路幅に対する比率）
 const BRANCH_FAR_EXTRA_SPAN = 0.1; // 奥側でわずかに広げる
@@ -502,7 +503,7 @@ function renderJunctionView(
   mainFloor: FloorCorners,
 ): string {
   const parts: string[] = [];
-  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
+  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
 
   // 1. 床（メイン通路）
@@ -533,7 +534,7 @@ function renderGoalView(
   mainFloor: FloorCorners,
 ): string {
   const parts: string[] = [];
-  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
+  const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
 
   parts.push(renderMainFloor(mainFloor));

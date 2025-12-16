@@ -259,6 +259,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-01-29): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter と内外壁の根元を slice2 アンカー(stop.y/left/right)に厳密に揃え、near 側をアンカー深度に固定し far 側だけ BRANCH_DEPTH_DELTA で奥行きを取るよう調整。branchMetrics で anchorStop との nearY/X 一致と壁根元の座標一致を検証（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-30): FancyMazePreview junction/goal で slice 単位の壁欠損をやめ、branch ジオメトリから開口ポリゴンを生成する mask を左右壁グループに適用。開口位置の柱をなくし、テストをマスク存在と mask 属性検証に置き換え（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-31): FancyMazePreview junction/goal の branch マスクを壁スライス形状の階段ポリゴンにし、data-branch-wall-mask-slice を付与してメイン壁と同じパースでくり抜く。`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でスライス形状一致を検証
+* 更新メモ(2026-02-01): FancyMazePreview junction/goal の BRANCH_ANCHOR を slice1 手前（depth 0.5）に繰り上げ、開口マスクに slice1 を含めて手前の柱を除去。壁スライス形状のマスクと data-branch-wall-mask-slice は維持しつつ、開口が前から抜けることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
 
 ### 8.2 オーナー
 

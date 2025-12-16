@@ -17,7 +17,8 @@ const VIEW_FLOOR_NEAR_LEFT = 40;
 const VIEW_FLOOR_NEAR_RIGHT = VIEW_WIDTH - 40;
 const VIEW_FLOOR_FAR_LEFT = VIEW_WIDTH * 0.5 - 60;
 const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
-const BRANCH_ANCHOR_SLICE_INDEX = 2;
+const BRANCH_ANCHOR_SLICE_INDEX = 1;
+const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -78,17 +79,13 @@ function pointsAlmostEqual(
   );
 }
 
-function buildSliceStops() {
-  const stops: { y: number; left: number; right: number }[] = [];
-  for (let i = 0; i <= SLICE_COUNT; i += 1) {
-    const t = i / SLICE_COUNT;
-    stops.push({
-      y: VIEW_FLOOR_Y + (VIEW_HORIZON_Y - VIEW_FLOOR_Y) * t,
-      left: VIEW_FLOOR_NEAR_LEFT + (VIEW_FLOOR_FAR_LEFT - VIEW_FLOOR_NEAR_LEFT) * t,
-      right: VIEW_FLOOR_NEAR_RIGHT + (VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_NEAR_RIGHT) * t,
-    });
-  }
-  return stops;
+function stopAt(depth: number) {
+  const t = depth / SLICE_COUNT;
+  return {
+    y: VIEW_FLOOR_Y + (VIEW_HORIZON_Y - VIEW_FLOOR_Y) * t,
+    left: VIEW_FLOOR_NEAR_LEFT + (VIEW_FLOOR_FAR_LEFT - VIEW_FLOOR_NEAR_LEFT) * t,
+    right: VIEW_FLOOR_NEAR_RIGHT + (VIEW_FLOOR_FAR_RIGHT - VIEW_FLOOR_NEAR_RIGHT) * t,
+  };
 }
 
 describe('FancyMazePreview', () => {
@@ -184,7 +181,7 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchorStop = stopAt(BRANCH_ANCHOR_DEPTH);
     const leftBranchFloor = container.querySelector(
       'polygon[data-branch="left"][data-layer="floor"]',
     );
@@ -253,20 +250,20 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const targetSliceIndex = BRANCH_ANCHOR_SLICE_INDEX + 1;
-    const leftWallSlice = container.querySelector(
-      `[data-layer="wall"][data-wall-side="left"][data-slice="${targetSliceIndex}"]`,
-    );
-    const rightWallSlice = container.querySelector(
-      `[data-layer="wall"][data-wall-side="right"][data-slice="${targetSliceIndex}"]`,
-    );
-    expect(leftWallSlice).not.toBeNull();
-    expect(rightWallSlice).not.toBeNull();
+    const collectWallPointsBySlice = (side: 'left' | 'right') => {
+      return Array.from(
+        container.querySelectorAll(`[data-layer="wall"][data-wall-side="${side}"][data-slice]`),
+      ).reduce<Map<string, { x: number; y: number }[]>>((map, el) => {
+        const sliceIndex = el.getAttribute('data-slice');
+        if (sliceIndex) {
+          map.set(sliceIndex, parsePoints(el.getAttribute('points')));
+        }
+        return map;
+      }, new Map());
+    };
 
-    const assertMaskMatchesSlice = (
-      side: 'left' | 'right',
-      wallPoints: { x: number; y: number }[],
-    ) => {
+    const assertMaskMatchesWallSlices = (side: 'left' | 'right') => {
+      const wallPointsBySlice = collectWallPointsBySlice(side);
       const maskPolys = Array.from(
         container.querySelectorAll(
           `mask[data-junction-mask="true"][data-mask-side="${side}"] polygon[data-branch-wall-mask-slice]`,
@@ -274,14 +271,21 @@ describe('FancyMazePreview', () => {
       );
       expect(maskPolys.length).toBeGreaterThan(0);
       const sliceIndexes = new Set(maskPolys.map((p) => p.getAttribute('data-branch-wall-mask-slice')));
-      expect(sliceIndexes.has(String(targetSliceIndex))).toBe(true);
+      expect(sliceIndexes.has('1')).toBe(true);
 
-      const maskPointSets = maskPolys.map((p) => parsePoints(p.getAttribute('points')));
-      expect(maskPointSets.some((pts) => pointsAlmostEqual(pts, wallPoints))).toBe(true);
+      maskPolys.forEach((poly) => {
+        const sliceIndex = poly.getAttribute('data-branch-wall-mask-slice');
+        expect(sliceIndex).toBeTruthy();
+        const wallPoints = sliceIndex ? wallPointsBySlice.get(sliceIndex) : null;
+        expect(wallPoints).toBeDefined();
+        expect(pointsAlmostEqual(parsePoints(poly.getAttribute('points')), wallPoints ?? null)).toBe(
+          true,
+        );
+      });
     };
 
-    assertMaskMatchesSlice('left', parsePoints(leftWallSlice?.getAttribute('points')));
-    assertMaskMatchesSlice('right', parsePoints(rightWallSlice?.getAttribute('points')));
+    assertMaskMatchesWallSlices('left');
+    assertMaskMatchesWallSlices('right');
   });
 
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
@@ -368,7 +372,7 @@ describe('FancyMazePreview', () => {
     expect(leftSlice2Walls.length).toBe(1);
     expect(rightSlice2Walls.length).toBe(1);
 
-    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchorStop = stopAt(BRANCH_ANCHOR_DEPTH);
     const leftNearY = Math.max(
       ...parsePoints(leftBranchFloors[0].getAttribute('points')).map((p) => p.y),
     );
@@ -409,7 +413,7 @@ describe('FancyMazePreview', () => {
     expect(leftBranchFloors.length).toBe(1);
     expect(rightBranchFloors.length).toBe(0);
 
-    const anchorStop = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchorStop = stopAt(BRANCH_ANCHOR_DEPTH);
     const leftMetrics = branchMetrics(parsePoints(leftBranchFloors[0].getAttribute('points')));
     const anchorWidth = anchorStop.right - anchorStop.left;
     expect(leftMetrics.nearY).toBeCloseTo(anchorStop.y, 0.5);
@@ -425,8 +429,7 @@ describe('FancyMazePreview', () => {
   });
 
   it('分岐床の手前端はアンカーの床ラインに揃い、内側角がアンカー座標に一致する', () => {
-    const stops = buildSliceStops();
-    const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
     const anchorWidth = anchor.right - anchor.left;
     const { container } = renderPreview('junction', {
       forward: true,
@@ -512,7 +515,7 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const anchor = buildSliceStops()[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
     const maxYSpan = (VIEW_FLOOR_Y - VIEW_HORIZON_Y) * 0.35;
     const anchorWidth = anchor.right - anchor.left;
 
@@ -543,8 +546,7 @@ describe('FancyMazePreview', () => {
   });
 
   it('分岐壁の根元はアンカー座標と一致し、床と連続して奥へ伸びる', () => {
-    const stops = buildSliceStops();
-    const anchor = stops[BRANCH_ANCHOR_SLICE_INDEX];
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
