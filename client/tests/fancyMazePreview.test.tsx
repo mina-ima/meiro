@@ -164,7 +164,7 @@ describe('FancyMazePreview', () => {
     expect(slices.has('3') || slices.has('4')).toBe(true);
   });
 
-  it('junctionビューはメイン床の手前角からL字の分岐を伸ばし、分岐側のメイン壁を外す', () => {
+  it('junctionビューはメイン床の手前角からL字の分岐を伸ばし、分岐側のメイン壁に開口マスクを適用する', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -194,11 +194,29 @@ describe('FancyMazePreview', () => {
     expect(
       container.querySelectorAll('[data-layer="wall"][data-wall-side="left"][data-slice="2"]')
         .length,
-    ).toBe(0);
+    ).toBeGreaterThan(0);
     expect(
       container.querySelectorAll('[data-layer="wall"][data-wall-side="right"][data-slice="2"]')
         .length,
-    ).toBe(0);
+    ).toBeGreaterThan(0);
+
+    const leftMask = container.querySelector(
+      'mask[data-junction-mask="true"][data-mask-side="left"]',
+    );
+    const rightMask = container.querySelector(
+      'mask[data-junction-mask="true"][data-mask-side="right"]',
+    );
+    expect(leftMask).not.toBeNull();
+    expect(rightMask).not.toBeNull();
+    expect(leftMask?.getAttribute('id')).toBeTruthy();
+    expect(rightMask?.getAttribute('id')).toBeTruthy();
+
+    const leftWallGroup = container.querySelector('g[data-wall-group="left"]');
+    const rightWallGroup = container.querySelector('g[data-wall-group="right"]');
+    expect(leftWallGroup?.getAttribute('mask')).toBe(`url(#${leftMask?.id})`);
+    expect(rightWallGroup?.getAttribute('mask')).toBe(`url(#${rightMask?.id})`);
+    expect(leftWallGroup?.getAttribute('data-junction-wall-mask-applied')).toBe('true');
+    expect(rightWallGroup?.getAttribute('data-junction-wall-mask-applied')).toBe('true');
 
     const leftInnerWall = container.querySelector(
       '[data-branch-wall="left"][data-branch-position="inner"]',

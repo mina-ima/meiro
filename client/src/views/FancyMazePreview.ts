@@ -204,24 +204,36 @@ function renderWallSlice(side: 'left' | 'right', slice: SliceGeometry, dataRole?
 
 function renderCorridorWalls(
   slices: SliceGeometry[],
-  variant?: MazePreviewVariant,
-  openings?: Openings,
+  _variant?: MazePreviewVariant,
+  _openings?: Openings,
+  wallMasks?: Partial<Record<'left' | 'right', string>>,
 ): string {
-  const parts: string[] = [];
+  const leftParts: string[] = [];
+  const rightParts: string[] = [];
   slices.forEach((slice) => {
-    const i = slice.index;
-    const skipLeft = variant === 'junction' && openings?.left && i === BRANCH_ANCHOR_SLICE_INDEX;
-    const skipRight = variant === 'junction' && openings?.right && i === BRANCH_ANCHOR_SLICE_INDEX;
-    const markMainWall = i === 1;
+    const markMainWall = slice.index === 1;
 
-    if (!skipLeft) {
-      parts.push(renderWallSlice('left', slice, markMainWall ? 'main-wall-left' : undefined));
-    }
-    if (!skipRight) {
-      parts.push(renderWallSlice('right', slice, markMainWall ? 'main-wall-right' : undefined));
-    }
+    leftParts.push(renderWallSlice('left', slice, markMainWall ? 'main-wall-left' : undefined));
+    rightParts.push(renderWallSlice('right', slice, markMainWall ? 'main-wall-right' : undefined));
   });
-  return parts.join('\n');
+
+  const wrapWithMask = (side: 'left' | 'right', elements: string[]) => {
+    if (!elements.length) return '';
+    const maskId = wallMasks?.[side];
+    const maskAttr = maskId ? ` mask="url(#${maskId})"` : '';
+    const groupAttrs = [
+      `data-wall-group="${side}"`,
+      maskId ? 'data-junction-wall-mask-applied="true"' : null,
+      maskId ? `data-wall-mask-id="${maskId}"` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return `<g ${groupAttrs}${maskAttr}>${elements.join('\n')}</g>`;
+  };
+
+  return [wrapWithMask('left', leftParts), wrapWithMask('right', rightParts)]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function renderFrontWall(
@@ -298,8 +310,21 @@ type BranchParts = {
   outerWall: string;
 };
 
-// junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
-function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchParts {
+type BranchGeometry = {
+  side: 'left' | 'right';
+  anchorDepth: number;
+  farDepth: number;
+  anchorStop: SliceStop;
+  farStop: SliceStop;
+  nearInner: { x: number; y: number };
+  nearOuter: { x: number; y: number };
+  farInner: { x: number; y: number };
+  farOuter: { x: number; y: number };
+  anchorEdgeX: number;
+  farEdgeX: number;
+};
+
+function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): BranchGeometry {
   const isLeft = side === 'left';
   const direction = isLeft ? -1 : 1;
   const nearDepth = anchorDepth;
@@ -309,9 +334,8 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
   const anchorWidth = anchorStop.right - anchorStop.left;
   const farWidth = farStop.right - farStop.left;
   const anchorEdgeX = isLeft ? anchorStop.left : anchorStop.right;
-  const farEdgeXBase = isLeft ? farStop.left : farStop.right;
+  const farEdgeX = isLeft ? farStop.left : farStop.right;
 
-  // アンカー位置を厳密に基準とした分岐床の角
   const branchNearInner = { x: anchorEdgeX, y: anchorStop.y };
   const branchNearOuter = {
     x: anchorEdgeX + direction * (anchorWidth * BRANCH_NEAR_SPAN),
@@ -319,18 +343,43 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
   };
   const branchFarInner = {
     x:
-      farEdgeXBase +
+      farEdgeX +
       direction * (farWidth * BRANCH_INNER_TAPER) +
       direction * BRANCH_FAR_LATERAL_SHIFT * 0.35,
     y: farStop.y,
   };
   const branchFarOuter = {
     x:
-      farEdgeXBase +
+      farEdgeX +
       direction * (farWidth * (BRANCH_NEAR_SPAN + BRANCH_FAR_EXTRA_SPAN)) +
       direction * BRANCH_FAR_LATERAL_SHIFT,
     y: farStop.y,
   };
+
+  return {
+    side,
+    anchorDepth,
+    farDepth,
+    anchorStop,
+    farStop,
+    nearInner: branchNearInner,
+    nearOuter: branchNearOuter,
+    farInner: branchFarInner,
+    farOuter: branchFarOuter,
+    anchorEdgeX,
+    farEdgeX,
+  };
+}
+
+// junction / goal 分岐: メイン床の手前角から横方向にL字で伸ばす。
+function renderSideBranch(geometry: BranchGeometry): BranchParts {
+  const {
+    side,
+    nearInner: branchNearInner,
+    nearOuter: branchNearOuter,
+    farInner: branchFarInner,
+    farOuter: branchFarOuter,
+  } = geometry;
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
   const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
@@ -363,22 +412,54 @@ function renderSideBranch(side: 'left' | 'right', anchorDepth: number): BranchPa
 function buildBranchParts(
   openings: Openings,
   anchorDepth: number,
-): { floors: string[]; walls: string[] } {
+): { floors: string[]; walls: string[]; geometries: BranchGeometry[] } {
   const floors: string[] = [];
   const walls: string[] = [];
+  const geometries: BranchGeometry[] = [];
 
   if (openings.left) {
-    const left = renderSideBranch('left', anchorDepth);
+    const leftGeometry = createBranchGeometry('left', anchorDepth);
+    const left = renderSideBranch(leftGeometry);
     floors.push(left.floor);
     walls.push(left.innerWall, left.outerWall);
+    geometries.push(leftGeometry);
   }
   if (openings.right) {
-    const right = renderSideBranch('right', anchorDepth);
+    const rightGeometry = createBranchGeometry('right', anchorDepth);
+    const right = renderSideBranch(rightGeometry);
     floors.push(right.floor);
     walls.push(right.innerWall, right.outerWall);
+    geometries.push(rightGeometry);
   }
 
-  return { floors, walls };
+  return { floors, walls, geometries };
+}
+
+function buildBranchWallMasks(geometries: BranchGeometry[]): {
+  defs: string[];
+  maskIds: Partial<Record<'left' | 'right', string>>;
+} {
+  const defs: string[] = [];
+  const maskIds: Partial<Record<'left' | 'right', string>> = {};
+
+  geometries.forEach((geometry) => {
+    const maskId = `junction-wall-mask-${geometry.side}`;
+    maskIds[geometry.side] = maskId;
+    const openingPoints = [
+      { x: geometry.anchorEdgeX, y: geometry.anchorStop.y },
+      { x: geometry.farEdgeX, y: geometry.farStop.y },
+      { x: geometry.farEdgeX, y: 0 },
+      { x: geometry.anchorEdgeX, y: 0 },
+    ];
+    defs.push(
+      `<mask id="${maskId}" data-junction-mask="true" data-mask-side="${geometry.side}">
+        <rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="white" />
+        <polygon points="${joinPoints(openingPoints)}" fill="black" />
+      </mask>`,
+    );
+  });
+
+  return { defs, maskIds };
 }
 
 function renderStartView(
@@ -407,14 +488,19 @@ function renderJunctionView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
+  const wallMasks = buildBranchWallMasks(branchParts.geometries);
 
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
   // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
   parts.push(...branchParts.floors);
+  // 2.5 開口用マスク定義（壁より前に置き、メイン壁をくり抜く）
+  if (wallMasks.defs.length > 0) {
+    parts.push(`<defs>${wallMasks.defs.join('\n')}</defs>`);
+  }
   // 3. メイン左右壁
-  parts.push(renderCorridorWalls(slices, 'junction', openings));
+  parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
   // 4. 左右分岐（壁）
   parts.push(...branchParts.walls);
   // 5. 正面奥の壁（必要なら）
@@ -433,12 +519,16 @@ function renderGoalView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_SLICE_INDEX);
+  const wallMasks = buildBranchWallMasks(branchParts.geometries);
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
   parts.push(renderGoalFloorGlow(mainFloor));
   parts.push(...branchParts.floors);
-  parts.push(renderCorridorWalls(slices, 'goal', openings));
+  if (wallMasks.defs.length > 0) {
+    parts.push(`<defs>${wallMasks.defs.join('\n')}</defs>`);
+  }
+  parts.push(renderCorridorWalls(slices, 'goal', openings, wallMasks.maskIds));
   parts.push(...branchParts.walls);
   parts.push(renderFrontWall(stops, 4, 'goal'));
   parts.push(renderGoalPortal(stops[4]));

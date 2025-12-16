@@ -200,6 +200,7 @@
 - 更新メモ(2026-01-27): FancyMazePreview junction/goal の描画順を床→分岐床→壁→前壁に整理し、分岐床が左右壁の上に灰色帯でかぶらないようDOM順を修正（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` にDOM順テストを追加）
 - 更新メモ(2026-01-28): FancyMazePreview junction/goal の分岐床を anchor 起点の短い台形に再調整し、遠方でわずかに外へ逃がす側方シフトを追加。goal ではポータル光の床グローを重ね、テストに nearY>=anchor・farY<nearY・farXの外向きシフトを確認するアサーションを追加（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-01-29): FancyMazePreview junction/goal の分岐床 nearInner/nearOuter と内外壁の根元を slice2 アンカー(stop.y/left/right)に厳密に揃え、near 側をアンカー深度に固定し far 側だけ BRANCH_DEPTH_DELTA で奥行きを取るよう調整。branchMetrics で anchorStop との nearY/X 一致と壁根元の座標一致を検証（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
+- 更新メモ(2026-01-30): FancyMazePreview junction/goal で slice 単位の壁抜けを廃止し、branch ジオメトリから開口ポリゴンを定義した mask を左右メイン壁のグループに適用。柱が残らない連続開口にし、テストをマスク存在と mask 属性検証へ差し替え（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
