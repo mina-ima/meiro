@@ -43,6 +43,7 @@ const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5; // 手前スライ�
 const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
 const BRANCH_NEAR_SPAN = 0.2; // アンカー位置で見せる横幅（通路幅に対する比率）
 const BRANCH_FAR_EXTRA_SPAN = 0.1; // 奥側でわずかに広げる
+const BRANCH_MOUTH_INSET = 0.12; // 分岐口を通路内側へ少し食い込ませる（アンカー幅比）
 const BRANCH_INNER_TAPER = 0.04; // 奥側でほんの少し内側へ寄せ、“コの字”の奥行きを見せる
 const BRANCH_FAR_LATERAL_SHIFT = 10; // 遠方でわずかに外へ寄せて“横通路”感を出す
 
@@ -351,7 +352,9 @@ function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): Bran
   const anchorEdgeX = isLeft ? anchorStop.left : anchorStop.right;
   const farEdgeX = isLeft ? farStop.left : farStop.right;
 
-  const branchNearInner = { x: anchorEdgeX, y: anchorStop.y };
+  const inset = anchorWidth * BRANCH_MOUTH_INSET;
+  const nearInnerX = isLeft ? anchorEdgeX + inset : anchorEdgeX - inset;
+  const branchNearInner = { x: nearInnerX, y: anchorStop.y };
   const branchNearOuter = {
     x: anchorEdgeX + direction * (anchorWidth * BRANCH_NEAR_SPAN),
     y: anchorStop.y,
@@ -498,27 +501,16 @@ function buildBranchWallClips(geometries: BranchGeometry[]): {
     const points =
       geometry.side === 'left'
         ? [
-            {
-              x: Math.min(geometry.nearOuter.x, geometry.anchorStop.left) - margin,
-              y: HEIGHT,
-            },
-            {
-              x: Math.min(geometry.nearOuter.x, geometry.anchorStop.left) - margin,
-              y: 0,
-            },
-            { x: Math.min(geometry.farOuter.x, geometry.farStop.left) - margin, y: 0 },
-            { x: geometry.farStop.left, y: geometry.farStop.y },
-            { x: geometry.anchorStop.left, y: geometry.anchorStop.y },
+            { x: 0, y: HEIGHT },
+            { x: geometry.anchorStop.left - margin, y: HEIGHT },
+            { x: geometry.farStop.left, y: 0 },
+            { x: 0, y: 0 },
           ]
         : [
-            {
-              x: Math.max(geometry.nearOuter.x, geometry.anchorStop.right) + margin,
-              y: HEIGHT,
-            },
-            { x: Math.max(geometry.nearOuter.x, geometry.anchorStop.right) + margin, y: 0 },
-            { x: Math.max(geometry.farOuter.x, geometry.farStop.right) + margin, y: 0 },
-            { x: geometry.farStop.right, y: geometry.farStop.y },
-            { x: geometry.anchorStop.right, y: geometry.anchorStop.y },
+            { x: geometry.anchorStop.right + margin, y: HEIGHT },
+            { x: WIDTH, y: HEIGHT },
+            { x: WIDTH, y: 0 },
+            { x: geometry.farStop.right, y: 0 },
           ];
     defs.push(
       `<clipPath id="${clipId}" data-role="branch-clip-${geometry.side}">
@@ -557,7 +549,7 @@ function renderBranchFloorSeams(branchParts: BranchParts[]): string[] {
     const { side, geometry } = part;
     const anchorStop = geometry.anchorStop;
     const anchorWidth = anchorStop.right - anchorStop.left;
-    const inset = anchorWidth * 0.12;
+    const inset = anchorWidth * BRANCH_MOUTH_INSET;
     const mainInner =
       side === 'left'
         ? { x: anchorStop.left + inset, y: anchorStop.y }
@@ -566,11 +558,7 @@ function renderBranchFloorSeams(branchParts: BranchParts[]): string[] {
       x: side === 'left' ? anchorStop.left : anchorStop.right,
       y: anchorStop.y,
     };
-    const branchOuterDeep = {
-      x: lerp(geometry.nearOuter.x, geometry.farOuter.x, 0.22),
-      y: lerp(geometry.nearOuter.y, geometry.farOuter.y, 0.22),
-    };
-    const points = [mainInner, mainEdge, geometry.nearOuter, branchOuterDeep];
+    const points = [mainInner, mainEdge, geometry.nearOuter, geometry.nearInner];
     return `<polygon data-role="branch-floor-seam-${side}" points="${joinPoints(
       points,
     )}" fill="url(#corridor-floor-grad)" fill-opacity="0.9" stroke="${COLOR_FLOOR_LINE}" stroke-width="0.45" stroke-opacity="0.08" />`;

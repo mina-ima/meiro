@@ -67,6 +67,20 @@ function branchMetrics(points: { x: number; y: number }[]) {
   };
 }
 
+function branchNearEdge(
+  points: { x: number; y: number }[],
+  side: 'left' | 'right',
+): { nearInner: { x: number; y: number }; nearOuter: { x: number; y: number }; nearY: number } {
+  const ys = points.map((p) => p.y);
+  const nearY = Math.max(...ys);
+  const nearPoints = points.filter((p) => Math.abs(p.y - nearY) < 0.001);
+  const minXPoint = nearPoints.reduce((min, p) => (p.x < min.x ? p : min), nearPoints[0]);
+  const maxXPoint = nearPoints.reduce((max, p) => (p.x > max.x ? p : max), nearPoints[0]);
+  const nearInner = side === 'left' ? maxXPoint : minXPoint;
+  const nearOuter = side === 'left' ? minXPoint : maxXPoint;
+  return { nearInner, nearOuter, nearY };
+}
+
 function pointsAlmostEqual(
   a: { x: number; y: number }[] | null,
   b: { x: number; y: number }[] | null,
@@ -218,12 +232,14 @@ describe('FancyMazePreview', () => {
 
     const leftBranchPoints = parsePoints(leftBranchFloor?.getAttribute('points'));
     const rightBranchPoints = parsePoints(rightBranchFloor?.getAttribute('points'));
-    const leftNearY = Math.max(...leftBranchPoints.map((p) => p.y));
-    const rightNearY = Math.max(...rightBranchPoints.map((p) => p.y));
-    expect(leftNearY).toBeCloseTo(anchorStop.y, 0.01);
-    expect(rightNearY).toBeCloseTo(anchorStop.y, 0.01);
-    expect(leftBranchPoints).toContainEqual({ x: anchorStop.left, y: anchorStop.y });
-    expect(rightBranchPoints).toContainEqual({ x: anchorStop.right, y: anchorStop.y });
+    const leftNear = branchNearEdge(leftBranchPoints, 'left');
+    const rightNear = branchNearEdge(rightBranchPoints, 'right');
+    expect(leftNear.nearY).toBeCloseTo(anchorStop.y, 0.01);
+    expect(rightNear.nearY).toBeCloseTo(anchorStop.y, 0.01);
+    expect(leftNear.nearOuter.x).toBeLessThan(anchorStop.left);
+    expect(leftNear.nearInner.x).toBeGreaterThan(anchorStop.left);
+    expect(rightNear.nearOuter.x).toBeGreaterThan(anchorStop.right);
+    expect(rightNear.nearInner.x).toBeLessThan(anchorStop.right);
 
     expect(
       container.querySelectorAll('[data-layer="wall"][data-wall-side="left"][data-slice="2"]')
@@ -263,8 +279,8 @@ describe('FancyMazePreview', () => {
 
     const leftInnerPoints = parsePoints(leftInnerWall?.getAttribute('points'));
     const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
-    expect(leftInnerPoints[0]).toEqual({ x: anchorStop.left, y: anchorStop.y });
-    expect(rightInnerPoints[0]).toEqual({ x: anchorStop.right, y: anchorStop.y });
+    expect(leftInnerPoints[0]).toEqual(leftNear.nearInner);
+    expect(rightInnerPoints[0]).toEqual(rightNear.nearInner);
   });
 
   it('junctionマスクは開口側の壁スライス形状に一致するポリゴンでくり抜く', () => {
@@ -519,12 +535,16 @@ describe('FancyMazePreview', () => {
     expect(rightBranchFloors.length).toBe(0);
 
     const anchorStop = stopAt(BRANCH_ANCHOR_DEPTH);
-    const leftMetrics = branchMetrics(parsePoints(leftBranchFloors[0].getAttribute('points')));
+    const leftPoints = parsePoints(leftBranchFloors[0].getAttribute('points'));
+    const leftMetrics = branchMetrics(leftPoints);
+    const leftNear = branchNearEdge(leftPoints, 'left');
     const anchorWidth = anchorStop.right - anchorStop.left;
     expect(leftMetrics.nearY).toBeCloseTo(anchorStop.y, 0.5);
     expect(leftMetrics.farY).toBeLessThan(leftMetrics.nearY);
-    expect(leftMetrics.nearMaxX).toBeCloseTo(anchorStop.left, 1);
-    expect(anchorStop.left - leftMetrics.nearMinX).toBeLessThan(anchorWidth * 0.35);
+    expect(leftNear.nearInner.x - anchorStop.left).toBeGreaterThan(anchorWidth * 0.08);
+    expect(leftNear.nearInner.x - anchorStop.left).toBeLessThan(anchorWidth * 0.18);
+    expect(anchorStop.left - leftNear.nearOuter.x).toBeGreaterThan(anchorWidth * 0.15);
+    expect(anchorStop.left - leftNear.nearOuter.x).toBeLessThan(anchorWidth * 0.25);
     expect(anchorStop.left - leftMetrics.farMinX).toBeLessThan(anchorWidth * 0.45);
     expect(leftMetrics.ySpan).toBeLessThan((VIEW_FLOOR_Y - VIEW_HORIZON_Y) * 0.35);
     expect(leftMetrics.farMinX).toBeLessThan(leftMetrics.nearMinX);
@@ -533,7 +553,40 @@ describe('FancyMazePreview', () => {
     expect(portal).not.toBeNull();
   });
 
-  it('分岐床の手前端はアンカーの床ラインに揃い、内側角がアンカー座標に一致する', () => {
+  it('分岐床のmouthはアンカー境界から内側へ押し込み、幅のある線分を作る', () => {
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+    const anchorWidth = anchor.right - anchor.left;
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const assertInset = (side: 'left' | 'right', anchorX: number) => {
+      const floor = container.querySelector<SVGPolygonElement>(`[data-role="branch-floor-${side}"]`);
+      expect(floor).not.toBeNull();
+      const edge = branchNearEdge(parsePoints(floor?.getAttribute('points')), side);
+      const inset = Math.abs(edge.nearInner.x - anchorX);
+      expect(Math.abs(edge.nearInner.y - anchor.y)).toBeLessThan(0.01);
+      expect(Math.abs(edge.nearOuter.y - anchor.y)).toBeLessThan(0.01);
+      expect(inset).toBeGreaterThan(1);
+      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
+      expect(inset).toBeLessThan(anchorWidth * 0.18);
+      if (side === 'left') {
+        expect(edge.nearInner.x).toBeGreaterThan(anchorX);
+        expect(edge.nearOuter.x).toBeLessThan(anchorX);
+      } else {
+        expect(edge.nearInner.x).toBeLessThan(anchorX);
+        expect(edge.nearOuter.x).toBeGreaterThan(anchorX);
+      }
+    };
+
+    assertInset('left', anchor.left);
+    assertInset('right', anchor.right);
+  });
+
+  it('分岐床の手前端はアンカーライン上で幅を持ち、境界を跨いで分岐を開始する', () => {
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
     const anchorWidth = anchor.right - anchor.left;
     const { container } = renderPreview('junction', {
@@ -550,32 +603,26 @@ describe('FancyMazePreview', () => {
     expect(leftBranch).not.toBeNull();
     expect(rightBranch).not.toBeNull();
 
-    const assertBranch = (metrics: ReturnType<typeof branchMetrics>, anchorX: number) => {
+    const assertBranch = (
+      points: { x: number; y: number }[],
+      side: 'left' | 'right',
+      anchorX: number,
+    ) => {
+      const metrics = branchMetrics(points);
+      const near = branchNearEdge(points, side);
       expect(metrics.nearY).toBeGreaterThanOrEqual(anchor.y - 0.6);
       expect(metrics.nearY).toBeLessThanOrEqual(anchor.y + 0.6);
       expect(metrics.farY).toBeLessThan(metrics.nearY);
-      const anchorInner = anchorX < VIEW_WIDTH / 2 ? metrics.nearMaxX : metrics.nearMinX;
-      expect(Math.abs(anchorInner - anchorX)).toBeLessThanOrEqual(0.3);
+      expect((near.nearInner.x - anchorX) * (near.nearOuter.x - anchorX)).toBeLessThan(0);
+      const inset = Math.abs(near.nearInner.x - anchorX);
+      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
+      expect(inset).toBeLessThan(anchorWidth * 0.18);
+      const mouthSpan = Math.abs(near.nearOuter.x - near.nearInner.x);
+      expect(mouthSpan).toBeGreaterThan(anchorWidth * 0.25);
     };
 
-    const leftMetrics = branchMetrics(parsePoints(leftBranch?.getAttribute('points')));
-    const rightMetrics = branchMetrics(parsePoints(rightBranch?.getAttribute('points')));
-    expect(Math.abs(leftMetrics.nearMaxX - anchor.left)).toBeLessThanOrEqual(0.3);
-    expect(Math.abs(rightMetrics.nearMinX - anchor.right)).toBeLessThanOrEqual(0.3);
-    expect(anchor.left - leftMetrics.nearMinX).toBeLessThan(anchorWidth * 0.4);
-    expect(rightMetrics.nearMaxX - anchor.right).toBeLessThan(anchorWidth * 0.4);
-    assertBranch(leftMetrics, anchor.left);
-    assertBranch(rightMetrics, anchor.right);
-    expect(
-      parsePoints(leftBranch?.getAttribute('points')).some(
-        (p) => Math.abs(p.x - anchor.left) < 0.3 && Math.abs(p.y - anchor.y) < 0.3,
-      ),
-    ).toBe(true);
-    expect(
-      parsePoints(rightBranch?.getAttribute('points')).some(
-        (p) => Math.abs(p.x - anchor.right) < 0.3 && Math.abs(p.y - anchor.y) < 0.3,
-      ),
-    ).toBe(true);
+    assertBranch(parsePoints(leftBranch?.getAttribute('points')), 'left', anchor.left);
+    assertBranch(parsePoints(rightBranch?.getAttribute('points')), 'right', anchor.right);
   });
 
   it('分岐床は壁より後ろで描画され、壁が手前で床を隠せるDOM順になっている', () => {
@@ -627,22 +674,26 @@ describe('FancyMazePreview', () => {
     const assertBranch = (selector: string, anchorEdge: number, side: 'left' | 'right') => {
       const poly = container.querySelector<SVGPolygonElement>(selector);
       expect(poly).not.toBeNull();
-      const metrics = branchMetrics(parsePoints(poly?.getAttribute('points')));
+      const points = parsePoints(poly?.getAttribute('points'));
+      const metrics = branchMetrics(points);
+      const near = branchNearEdge(points, side);
       expect(metrics.nearY).toBeGreaterThanOrEqual(anchor.y - 0.01);
       expect(metrics.nearY).toBeCloseTo(anchor.y, 0.6);
       expect(metrics.farY).toBeLessThan(metrics.nearY);
       expect(metrics.ySpan).toBeLessThan(maxYSpan);
+      expect((near.nearInner.x - anchorEdge) * (near.nearOuter.x - anchorEdge)).toBeLessThan(0);
+
+      const inset = Math.abs(near.nearInner.x - anchorEdge);
+      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
 
       if (side === 'left') {
-        expect(anchorEdge - metrics.nearMaxX).toBeLessThan(1.5);
-        expect(anchorEdge - metrics.nearMinX).toBeLessThan(anchorWidth * 0.35);
-        expect(anchorEdge - metrics.farMinX).toBeLessThan(anchorWidth * 0.45);
-        expect(metrics.farMinX).toBeLessThan(metrics.nearMinX);
+        expect(anchorEdge - near.nearOuter.x).toBeGreaterThan(anchorWidth * 0.15);
+        expect(anchorEdge - metrics.farMinX).toBeLessThan(anchorWidth * 0.5);
+        expect(metrics.farMinX).toBeLessThan(near.nearOuter.x);
       } else {
-        expect(metrics.nearMinX - anchorEdge).toBeLessThan(1.5);
-        expect(metrics.nearMaxX - anchorEdge).toBeLessThan(anchorWidth * 0.35);
-        expect(metrics.farMaxX - anchorEdge).toBeLessThan(anchorWidth * 0.45);
-        expect(metrics.farMaxX).toBeGreaterThan(metrics.nearMaxX);
+        expect(near.nearOuter.x - anchorEdge).toBeGreaterThan(anchorWidth * 0.15);
+        expect(metrics.farMaxX - anchorEdge).toBeLessThan(anchorWidth * 0.5);
+        expect(metrics.farMaxX).toBeGreaterThan(near.nearOuter.x);
       }
     };
 
@@ -650,8 +701,7 @@ describe('FancyMazePreview', () => {
     assertBranch('[data-role="branch-floor-right"]', anchor.right, 'right');
   });
 
-  it('分岐壁の根元はアンカー座標と一致し、床と連続して奥へ伸びる', () => {
-    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+  it('分岐壁の根元はmouth位置に揃い、床と連続して奥へ伸びる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -659,26 +709,42 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const leftWall = container.querySelector<SVGPolygonElement>(
+    const leftInnerWall = container.querySelector<SVGPolygonElement>(
       '[data-role="branch-wall-left-inner"]',
     );
-    const rightWall = container.querySelector<SVGPolygonElement>(
+    const rightInnerWall = container.querySelector<SVGPolygonElement>(
       '[data-role="branch-wall-right-inner"]',
     );
-    expect(leftWall).not.toBeNull();
-    expect(rightWall).not.toBeNull();
+    const leftOuterWall = container.querySelector<SVGPolygonElement>(
+      '[data-role="branch-wall-left-outer"]',
+    );
+    const rightOuterWall = container.querySelector<SVGPolygonElement>(
+      '[data-role="branch-wall-right-outer"]',
+    );
+    const leftFloor = container.querySelector<SVGPolygonElement>('[data-role="branch-floor-left"]');
+    const rightFloor = container.querySelector<SVGPolygonElement>('[data-role="branch-floor-right"]');
+    expect(leftInnerWall).not.toBeNull();
+    expect(rightInnerWall).not.toBeNull();
+    expect(leftOuterWall).not.toBeNull();
+    expect(rightOuterWall).not.toBeNull();
+    expect(leftFloor).not.toBeNull();
+    expect(rightFloor).not.toBeNull();
 
-    const assertWall = (points: { x: number; y: number }[], anchorX: number) => {
+    const leftNear = branchNearEdge(parsePoints(leftFloor?.getAttribute('points')), 'left');
+    const rightNear = branchNearEdge(parsePoints(rightFloor?.getAttribute('points')), 'right');
+
+    const assertWall = (points: { x: number; y: number }[], expectedBase: { x: number; y: number }) => {
       expect(points.length).toBeGreaterThan(0);
       const baseY = Math.max(...points.map((p) => p.y));
-      expect(Math.abs(baseY - anchor.y)).toBeLessThanOrEqual(0.3);
-      expect(
-        points.some((p) => Math.abs(p.x - anchorX) < 0.3 && Math.abs(p.y - anchor.y) < 0.3),
-      ).toBe(true);
+      const baseXs = points.filter((p) => Math.abs(p.y - baseY) < 0.001).map((p) => p.x);
+      expect(Math.abs(baseY - expectedBase.y)).toBeLessThanOrEqual(0.3);
+      expect(baseXs.some((x) => Math.abs(x - expectedBase.x) < 0.6)).toBe(true);
       expect(Math.min(...points.map((p) => p.y))).toBeLessThan(baseY);
     };
 
-    assertWall(parsePoints(leftWall?.getAttribute('points')), anchor.left);
-    assertWall(parsePoints(rightWall?.getAttribute('points')), anchor.right);
+    assertWall(parsePoints(leftInnerWall?.getAttribute('points')), leftNear.nearInner);
+    assertWall(parsePoints(rightInnerWall?.getAttribute('points')), rightNear.nearInner);
+    assertWall(parsePoints(leftOuterWall?.getAttribute('points')), leftNear.nearOuter);
+    assertWall(parsePoints(rightOuterWall?.getAttribute('points')), rightNear.nearOuter);
   });
 });

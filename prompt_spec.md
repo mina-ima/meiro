@@ -263,6 +263,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-02-02): FancyMazePreview junction で正面壁描画を廃止し、forward=false 時は黒いキャップのみで閉塞を示す専用描画に変更。左右開口を分岐床/壁で優先的に見せ、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で前壁非表示とキャップ存在を回帰
 * 更新メモ(2026-02-03): FancyMazePreview junction に開口フィル(branch-opening-fill)を追加し、メイン壁の穴越しに暗い横通路面が見えるよう描画順を 床→分岐床→開口フィル→マスク→壁→分岐壁→キャップ に整理。開口フィルはマスクと同じスライス形状・data-open-slice を持ち、COLOR_BG に壁色を 0.3 混ぜた暗色で塗布（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で開口フィル存在と形状一致を検証）
 * 更新メモ(2026-02-04): FancyMazePreview junction の分岐床にメイン床と連続するシームポリゴンを追加し、床の消失線を途切れさせず横通路が自然に生えるよう調整。分岐壁は branch 側だけを clipPath(data-role="branch-clip-*") で切り出し、本線手前に食い込まないよう <g data-role="branch-walls-*> に clip-path を適用。描画順を 床→床スライス→分岐床→シーム→開口フィル→defs(マスク/クリップ)→メイン壁→クリップ付き分岐壁→キャップ に整理し、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でシーム・クリップの存在を検証
+* 更新メモ(2026-02-05): FancyMazePreview junction/goal の mouth にインセットを設け、nearInner を通路内側へ押し込んで手前エッジを線分で接続。内外壁の根元を nearInner/nearOuter に揃え、branch clip を分岐側だけの台形に簡略化し、シームを main内側→アンカー→branch nearOuter→nearInner の4点に整理（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で mouth インセットと壁根元・シーム・クリップを検証）
 
 ### 8.2 オーナー
 
