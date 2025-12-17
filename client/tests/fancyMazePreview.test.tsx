@@ -356,6 +356,43 @@ describe('FancyMazePreview', () => {
     expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
   });
 
+  it('junctionビューは分岐床をメイン床とシームで繋ぎ、分岐壁にクリップを適用する', () => {
+    const openings = { forward: true, left: true, right: true, backward: false };
+    const { container } = renderPreview('junction', openings);
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+
+    const assertSeam = (side: 'left' | 'right', anchorX: number) => {
+      const seam = container.querySelector<SVGPolygonElement>(
+        `[data-role="branch-floor-seam-${side}"]`,
+      );
+      expect(seam).not.toBeNull();
+      const points = parsePoints(seam?.getAttribute('points'));
+      expect(points.length).toBeGreaterThan(0);
+      const nearY = Math.max(...points.map((p) => p.y));
+      expect(Math.abs(nearY - anchor.y)).toBeLessThan(0.6);
+      expect(
+        points.some((p) => Math.abs(p.x - anchorX) < 0.6 && Math.abs(p.y - anchor.y) < 0.6),
+      ).toBe(true);
+    };
+
+    assertSeam('left', anchor.left);
+    assertSeam('right', anchor.right);
+
+    const assertClip = (side: 'left' | 'right') => {
+      const clip = container.querySelector(`clipPath[data-role="branch-clip-${side}"]`);
+      expect(clip).not.toBeNull();
+      const clipId = clip?.getAttribute('id');
+      expect(clipId).toBeTruthy();
+
+      const wallGroup = container.querySelector(`g[data-role="branch-walls-${side}"]`);
+      expect(wallGroup).not.toBeNull();
+      expect(wallGroup?.getAttribute('clip-path')).toBe(`url(#${clipId})`);
+    };
+
+    assertClip('left');
+    assertClip('right');
+  });
+
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
     const { container } = renderPreview('junction', {
       forward: true,

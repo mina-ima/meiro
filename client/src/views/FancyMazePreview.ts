@@ -312,6 +312,8 @@ function renderGoalFloorGlow(mainFloor: FloorCorners): string {
 }
 
 type BranchParts = {
+  side: 'left' | 'right';
+  geometry: BranchGeometry;
   floor: string;
   innerWall: string;
   outerWall: string;
@@ -419,33 +421,22 @@ function renderSideBranch(geometry: BranchGeometry): BranchParts {
   const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" data-role="branch-wall-${side}-outer"
     points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" stroke="${COLOR_WALL_LINE}" stroke-width="0.6" stroke-opacity="0.12" />`;
 
-  return { floor: floorSvg, innerWall: innerWallSvg, outerWall: outerWallSvg };
+  return { side, geometry, floor: floorSvg, innerWall: innerWallSvg, outerWall: outerWallSvg };
 }
 
-function buildBranchParts(
-  openings: Openings,
-  anchorDepth: number,
-): { floors: string[]; walls: string[]; geometries: BranchGeometry[] } {
-  const floors: string[] = [];
-  const walls: string[] = [];
-  const geometries: BranchGeometry[] = [];
+function buildBranchParts(openings: Openings, anchorDepth: number): BranchParts[] {
+  const parts: BranchParts[] = [];
 
   if (openings.left) {
     const leftGeometry = createBranchGeometry('left', anchorDepth);
-    const left = renderSideBranch(leftGeometry);
-    floors.push(left.floor);
-    walls.push(left.innerWall, left.outerWall);
-    geometries.push(leftGeometry);
+    parts.push(renderSideBranch(leftGeometry));
   }
   if (openings.right) {
     const rightGeometry = createBranchGeometry('right', anchorDepth);
-    const right = renderSideBranch(rightGeometry);
-    floors.push(right.floor);
-    walls.push(right.innerWall, right.outerWall);
-    geometries.push(rightGeometry);
+    parts.push(renderSideBranch(rightGeometry));
   }
 
-  return { floors, walls, geometries };
+  return parts;
 }
 
 function buildBranchWallMasks(
@@ -493,11 +484,96 @@ function buildBranchWallMasks(
   return { defs, maskIds, openingShapes };
 }
 
+function buildBranchWallClips(geometries: BranchGeometry[]): {
+  defs: string[];
+  clipIds: Partial<Record<'left' | 'right', string>>;
+} {
+  const defs: string[] = [];
+  const clipIds: Partial<Record<'left' | 'right', string>> = {};
+
+  geometries.forEach((geometry) => {
+    const clipId = `branch-wall-clip-${geometry.side}`;
+    clipIds[geometry.side] = clipId;
+    const margin = 4;
+    const points =
+      geometry.side === 'left'
+        ? [
+            {
+              x: Math.min(geometry.nearOuter.x, geometry.anchorStop.left) - margin,
+              y: HEIGHT,
+            },
+            {
+              x: Math.min(geometry.nearOuter.x, geometry.anchorStop.left) - margin,
+              y: 0,
+            },
+            { x: Math.min(geometry.farOuter.x, geometry.farStop.left) - margin, y: 0 },
+            { x: geometry.farStop.left, y: geometry.farStop.y },
+            { x: geometry.anchorStop.left, y: geometry.anchorStop.y },
+          ]
+        : [
+            {
+              x: Math.max(geometry.nearOuter.x, geometry.anchorStop.right) + margin,
+              y: HEIGHT,
+            },
+            { x: Math.max(geometry.nearOuter.x, geometry.anchorStop.right) + margin, y: 0 },
+            { x: Math.max(geometry.farOuter.x, geometry.farStop.right) + margin, y: 0 },
+            { x: geometry.farStop.right, y: geometry.farStop.y },
+            { x: geometry.anchorStop.right, y: geometry.anchorStop.y },
+          ];
+    defs.push(
+      `<clipPath id="${clipId}" data-role="branch-clip-${geometry.side}">
+        <polygon points="${joinPoints(points)}" />
+      </clipPath>`,
+    );
+  });
+
+  return { defs, clipIds };
+}
+
 function renderBranchOpeningFills(openings: BranchOpeningShape[]): string[] {
   return openings.map((opening) => {
     return `<polygon data-role="branch-opening-fill-${opening.side}" data-open-slice="${opening.sliceIndex}"
       points="${joinPoints(opening.points)}" fill="${COLOR_BRANCH_OPENING_FILL}" fill-opacity="0.92"
       stroke="${COLOR_WALL_LINE}" stroke-width="0.4" stroke-opacity="0.08" />`;
+  });
+}
+
+function renderBranchWallGroups(
+  branchParts: BranchParts[],
+  clipIds: Partial<Record<'left' | 'right', string>>,
+): string[] {
+  return branchParts.map((part) => {
+    const clipId = clipIds[part.side];
+    const clipAttr = clipId ? ` clip-path="url(#${clipId})"` : '';
+    return `<g data-role="branch-walls-${part.side}"${clipAttr}>
+      ${part.innerWall}
+      ${part.outerWall}
+    </g>`;
+  });
+}
+
+function renderBranchFloorSeams(branchParts: BranchParts[]): string[] {
+  return branchParts.map((part) => {
+    const { side, geometry } = part;
+    const anchorStop = geometry.anchorStop;
+    const anchorWidth = anchorStop.right - anchorStop.left;
+    const inset = anchorWidth * 0.12;
+    const mainInner =
+      side === 'left'
+        ? { x: anchorStop.left + inset, y: anchorStop.y }
+        : { x: anchorStop.right - inset, y: anchorStop.y };
+    const mainEdge = {
+      x: side === 'left' ? anchorStop.left : anchorStop.right,
+      y: anchorStop.y,
+    };
+    const branchOuterDeep = {
+      x: lerp(geometry.nearOuter.x, geometry.farOuter.x, 0.22),
+      y: lerp(geometry.nearOuter.y, geometry.farOuter.y, 0.22),
+    };
+    const points = [mainInner, mainEdge, geometry.nearOuter, branchOuterDeep];
+    return `<polygon data-role="branch-floor-seam-${side}" points="${joinPoints(
+      points,
+    )}" fill="url(#corridor-floor-grad)" fill-opacity="0.9" stroke="${COLOR_FLOOR_LINE}" stroke-width="0.45" stroke-opacity="0.08" />`;
   });
 }
 
@@ -527,24 +603,31 @@ function renderJunctionView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
-  const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
+  const branchGeometries = branchParts.map((part) => part.geometry);
+  const wallMasks = buildBranchWallMasks(branchGeometries, slices);
   const branchOpeningFills = renderBranchOpeningFills(wallMasks.openingShapes);
+  const branchFloorSeams = renderBranchFloorSeams(branchParts);
+  const branchWallClips = buildBranchWallClips(branchGeometries);
+  const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
 
   // 1. 床（メイン通路）
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
   // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
-  parts.push(...branchParts.floors);
+  parts.push(...branchParts.map((part) => part.floor));
+  // 2.2 継ぎ目: メイン床と分岐床を繋ぐシーム
+  parts.push(...branchFloorSeams);
   // 2.5 開口の奥行きを示すフィル（壁の前、マスク定義より前に置く）
   parts.push(...branchOpeningFills);
   // 3 開口用マスク定義（壁より前に置き、メイン壁をくり抜く）
-  if (wallMasks.defs.length > 0) {
-    parts.push(`<defs>${wallMasks.defs.join('\n')}</defs>`);
+  const defs = [...wallMasks.defs, ...branchWallClips.defs];
+  if (defs.length > 0) {
+    parts.push(`<defs>${defs.join('\n')}</defs>`);
   }
   // 4. メイン左右壁
   parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
   // 5. 左右分岐（壁）
-  parts.push(...branchParts.walls);
+  parts.push(...branchWallGroups);
   // 6. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
   if (!openings.forward) {
     parts.push(renderJunctionForwardCap(stops[3]));
@@ -561,17 +644,23 @@ function renderGoalView(
 ): string {
   const parts: string[] = [];
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
-  const wallMasks = buildBranchWallMasks(branchParts.geometries, slices);
+  const branchGeometries = branchParts.map((part) => part.geometry);
+  const wallMasks = buildBranchWallMasks(branchGeometries, slices);
+  const branchFloorSeams = renderBranchFloorSeams(branchParts);
+  const branchWallClips = buildBranchWallClips(branchGeometries);
+  const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
+  const defs = [...wallMasks.defs, ...branchWallClips.defs];
 
   parts.push(renderMainFloor(mainFloor));
   parts.push(renderFloorSlices(slices));
   parts.push(renderGoalFloorGlow(mainFloor));
-  parts.push(...branchParts.floors);
-  if (wallMasks.defs.length > 0) {
-    parts.push(`<defs>${wallMasks.defs.join('\n')}</defs>`);
+  parts.push(...branchParts.map((part) => part.floor));
+  parts.push(...branchFloorSeams);
+  if (defs.length > 0) {
+    parts.push(`<defs>${defs.join('\n')}</defs>`);
   }
   parts.push(renderCorridorWalls(slices, 'goal', openings, wallMasks.maskIds));
-  parts.push(...branchParts.walls);
+  parts.push(...branchWallGroups);
   parts.push(renderFrontWall(stops, 4, 'goal'));
   parts.push(renderGoalPortal(stops[4]));
   return parts.join('\n');
