@@ -20,6 +20,7 @@ const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
 const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5;
 const BRANCH_MOUTH_WIDTH_RATIO = 0.12;
+const BRANCH_NEAR_SPAN = 0.2;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -378,7 +379,7 @@ describe('FancyMazePreview', () => {
     expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
   });
 
-  it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、branch wall clipを使わない', () => {
+  it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、branch wall clipを使う', () => {
     const openings = { forward: true, left: true, right: true, backward: false };
     const { container } = renderPreview('junction', openings);
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
@@ -387,8 +388,8 @@ describe('FancyMazePreview', () => {
 
     expect(container.querySelector('[data-role="branch-floor-seam-left"]')).toBeNull();
     expect(container.querySelector('[data-role="branch-floor-seam-right"]')).toBeNull();
-    expect(container.querySelector('[data-role="branch-clip-left"]')).toBeNull();
-    expect(container.querySelector('[data-role="branch-clip-right"]')).toBeNull();
+    expect(container.querySelector('[data-role="branch-clip-left"]')).not.toBeNull();
+    expect(container.querySelector('[data-role="branch-clip-right"]')).not.toBeNull();
 
     const assertFloorConnection = (
       side: 'left' | 'right',
@@ -413,11 +414,44 @@ describe('FancyMazePreview', () => {
 
       const wallGroup = container.querySelector(`g[data-role="branch-walls-${side}"]`);
       expect(wallGroup).not.toBeNull();
-      expect(wallGroup?.getAttribute('clip-path')).toBeNull();
+      expect(wallGroup?.getAttribute('clip-path')).toBe(`url(#branch-wall-clip-${side})`);
     };
 
     assertFloorConnection('left', anchor.left, mouthWidth);
     assertFloorConnection('right', anchor.right, -mouthWidth);
+  });
+
+  it('junctionビューの分岐内壁は通路境界の近点から立ち上がる', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+    const mouthWidth = (anchor.right - anchor.left) * BRANCH_MOUTH_WIDTH_RATIO;
+
+    const assertInnerWallBase = (selector: string, anchorX: number, mouthX: number) => {
+      const wall = container.querySelector<SVGPolygonElement>(selector);
+      expect(wall).not.toBeNull();
+      const points = parsePoints(wall?.getAttribute('points'));
+      const nearLine = nearPoints(points);
+      const nearY = Math.max(...nearLine.map((p) => p.y));
+      expect(nearY).toBeCloseTo(anchor.y, 0.01);
+      expect(nearLine.some((p) => Math.abs(p.x - anchorX) < 0.6)).toBe(true);
+      expect(nearLine.some((p) => Math.abs(p.x - mouthX) < 0.6)).toBe(false);
+    };
+
+    assertInnerWallBase(
+      '[data-role="branch-wall-left-inner"]',
+      anchor.left,
+      anchor.left + mouthWidth,
+    );
+    assertInnerWallBase(
+      '[data-role="branch-wall-right-inner"]',
+      anchor.right,
+      anchor.right - mouthWidth,
+    );
   });
 
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
@@ -632,7 +666,7 @@ describe('FancyMazePreview', () => {
     assertBranch('[data-role="branch-floor-right"]', anchor.right, 'right');
   });
 
-  it('分岐壁の根元はmouth線分に揃い、床と連続して奥へ伸びる', () => {
+  it('分岐壁の根元は通路境界と外側に揃い、床と連続して奥へ伸びる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -662,7 +696,7 @@ describe('FancyMazePreview', () => {
     expect(rightFloor).not.toBeNull();
 
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
-    const mouthWidth = (anchor.right - anchor.left) * BRANCH_MOUTH_WIDTH_RATIO;
+    const anchorWidth = anchor.right - anchor.left;
 
     const assertWall = (
       points: { x: number; y: number }[],
@@ -677,16 +711,19 @@ describe('FancyMazePreview', () => {
     };
 
     assertWall(parsePoints(leftInnerWall?.getAttribute('points')), {
-      x: anchor.left + mouthWidth,
+      x: anchor.left,
       y: anchor.y,
     });
     assertWall(parsePoints(rightInnerWall?.getAttribute('points')), {
-      x: anchor.right - mouthWidth,
+      x: anchor.right,
       y: anchor.y,
     });
-    assertWall(parsePoints(leftOuterWall?.getAttribute('points')), { x: anchor.left, y: anchor.y });
+    assertWall(parsePoints(leftOuterWall?.getAttribute('points')), {
+      x: anchor.left - anchorWidth * BRANCH_NEAR_SPAN,
+      y: anchor.y,
+    });
     assertWall(parsePoints(rightOuterWall?.getAttribute('points')), {
-      x: anchor.right,
+      x: anchor.right + anchorWidth * BRANCH_NEAR_SPAN,
       y: anchor.y,
     });
   });
