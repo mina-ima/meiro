@@ -20,7 +20,7 @@ const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
 const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5;
 const BRANCH_MOUTH_WIDTH_RATIO = 0.12;
-const BRANCH_NEAR_SPAN = 0.2;
+const BRANCH_NEAR_WALL_THICKNESS = 2.5;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -286,8 +286,8 @@ describe('FancyMazePreview', () => {
 
     const leftInnerPoints = parsePoints(leftInnerWall?.getAttribute('points'));
     const rightInnerPoints = parsePoints(rightInnerWall?.getAttribute('points'));
-    expect(leftInnerPoints[0]).toEqual(leftNear.nearInner);
-    expect(rightInnerPoints[0]).toEqual(rightNear.nearInner);
+    expect(leftInnerPoints[0]).toEqual({ x: anchorStop.left, y: anchorStop.y });
+    expect(rightInnerPoints[0]).toEqual({ x: anchorStop.right, y: anchorStop.y });
   });
 
   it('junctionマスクは開口側の壁スライス形状に一致するポリゴンでくり抜く', () => {
@@ -377,6 +377,30 @@ describe('FancyMazePreview', () => {
     expect(closed.container.querySelector('[data-role="junction-forward-cap"]')).not.toBeNull();
     expect(closed.container.querySelector('[data-role="branch-opening-fill-left"]')).not.toBeNull();
     expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
+  });
+
+  it('junctionビューでは開口クリップで分岐床と開口フィルを切り抜く', () => {
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: true,
+      backward: false,
+    });
+
+    const leftClip = container.querySelector('clipPath[data-role="branch-opening-clip-left"]');
+    const rightClip = container.querySelector('clipPath[data-role="branch-opening-clip-right"]');
+    expect(leftClip).not.toBeNull();
+    expect(rightClip).not.toBeNull();
+
+    const leftFloor = container.querySelector('[data-role="branch-floor-left"]');
+    const rightFloor = container.querySelector('[data-role="branch-floor-right"]');
+    expect(leftFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-left)');
+    expect(rightFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-right)');
+
+    const leftFill = container.querySelector('[data-role="branch-opening-fill-left"]');
+    const rightFill = container.querySelector('[data-role="branch-opening-fill-right"]');
+    expect(leftFill?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-left)');
+    expect(rightFill?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-right)');
   });
 
   it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、branch wall clipを使う', () => {
@@ -696,7 +720,6 @@ describe('FancyMazePreview', () => {
     expect(rightFloor).not.toBeNull();
 
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
-    const anchorWidth = anchor.right - anchor.left;
 
     const assertWall = (
       points: { x: number; y: number }[],
@@ -719,11 +742,11 @@ describe('FancyMazePreview', () => {
       y: anchor.y,
     });
     assertWall(parsePoints(leftOuterWall?.getAttribute('points')), {
-      x: anchor.left - anchorWidth * BRANCH_NEAR_SPAN,
+      x: anchor.left - BRANCH_NEAR_WALL_THICKNESS,
       y: anchor.y,
     });
     assertWall(parsePoints(rightOuterWall?.getAttribute('points')), {
-      x: anchor.right + anchorWidth * BRANCH_NEAR_SPAN,
+      x: anchor.right + BRANCH_NEAR_WALL_THICKNESS,
       y: anchor.y,
     });
   });
