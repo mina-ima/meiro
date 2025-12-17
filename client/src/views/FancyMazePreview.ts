@@ -38,12 +38,12 @@ const COLOR_WALL_LINE = '#e6d4bd';
 const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 const COLOR_BRANCH_OPENING_FILL = mixColor(COLOR_BG, COLOR_WALL_FAR, 0.3);
+const BRANCH_MOUTH_WIDTH_RATIO = 0.12; // 手前の共有エッジに使うmouth幅（アンカー幅比）
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
 const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5; // 手前スライスの前半から分岐を開始し、柱を含めて開口する
 const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
 const BRANCH_NEAR_SPAN = 0.2; // アンカー位置で見せる横幅（通路幅に対する比率）
 const BRANCH_FAR_EXTRA_SPAN = 0.1; // 奥側でわずかに広げる
-const BRANCH_MOUTH_INSET = 0.12; // 分岐口を通路内側へ少し食い込ませる（アンカー幅比）
 const BRANCH_INNER_TAPER = 0.04; // 奥側でほんの少し内側へ寄せ、“コの字”の奥行きを見せる
 const BRANCH_FAR_LATERAL_SHIFT = 10; // 遠方でわずかに外へ寄せて“横通路”感を出す
 
@@ -327,6 +327,7 @@ type BranchGeometry = {
   anchorStop: SliceStop;
   farStop: SliceStop;
   nearInner: { x: number; y: number };
+  nearInnerInset: { x: number; y: number };
   nearOuter: { x: number; y: number };
   farInner: { x: number; y: number };
   farOuter: { x: number; y: number };
@@ -352,9 +353,12 @@ function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): Bran
   const anchorEdgeX = isLeft ? anchorStop.left : anchorStop.right;
   const farEdgeX = isLeft ? farStop.left : farStop.right;
 
-  const inset = anchorWidth * BRANCH_MOUTH_INSET;
-  const nearInnerX = isLeft ? anchorEdgeX + inset : anchorEdgeX - inset;
-  const branchNearInner = { x: nearInnerX, y: anchorStop.y };
+  const mouthWidth = anchorWidth * BRANCH_MOUTH_WIDTH_RATIO;
+  const branchNearInner = { x: anchorEdgeX, y: anchorStop.y };
+  const branchNearInnerInset = {
+    x: anchorEdgeX + (isLeft ? mouthWidth : -mouthWidth),
+    y: anchorStop.y,
+  };
   const branchNearOuter = {
     x: anchorEdgeX + direction * (anchorWidth * BRANCH_NEAR_SPAN),
     y: anchorStop.y,
@@ -381,6 +385,7 @@ function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): Bran
     anchorStop,
     farStop,
     nearInner: branchNearInner,
+    nearInnerInset: branchNearInnerInset,
     nearOuter: branchNearOuter,
     farInner: branchFarInner,
     farOuter: branchFarOuter,
@@ -393,33 +398,34 @@ function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): Bran
 function renderSideBranch(geometry: BranchGeometry): BranchParts {
   const {
     side,
-    nearInner: branchNearInner,
+    nearInner,
+    nearInnerInset,
     nearOuter: branchNearOuter,
     farInner: branchFarInner,
     farOuter: branchFarOuter,
   } = geometry;
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
-  const floorPoints = [branchNearInner, branchNearOuter, branchFarOuter, branchFarInner];
+  const floorPoints = [nearInnerInset, nearInner, branchNearOuter, branchFarOuter, branchFarInner];
   const floorSvg = `<polygon data-branch="${side}" data-layer="floor" data-role="branch-floor-${side}"
     points="${joinPoints(floorPoints)}" fill="url(#corridor-floor-grad)" stroke="${COLOR_FLOOR_LINE}" stroke-width="0.6" stroke-opacity="0.12" />`;
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
-    branchNearInner,
+    nearInnerInset,
     branchFarInner,
     { x: branchFarInner.x, y: 0 },
-    { x: branchNearInner.x, y: 0 },
+    { x: nearInnerInset.x, y: 0 },
   ];
   const innerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="inner" data-role="branch-wall-${side}-inner"
     points="${joinPoints(innerWallPoints)}" fill="${COLOR_WALL}" stroke="${COLOR_WALL_LINE}" stroke-width="0.8" stroke-opacity="0.18" />`;
 
   // 3. 外側の壁（横通路外側）: 床の端から天井まで
   const outerWallPoints = [
-    branchNearOuter,
+    nearInner,
     branchFarOuter,
     { x: branchFarOuter.x, y: 0 },
-    { x: branchNearOuter.x, y: 0 },
+    { x: nearInner.x, y: 0 },
   ];
   const outerWallSvg = `<polygon data-branch-wall="${side}" data-branch-position="outer" data-role="branch-wall-${side}-outer"
     points="${joinPoints(outerWallPoints)}" fill="${COLOR_WALL}" fill-opacity="0.9" stroke="${COLOR_WALL_LINE}" stroke-width="0.6" stroke-opacity="0.12" />`;
@@ -487,39 +493,11 @@ function buildBranchWallMasks(
   return { defs, maskIds, openingShapes };
 }
 
-function buildBranchWallClips(geometries: BranchGeometry[]): {
+function buildBranchWallClips(): {
   defs: string[];
   clipIds: Partial<Record<'left' | 'right', string>>;
 } {
-  const defs: string[] = [];
-  const clipIds: Partial<Record<'left' | 'right', string>> = {};
-
-  geometries.forEach((geometry) => {
-    const clipId = `branch-wall-clip-${geometry.side}`;
-    clipIds[geometry.side] = clipId;
-    const margin = 4;
-    const points =
-      geometry.side === 'left'
-        ? [
-            { x: 0, y: HEIGHT },
-            { x: geometry.anchorStop.left - margin, y: HEIGHT },
-            { x: geometry.farStop.left, y: 0 },
-            { x: 0, y: 0 },
-          ]
-        : [
-            { x: geometry.anchorStop.right + margin, y: HEIGHT },
-            { x: WIDTH, y: HEIGHT },
-            { x: WIDTH, y: 0 },
-            { x: geometry.farStop.right, y: 0 },
-          ];
-    defs.push(
-      `<clipPath id="${clipId}" data-role="branch-clip-${geometry.side}">
-        <polygon points="${joinPoints(points)}" />
-      </clipPath>`,
-    );
-  });
-
-  return { defs, clipIds };
+  return { defs: [], clipIds: {} };
 }
 
 function renderBranchOpeningFills(openings: BranchOpeningShape[]): string[] {
@@ -541,27 +519,6 @@ function renderBranchWallGroups(
       ${part.innerWall}
       ${part.outerWall}
     </g>`;
-  });
-}
-
-function renderBranchFloorSeams(branchParts: BranchParts[]): string[] {
-  return branchParts.map((part) => {
-    const { side, geometry } = part;
-    const anchorStop = geometry.anchorStop;
-    const anchorWidth = anchorStop.right - anchorStop.left;
-    const inset = anchorWidth * BRANCH_MOUTH_INSET;
-    const mainInner =
-      side === 'left'
-        ? { x: anchorStop.left + inset, y: anchorStop.y }
-        : { x: anchorStop.right - inset, y: anchorStop.y };
-    const mainEdge = {
-      x: side === 'left' ? anchorStop.left : anchorStop.right,
-      y: anchorStop.y,
-    };
-    const points = [mainInner, mainEdge, geometry.nearOuter, geometry.nearInner];
-    return `<polygon data-role="branch-floor-seam-${side}" points="${joinPoints(
-      points,
-    )}" fill="url(#corridor-floor-grad)" fill-opacity="0.9" stroke="${COLOR_FLOOR_LINE}" stroke-width="0.45" stroke-opacity="0.08" />`;
   });
 }
 
@@ -594,8 +551,7 @@ function renderJunctionView(
   const branchGeometries = branchParts.map((part) => part.geometry);
   const wallMasks = buildBranchWallMasks(branchGeometries, slices);
   const branchOpeningFills = renderBranchOpeningFills(wallMasks.openingShapes);
-  const branchFloorSeams = renderBranchFloorSeams(branchParts);
-  const branchWallClips = buildBranchWallClips(branchGeometries);
+  const branchWallClips = buildBranchWallClips();
   const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
 
   // 1. 床（メイン通路）
@@ -603,8 +559,6 @@ function renderJunctionView(
   parts.push(renderFloorSlices(slices));
   // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
   parts.push(...branchParts.map((part) => part.floor));
-  // 2.2 継ぎ目: メイン床と分岐床を繋ぐシーム
-  parts.push(...branchFloorSeams);
   // 2.5 開口の奥行きを示すフィル（壁の前、マスク定義より前に置く）
   parts.push(...branchOpeningFills);
   // 3 開口用マスク定義（壁より前に置き、メイン壁をくり抜く）
@@ -634,8 +588,7 @@ function renderGoalView(
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const branchGeometries = branchParts.map((part) => part.geometry);
   const wallMasks = buildBranchWallMasks(branchGeometries, slices);
-  const branchFloorSeams = renderBranchFloorSeams(branchParts);
-  const branchWallClips = buildBranchWallClips(branchGeometries);
+  const branchWallClips = buildBranchWallClips();
   const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
   const defs = [...wallMasks.defs, ...branchWallClips.defs];
 
@@ -643,7 +596,6 @@ function renderGoalView(
   parts.push(renderFloorSlices(slices));
   parts.push(renderGoalFloorGlow(mainFloor));
   parts.push(...branchParts.map((part) => part.floor));
-  parts.push(...branchFloorSeams);
   if (defs.length > 0) {
     parts.push(`<defs>${defs.join('\n')}</defs>`);
   }

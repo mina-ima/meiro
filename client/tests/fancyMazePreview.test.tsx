@@ -19,6 +19,7 @@ const VIEW_FLOOR_FAR_LEFT = VIEW_WIDTH * 0.5 - 60;
 const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
 const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5;
+const BRANCH_MOUTH_WIDTH_RATIO = 0.12;
 
 function renderPreview(
   variant: MazePreviewVariant,
@@ -79,6 +80,11 @@ function branchNearEdge(
   const nearInner = side === 'left' ? maxXPoint : minXPoint;
   const nearOuter = side === 'left' ? minXPoint : maxXPoint;
   return { nearInner, nearOuter, nearY };
+}
+
+function nearPoints(points: { x: number; y: number }[]) {
+  const nearY = Math.max(...points.map((p) => p.y));
+  return points.filter((p) => Math.abs(p.y - nearY) < 0.001);
 }
 
 function pointsAlmostEqual(
@@ -372,41 +378,46 @@ describe('FancyMazePreview', () => {
     expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
   });
 
-  it('junctionビューは分岐床をメイン床とシームで繋ぎ、分岐壁にクリップを適用する', () => {
+  it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、branch wall clipを使わない', () => {
     const openings = { forward: true, left: true, right: true, backward: false };
     const { container } = renderPreview('junction', openings);
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+    const anchorWidth = anchor.right - anchor.left;
+    const mouthWidth = anchorWidth * BRANCH_MOUTH_WIDTH_RATIO;
 
-    const assertSeam = (side: 'left' | 'right', anchorX: number) => {
-      const seam = container.querySelector<SVGPolygonElement>(
-        `[data-role="branch-floor-seam-${side}"]`,
-      );
-      expect(seam).not.toBeNull();
-      const points = parsePoints(seam?.getAttribute('points'));
-      expect(points.length).toBeGreaterThan(0);
-      const nearY = Math.max(...points.map((p) => p.y));
-      expect(Math.abs(nearY - anchor.y)).toBeLessThan(0.6);
+    expect(container.querySelector('[data-role="branch-floor-seam-left"]')).toBeNull();
+    expect(container.querySelector('[data-role="branch-floor-seam-right"]')).toBeNull();
+    expect(container.querySelector('[data-role="branch-clip-left"]')).toBeNull();
+    expect(container.querySelector('[data-role="branch-clip-right"]')).toBeNull();
+
+    const assertFloorConnection = (
+      side: 'left' | 'right',
+      anchorX: number,
+      mouthOffset: number,
+    ) => {
+      const floor = container.querySelector<SVGPolygonElement>(`[data-role="branch-floor-${side}"]`);
+      expect(floor).not.toBeNull();
+      const points = parsePoints(floor?.getAttribute('points'));
+      const near = branchNearEdge(points, side);
+      expect(near.nearY).toBeCloseTo(anchor.y, 0.01);
+      const nearLine = nearPoints(points);
       expect(
-        points.some((p) => Math.abs(p.x - anchorX) < 0.6 && Math.abs(p.y - anchor.y) < 0.6),
+        nearLine.some((p) => Math.abs(p.x - anchorX) < 0.6 && Math.abs(p.y - anchor.y) < 0.6),
       ).toBe(true);
-    };
-
-    assertSeam('left', anchor.left);
-    assertSeam('right', anchor.right);
-
-    const assertClip = (side: 'left' | 'right') => {
-      const clip = container.querySelector(`clipPath[data-role="branch-clip-${side}"]`);
-      expect(clip).not.toBeNull();
-      const clipId = clip?.getAttribute('id');
-      expect(clipId).toBeTruthy();
+      expect(
+        nearLine.some(
+          (p) =>
+            Math.abs(p.x - (anchorX + mouthOffset)) < 0.6 && Math.abs(p.y - anchor.y) < 0.6,
+        ),
+      ).toBe(true);
 
       const wallGroup = container.querySelector(`g[data-role="branch-walls-${side}"]`);
       expect(wallGroup).not.toBeNull();
-      expect(wallGroup?.getAttribute('clip-path')).toBe(`url(#${clipId})`);
+      expect(wallGroup?.getAttribute('clip-path')).toBeNull();
     };
 
-    assertClip('left');
-    assertClip('right');
+    assertFloorConnection('left', anchor.left, mouthWidth);
+    assertFloorConnection('right', anchor.right, -mouthWidth);
   });
 
   it('junctionビューにデバッグ用data属性と役割ラベルを付与する', () => {
@@ -535,94 +546,19 @@ describe('FancyMazePreview', () => {
     expect(rightBranchFloors.length).toBe(0);
 
     const anchorStop = stopAt(BRANCH_ANCHOR_DEPTH);
+    const mouthWidth = (anchorStop.right - anchorStop.left) * BRANCH_MOUTH_WIDTH_RATIO;
     const leftPoints = parsePoints(leftBranchFloors[0].getAttribute('points'));
-    const leftMetrics = branchMetrics(leftPoints);
-    const leftNear = branchNearEdge(leftPoints, 'left');
-    const anchorWidth = anchorStop.right - anchorStop.left;
-    expect(leftMetrics.nearY).toBeCloseTo(anchorStop.y, 0.5);
-    expect(leftMetrics.farY).toBeLessThan(leftMetrics.nearY);
-    expect(leftNear.nearInner.x - anchorStop.left).toBeGreaterThan(anchorWidth * 0.08);
-    expect(leftNear.nearInner.x - anchorStop.left).toBeLessThan(anchorWidth * 0.18);
-    expect(anchorStop.left - leftNear.nearOuter.x).toBeGreaterThan(anchorWidth * 0.15);
-    expect(anchorStop.left - leftNear.nearOuter.x).toBeLessThan(anchorWidth * 0.25);
-    expect(anchorStop.left - leftMetrics.farMinX).toBeLessThan(anchorWidth * 0.45);
-    expect(leftMetrics.ySpan).toBeLessThan((VIEW_FLOOR_Y - VIEW_HORIZON_Y) * 0.35);
-    expect(leftMetrics.farMinX).toBeLessThan(leftMetrics.nearMinX);
+    const leftNearLine = nearPoints(leftPoints);
+    expect(leftNearLine.some((p) => Math.abs(p.x - anchorStop.left) < 0.6)).toBe(true);
+    expect(leftNearLine.some((p) => Math.abs(p.x - (anchorStop.left + mouthWidth)) < 0.6)).toBe(
+      true,
+    );
+    const leftNearY = Math.max(...leftNearLine.map((p) => p.y));
+    expect(Math.abs(leftNearY - anchorStop.y)).toBeLessThan(0.01);
+    expect(branchMetrics(leftPoints).farY).toBeLessThan(anchorStop.y);
 
     const portal = container.querySelector('[data-goal-portal="true"]');
     expect(portal).not.toBeNull();
-  });
-
-  it('分岐床のmouthはアンカー境界から内側へ押し込み、幅のある線分を作る', () => {
-    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
-    const anchorWidth = anchor.right - anchor.left;
-    const { container } = renderPreview('junction', {
-      forward: true,
-      left: true,
-      right: true,
-      backward: false,
-    });
-
-    const assertInset = (side: 'left' | 'right', anchorX: number) => {
-      const floor = container.querySelector<SVGPolygonElement>(`[data-role="branch-floor-${side}"]`);
-      expect(floor).not.toBeNull();
-      const edge = branchNearEdge(parsePoints(floor?.getAttribute('points')), side);
-      const inset = Math.abs(edge.nearInner.x - anchorX);
-      expect(Math.abs(edge.nearInner.y - anchor.y)).toBeLessThan(0.01);
-      expect(Math.abs(edge.nearOuter.y - anchor.y)).toBeLessThan(0.01);
-      expect(inset).toBeGreaterThan(1);
-      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
-      expect(inset).toBeLessThan(anchorWidth * 0.18);
-      if (side === 'left') {
-        expect(edge.nearInner.x).toBeGreaterThan(anchorX);
-        expect(edge.nearOuter.x).toBeLessThan(anchorX);
-      } else {
-        expect(edge.nearInner.x).toBeLessThan(anchorX);
-        expect(edge.nearOuter.x).toBeGreaterThan(anchorX);
-      }
-    };
-
-    assertInset('left', anchor.left);
-    assertInset('right', anchor.right);
-  });
-
-  it('分岐床の手前端はアンカーライン上で幅を持ち、境界を跨いで分岐を開始する', () => {
-    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
-    const anchorWidth = anchor.right - anchor.left;
-    const { container } = renderPreview('junction', {
-      forward: true,
-      left: true,
-      right: true,
-      backward: false,
-    });
-
-    const leftBranch = container.querySelector<SVGPolygonElement>('[data-role="branch-floor-left"]');
-    const rightBranch = container.querySelector<SVGPolygonElement>(
-      '[data-role="branch-floor-right"]',
-    );
-    expect(leftBranch).not.toBeNull();
-    expect(rightBranch).not.toBeNull();
-
-    const assertBranch = (
-      points: { x: number; y: number }[],
-      side: 'left' | 'right',
-      anchorX: number,
-    ) => {
-      const metrics = branchMetrics(points);
-      const near = branchNearEdge(points, side);
-      expect(metrics.nearY).toBeGreaterThanOrEqual(anchor.y - 0.6);
-      expect(metrics.nearY).toBeLessThanOrEqual(anchor.y + 0.6);
-      expect(metrics.farY).toBeLessThan(metrics.nearY);
-      expect((near.nearInner.x - anchorX) * (near.nearOuter.x - anchorX)).toBeLessThan(0);
-      const inset = Math.abs(near.nearInner.x - anchorX);
-      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
-      expect(inset).toBeLessThan(anchorWidth * 0.18);
-      const mouthSpan = Math.abs(near.nearOuter.x - near.nearInner.x);
-      expect(mouthSpan).toBeGreaterThan(anchorWidth * 0.25);
-    };
-
-    assertBranch(parsePoints(leftBranch?.getAttribute('points')), 'left', anchor.left);
-    assertBranch(parsePoints(rightBranch?.getAttribute('points')), 'right', anchor.right);
   });
 
   it('分岐床は壁より後ろで描画され、壁が手前で床を隠せるDOM順になっている', () => {
@@ -659,7 +595,7 @@ describe('FancyMazePreview', () => {
     assertBefore(rightBranchFloor!, rightBranchWall!);
   });
 
-  it('分岐床はアンカーより手前に出ず、奥側でわずかに外へ逃げる', () => {
+  it('分岐床はアンカーライン上から始まり、奥側で外へ広がる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -669,31 +605,26 @@ describe('FancyMazePreview', () => {
 
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
     const maxYSpan = (VIEW_FLOOR_Y - VIEW_HORIZON_Y) * 0.35;
-    const anchorWidth = anchor.right - anchor.left;
 
     const assertBranch = (selector: string, anchorEdge: number, side: 'left' | 'right') => {
       const poly = container.querySelector<SVGPolygonElement>(selector);
       expect(poly).not.toBeNull();
       const points = parsePoints(poly?.getAttribute('points'));
       const metrics = branchMetrics(points);
-      const near = branchNearEdge(points, side);
-      expect(metrics.nearY).toBeGreaterThanOrEqual(anchor.y - 0.01);
-      expect(metrics.nearY).toBeCloseTo(anchor.y, 0.6);
+      const nearLine = nearPoints(points);
+      const nearY = Math.max(...nearLine.map((p) => p.y));
+      expect(Math.abs(nearY - anchor.y)).toBeLessThan(0.01);
       expect(metrics.farY).toBeLessThan(metrics.nearY);
       expect(metrics.ySpan).toBeLessThan(maxYSpan);
-      expect((near.nearInner.x - anchorEdge) * (near.nearOuter.x - anchorEdge)).toBeLessThan(0);
-
-      const inset = Math.abs(near.nearInner.x - anchorEdge);
-      expect(inset).toBeGreaterThan(anchorWidth * 0.08);
 
       if (side === 'left') {
-        expect(anchorEdge - near.nearOuter.x).toBeGreaterThan(anchorWidth * 0.15);
-        expect(anchorEdge - metrics.farMinX).toBeLessThan(anchorWidth * 0.5);
-        expect(metrics.farMinX).toBeLessThan(near.nearOuter.x);
+        const nearMinX = Math.min(...nearLine.map((p) => p.x));
+        expect(nearMinX).toBeLessThan(anchorEdge);
+        expect(metrics.farMinX).toBeLessThan(nearMinX);
       } else {
-        expect(near.nearOuter.x - anchorEdge).toBeGreaterThan(anchorWidth * 0.15);
-        expect(metrics.farMaxX - anchorEdge).toBeLessThan(anchorWidth * 0.5);
-        expect(metrics.farMaxX).toBeGreaterThan(near.nearOuter.x);
+        const nearMaxX = Math.max(...nearLine.map((p) => p.x));
+        expect(nearMaxX).toBeGreaterThan(anchorEdge);
+        expect(metrics.farMaxX).toBeGreaterThan(nearMaxX);
       }
     };
 
@@ -701,7 +632,7 @@ describe('FancyMazePreview', () => {
     assertBranch('[data-role="branch-floor-right"]', anchor.right, 'right');
   });
 
-  it('分岐壁の根元はmouth位置に揃い、床と連続して奥へ伸びる', () => {
+  it('分岐壁の根元はmouth線分に揃い、床と連続して奥へ伸びる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -730,10 +661,13 @@ describe('FancyMazePreview', () => {
     expect(leftFloor).not.toBeNull();
     expect(rightFloor).not.toBeNull();
 
-    const leftNear = branchNearEdge(parsePoints(leftFloor?.getAttribute('points')), 'left');
-    const rightNear = branchNearEdge(parsePoints(rightFloor?.getAttribute('points')), 'right');
+    const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
+    const mouthWidth = (anchor.right - anchor.left) * BRANCH_MOUTH_WIDTH_RATIO;
 
-    const assertWall = (points: { x: number; y: number }[], expectedBase: { x: number; y: number }) => {
+    const assertWall = (
+      points: { x: number; y: number }[],
+      expectedBase: { x: number; y: number },
+    ) => {
       expect(points.length).toBeGreaterThan(0);
       const baseY = Math.max(...points.map((p) => p.y));
       const baseXs = points.filter((p) => Math.abs(p.y - baseY) < 0.001).map((p) => p.x);
@@ -742,9 +676,18 @@ describe('FancyMazePreview', () => {
       expect(Math.min(...points.map((p) => p.y))).toBeLessThan(baseY);
     };
 
-    assertWall(parsePoints(leftInnerWall?.getAttribute('points')), leftNear.nearInner);
-    assertWall(parsePoints(rightInnerWall?.getAttribute('points')), rightNear.nearInner);
-    assertWall(parsePoints(leftOuterWall?.getAttribute('points')), leftNear.nearOuter);
-    assertWall(parsePoints(rightOuterWall?.getAttribute('points')), rightNear.nearOuter);
+    assertWall(parsePoints(leftInnerWall?.getAttribute('points')), {
+      x: anchor.left + mouthWidth,
+      y: anchor.y,
+    });
+    assertWall(parsePoints(rightInnerWall?.getAttribute('points')), {
+      x: anchor.right - mouthWidth,
+      y: anchor.y,
+    });
+    assertWall(parsePoints(leftOuterWall?.getAttribute('points')), { x: anchor.left, y: anchor.y });
+    assertWall(parsePoints(rightOuterWall?.getAttribute('points')), {
+      x: anchor.right,
+      y: anchor.y,
+    });
   });
 });

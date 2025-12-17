@@ -207,6 +207,7 @@
 - 更新メモ(2026-02-03): FancyMazePreview junction に branch-opening-fill を追加し、メイン壁の穴越しに暗い横通路面が見えるよう開口スライス形状のポリゴンを描画。COLOR_BG に壁色を0.3混ぜた暗色で塗り、描画順を 床→分岐床→開口フィル→マスク→壁→分岐壁→キャップ に整理（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 - 更新メモ(2026-02-04): FancyMazePreview junction に branch-floor-seam を追加してメイン床と分岐床の継ぎ目を埋め、床の消失線を連続させる。分岐壁は <g data-role="branch-walls-*> へまとめて clipPath(data-role="branch-clip-*") を適用し、本線側に食い込まない領域だけを描画。描画順は 床→床スライス→分岐床→シーム→開口フィル→defs(マスク/クリップ)→メイン壁→クリップ付き分岐壁→キャップ に整理し、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` でシームとクリップの存在を検証
 - 更新メモ(2026-02-05): FancyMazePreview junction/goal に mouth インセットを導入し、nearInner を通路内側へ押し込んで手前エッジを線分として接続。内外壁の根元を nearInner/nearOuter に合わせ、branch clip を分岐側だけの台形に簡略化、シームを main内側→アンカー→branch nearOuter→nearInner の4点に整理（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で mouth インセットと壁根元・シーム・クリップを検証）
+- 更新メモ(2026-02-06): FancyMazePreview junction/goal で mouth インセットとシームを撤去し、anchorStop 上に mouthWidth=anchorWidth*0.12 の共有エッジを直接描画。branch-opening-fill とマスクのみを残して clipPath を無効化し、分岐壁の根元も mouth 線分に合わせて手前飛び出しを抑制。描画順は 床→床スライス→分岐床→開口フィル→defs→メイン壁→分岐壁→キャップ に固定（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で床連続性とclip非使用を検証）
 
 ### 13.3 オーナーUI
 - [x] 俯瞰マップ：ズーム/パン（最大 9マスが画面内）
