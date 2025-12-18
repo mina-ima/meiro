@@ -31,12 +31,14 @@ describe('FancyMazePreview (固定タイル描画)', () => {
 
     const floors = container.querySelectorAll('[data-tile-role="floor"]');
     expect(floors.length).toBe(4);
-    expect(container.querySelector('[data-tile-key="left_closed_d1"]')).not.toBeNull();
-    expect(container.querySelector('[data-tile-key="right_closed_d1"]')).not.toBeNull();
+    ['1', '2', '3', '4'].forEach((depth) => {
+      expect(container.querySelector(`[data-tile-key="left_closed_d${depth}"]`)).not.toBeNull();
+      expect(container.querySelector(`[data-tile-key="right_closed_d${depth}"]`)).not.toBeNull();
+    });
     expect(container.querySelector('[data-tile-key^="front_dead_"]')).toBeNull();
   });
 
-  it('junctionで左右開口があるとleft_open_d1/right_open_d1とopening_fillが描画される', () => {
+  it('forwardが開いているjunctionでは左右開口がdepth2まで延び、以降は閉じる', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -45,14 +47,26 @@ describe('FancyMazePreview (固定タイル描画)', () => {
     });
 
     expect(container.querySelector('[data-tile-key="left_open_d1"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="left_open_d2"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="left_open_d3"]')).toBeNull();
+    expect(container.querySelector('[data-tile-key="left_closed_d3"]')).not.toBeNull();
+
     expect(container.querySelector('[data-tile-key="right_open_d1"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="right_open_d2"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="right_open_d3"]')).toBeNull();
+    expect(container.querySelector('[data-tile-key="right_closed_d3"]')).not.toBeNull();
+
     expect(container.querySelector('[data-tile-key="opening_fill_left_d1"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="opening_fill_left_d2"]')).not.toBeNull();
     expect(container.querySelector('[data-tile-key="opening_fill_right_d1"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="opening_fill_right_d2"]')).not.toBeNull();
+
     expect(container.querySelector('[data-tile-key="left_closed_d1"]')).toBeNull();
     expect(container.querySelector('[data-tile-key="right_closed_d1"]')).toBeNull();
+    expect(container.querySelector('[data-tile-key^="front_dead_"]')).toBeNull();
   });
 
-  it('forward=false なら最初の閉塞depthでfront_dead_dNが入り、それより手前のdepthタイルは描かない', () => {
+  it('forward=false ならdepth1でfront_dead_d1が入り、depth2以降は描画しない', () => {
     const { container } = renderPreview('start', {
       forward: false,
       left: true,
@@ -63,12 +77,12 @@ describe('FancyMazePreview (固定タイル描画)', () => {
     const frontDead = container.querySelector('[data-tile-role="front"]');
     expect(frontDead).not.toBeNull();
     const depth = frontDead?.getAttribute('data-depth');
-    expect(depth).toBe('4');
+    expect(depth).toBe('1');
 
-    const depth3Tile = container.querySelector('[data-depth="3"]');
-    expect(depth3Tile).toBeNull();
-    expect(container.querySelector('[data-tile-key="left_open_d1"]')).toBeNull();
-    expect(container.querySelector('[data-tile-key="right_open_d1"]')).toBeNull();
+    expect(container.querySelector('[data-depth="2"]')).toBeNull();
+    expect(container.querySelector('[data-depth="3"]')).toBeNull();
+    expect(container.querySelector('[data-depth="4"]')).toBeNull();
+    expect(container.querySelector('[data-tile-key="left_open_d1"]')).not.toBeNull();
   });
 
   it('goalビューでも同じタイル方式で描画される', () => {
@@ -80,7 +94,7 @@ describe('FancyMazePreview (固定タイル描画)', () => {
     });
 
     expect(container.querySelector('[data-preview-variant="goal"]')).not.toBeNull();
-    expect(container.querySelector('[data-tile-key="right_open_d1"]')).not.toBeNull();
-    expect(container.querySelector('[data-tile-key="left_closed_d1"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="right_open_d2"]')).not.toBeNull();
+    expect(container.querySelector('[data-tile-key="left_closed_d2"]')).not.toBeNull();
   });
 });

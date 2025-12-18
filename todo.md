@@ -421,3 +421,5 @@
 ## 26. FancyMazePreview 画像タイル化（2026-02-09）
 - [x] ポリゴン/クリップ方式を廃止し、固定PNGタイル（depth=1..4、左右開閉と行き止まり）を重ねる描画へ切り替える  
   - DoD: `client/src/assets/preview_tiles/` に `floor_d*` / `left|right_(open|closed)_d*` / `front_dead_d*` / `opening_fill_*_d*` を配置し、FancyMazePreview が `<img>` 重ねで描画。`client/tests/fancyMazePreview.test.tsx` で開口有無によるタイル選択と行き止まりでの depth 打ち切りを確認
+- [x] depth別の開口ロジックを拡張し、forward 開口時は左右開口を depth=2 まで表示、forward=false 時は depth=1 で front_dead を挿入して打ち切る  
+  - DoD: FancyMazePreview の previewState が depth 別に左右開口を伸ばし、frontOpen=false の最初の depth までを描画範囲とする。`client/tests/fancyMazePreview.test.tsx` で depth2 の開口表示と front_dead_d1 の挿入、depth2 以降の非描画を検証

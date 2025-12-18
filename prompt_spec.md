@@ -252,7 +252,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 ## 26. FancyMazePreview 固定タイル方式（2026-02-09）
 
 - プレビューは `client/src/assets/preview_tiles/` の透過PNGタイルを重ねて描画する。命名: `floor_d{1..4}.png` / `left_open|closed_d{1..4}.png` / `right_open|closed_d{1..4}.png` / `front_dead_d{1..4}.png` / 任意 `opening_fill_left|right_d{1..4}.png`。ビューボックス320×180固定。
-- openings の左右開口は depth=1 のみ。frontOpen が false になった depth で `front_dead_dN` を描き、それより手前の depth タイルは描画しない。描画順は depth=4→1 で `floor → opening_fill(optional) → left/right → front_dead(optional)`。
+- openings の左右開口は forward が開いていると depth=2 まで伸ばし、それ以降（または forward=false 時）は閉じる。frontOpen が false になる最初の depth までを描画範囲とし、その depth に `front_dead_dN` を挿入する。描画順は depth=4→1 で `floor → opening_fill(optional) → left/right → front_dead(optional)`。
 - 画像未用意時は 1×1 透明 PNG をプレースホルダーとして読み込み、ビルドを通す。
 * 更新メモ(2026-01-20): FancyMazePreview junction を renderJunctionCrossView に差し替え、スライス非依存の固定十字路（メイン床＋左右壁＋左右分岐床/壁＋奥壁）を描画。テストは分岐有無と主要パーツの存在だけをスモーク検証に縮約（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx`）
 * 更新メモ(2026-01-21): FancyMazePreview junction/goal をスライスベースの描画に戻し、slice2 anchorX/anchorY から分岐床と内外壁を開始。描画順を床→壁→分岐→前壁に統一し、`client/tests/fancyMazePreview.test.tsx` で anchorY・inner wall 起点の一致を確認

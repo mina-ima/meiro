@@ -99,25 +99,42 @@ type TileEntry = {
   role: 'floor' | 'left' | 'right' | 'front' | 'opening_fill_left' | 'opening_fill_right';
 };
 
+const DEPTHS_NEAR_TO_FAR: Depth[] = [1, 2, 3, 4];
+const DEPTHS_FAR_TO_NEAR: Depth[] = [4, 3, 2, 1];
+const SIDE_OPEN_MAX_DEPTH_WHEN_FORWARD_OPEN: Depth = 2;
+const SIDE_OPEN_MAX_DEPTH_WHEN_FORWARD_BLOCKED: Depth = 1;
+const FRONT_OPEN_MAX_DEPTH_WHEN_FORWARD_OPEN: Depth = 4;
+
 function buildPreviewState(openings: Openings): PreviewState {
-  // MVP: 分岐はdepth=1のみ。正面はforwardに従って全depth同一とする。
-  const depths: Depth[] = [1, 2, 3, 4];
-  const state = depths.reduce((acc, depth) => {
-    acc[depth] = {
-      leftOpen: depth === 1 && openings.left,
-      rightOpen: depth === 1 && openings.right,
-      frontOpen: openings.forward,
-    } as DepthState;
-    return acc;
-  }, {} as PreviewState);
-  return state;
+  // 前方が開いている場合のみ、左右の開口をdepth=2まで伸ばす。
+  // 正面の見通せる最大depthも決めておき、そこを超えたらfrontDeadで打ち切る。
+  const state = {} as PreviewState;
+  const sideOpenLimit = openings.forward
+    ? SIDE_OPEN_MAX_DEPTH_WHEN_FORWARD_OPEN
+    : SIDE_OPEN_MAX_DEPTH_WHEN_FORWARD_BLOCKED;
+  const frontOpenLimit = openings.forward ? FRONT_OPEN_MAX_DEPTH_WHEN_FORWARD_OPEN : 0;
+
+  for (const depth of DEPTHS_NEAR_TO_FAR) {
+    state[depth] = {
+      leftOpen: openings.left && depth <= sideOpenLimit,
+      rightOpen: openings.right && depth <= sideOpenLimit,
+      frontOpen: depth <= frontOpenLimit && openings.forward,
+    };
+  }
+
+  return state as PreviewState;
 }
 
 function buildTileEntries(previewState: PreviewState): TileEntry[] {
   const entries: TileEntry[] = [];
-  const depths: Depth[] = [4, 3, 2, 1];
 
-  for (const depth of depths) {
+  const stopDepth = DEPTHS_NEAR_TO_FAR.find((depth) => !previewState[depth].frontOpen);
+  const maxRenderDepth = (stopDepth ?? DEPTHS_NEAR_TO_FAR[DEPTHS_NEAR_TO_FAR.length - 1]) as Depth;
+
+  for (const depth of DEPTHS_FAR_TO_NEAR) {
+    if (depth > maxRenderDepth) {
+      continue;
+    }
     const state = previewState[depth];
     entries.push({ key: `floor_d${depth}`, role: 'floor', depth });
 
@@ -137,7 +154,6 @@ function buildTileEntries(previewState: PreviewState): TileEntry[] {
 
     if (!state.frontOpen) {
       entries.push({ key: `front_dead_d${depth}`, role: 'front', depth });
-      break; // 以降の手前depthは描画しない
     }
   }
 
