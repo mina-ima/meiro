@@ -18,7 +18,7 @@ const VIEW_FLOOR_NEAR_RIGHT = VIEW_WIDTH - 40;
 const VIEW_FLOOR_FAR_LEFT = VIEW_WIDTH * 0.5 - 60;
 const VIEW_FLOOR_FAR_RIGHT = VIEW_WIDTH * 0.5 + 60;
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
-const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5;
+const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX;
 const BRANCH_MOUTH_WIDTH_RATIO = 0.12;
 const BRANCH_NEAR_WALL_THICKNESS = 2.5;
 
@@ -319,7 +319,8 @@ describe('FancyMazePreview', () => {
       );
       expect(maskPolys.length).toBeGreaterThan(0);
       const sliceIndexes = new Set(maskPolys.map((p) => p.getAttribute('data-branch-wall-mask-slice')));
-      expect(sliceIndexes.has('1')).toBe(true);
+      expect(sliceIndexes.has('2')).toBe(true);
+      expect(sliceIndexes.has('1')).toBe(false);
 
       maskPolys.forEach((poly) => {
         const sliceIndex = poly.getAttribute('data-branch-wall-mask-slice');
@@ -379,7 +380,7 @@ describe('FancyMazePreview', () => {
     expect(closed.container.querySelector('[data-role="branch-opening-fill-right"]')).not.toBeNull();
   });
 
-  it('junctionビューでは開口クリップで分岐床と開口フィルを切り抜く', () => {
+  it('junctionビューでは床用/壁用の開口クリップを使い分ける', () => {
     const { container } = renderPreview('junction', {
       forward: true,
       left: true,
@@ -387,23 +388,35 @@ describe('FancyMazePreview', () => {
       backward: false,
     });
 
-    const leftClip = container.querySelector('clipPath[data-role="branch-opening-clip-left"]');
-    const rightClip = container.querySelector('clipPath[data-role="branch-opening-clip-right"]');
-    expect(leftClip).not.toBeNull();
-    expect(rightClip).not.toBeNull();
+    const leftWallClip = container.querySelector(
+      'clipPath[data-role="branch-opening-wall-clip-left"]',
+    );
+    const rightWallClip = container.querySelector(
+      'clipPath[data-role="branch-opening-wall-clip-right"]',
+    );
+    const leftFloorClip = container.querySelector(
+      'clipPath[data-role="branch-opening-floor-clip-left"]',
+    );
+    const rightFloorClip = container.querySelector(
+      'clipPath[data-role="branch-opening-floor-clip-right"]',
+    );
+    expect(leftWallClip).not.toBeNull();
+    expect(rightWallClip).not.toBeNull();
+    expect(leftFloorClip).not.toBeNull();
+    expect(rightFloorClip).not.toBeNull();
 
     const leftFloor = container.querySelector('[data-role="branch-floor-left"]');
     const rightFloor = container.querySelector('[data-role="branch-floor-right"]');
-    expect(leftFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-left)');
-    expect(rightFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-right)');
+    expect(leftFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-floor-clip-left)');
+    expect(rightFloor?.getAttribute('clip-path')).toBe('url(#branch-opening-floor-clip-right)');
 
     const leftFill = container.querySelector('[data-role="branch-opening-fill-left"]');
     const rightFill = container.querySelector('[data-role="branch-opening-fill-right"]');
-    expect(leftFill?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-left)');
-    expect(rightFill?.getAttribute('clip-path')).toBe('url(#branch-opening-clip-right)');
+    expect(leftFill?.getAttribute('clip-path')).toBe('url(#branch-opening-wall-clip-left)');
+    expect(rightFill?.getAttribute('clip-path')).toBe('url(#branch-opening-wall-clip-right)');
   });
 
-  it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、branch wall clipを使う', () => {
+  it('junctionビューはシームなしでアンカーラインから分岐床を連続させ、開口クリップで分岐壁を絞る', () => {
     const openings = { forward: true, left: true, right: true, backward: false };
     const { container } = renderPreview('junction', openings);
     const anchor = stopAt(BRANCH_ANCHOR_DEPTH);
@@ -412,8 +425,8 @@ describe('FancyMazePreview', () => {
 
     expect(container.querySelector('[data-role="branch-floor-seam-left"]')).toBeNull();
     expect(container.querySelector('[data-role="branch-floor-seam-right"]')).toBeNull();
-    expect(container.querySelector('[data-role="branch-clip-left"]')).not.toBeNull();
-    expect(container.querySelector('[data-role="branch-clip-right"]')).not.toBeNull();
+    expect(container.querySelector('[data-role="branch-opening-wall-clip-left"]')).not.toBeNull();
+    expect(container.querySelector('[data-role="branch-opening-wall-clip-right"]')).not.toBeNull();
 
     const assertFloorConnection = (
       side: 'left' | 'right',
@@ -438,7 +451,9 @@ describe('FancyMazePreview', () => {
 
       const wallGroup = container.querySelector(`g[data-role="branch-walls-${side}"]`);
       expect(wallGroup).not.toBeNull();
-      expect(wallGroup?.getAttribute('clip-path')).toBe(`url(#branch-wall-clip-${side})`);
+      expect(wallGroup?.getAttribute('clip-path')).toBe(
+        `url(#branch-opening-wall-clip-${side})`,
+      );
     };
 
     assertFloorConnection('left', anchor.left, mouthWidth);

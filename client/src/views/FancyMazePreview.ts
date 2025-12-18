@@ -39,10 +39,9 @@ const COLOR_PORTAL = '#d7ecff';
 const COLOR_PORTAL_FRAME = '#8ba8c5';
 const COLOR_BRANCH_OPENING_FILL = mixColor(COLOR_BG, COLOR_WALL_FAR, 0.3);
 const BRANCH_MOUTH_WIDTH_RATIO = 0.12; // 手前の共有エッジに使うmouth幅（アンカー幅比）
-const BRANCH_WALL_CLIP_MARGIN = 0;
 const BRANCH_NEAR_WALL_THICKNESS = 2.5;
 const BRANCH_ANCHOR_SLICE_INDEX = 1;
-const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX - 0.5; // 手前スライスの前半から分岐を開始し、柱を含めて開口する
+const BRANCH_ANCHOR_DEPTH = BRANCH_ANCHOR_SLICE_INDEX; // アンカーはスライス1に合わせ、開口はslice2のみ抜く
 const BRANCH_DEPTH_DELTA = 0.65; // アンカーから奥へ浅く伸ばし、slice2付近に限定する
 const BRANCH_NEAR_SPAN = 0.2; // 奥側で外へ広げる横幅（近側は壁厚で制限）
 const BRANCH_FAR_EXTRA_SPAN = 0.1; // 奥側でわずかに広げる
@@ -335,6 +334,7 @@ type BranchGeometry = {
   farOuter: { x: number; y: number };
   anchorEdgeX: number;
   farEdgeX: number;
+  mouthWidth: number;
 };
 
 type BranchOpeningShape = {
@@ -393,6 +393,7 @@ function createBranchGeometry(side: 'left' | 'right', anchorDepth: number): Bran
     farOuter: branchFarOuter,
     anchorEdgeX,
     farEdgeX,
+    mouthWidth,
   };
 }
 
@@ -497,9 +498,7 @@ function buildBranchWallMasks(
   return { defs, maskIds, openingShapes };
 }
 
-function buildBranchOpeningClips(
-  openingShapes: BranchOpeningShape[],
-): {
+function buildBranchOpeningWallClips(openingShapes: BranchOpeningShape[]): {
   defs: string[];
   clipIds: Partial<Record<'left' | 'right', string>>;
 } {
@@ -509,13 +508,11 @@ function buildBranchOpeningClips(
   (['left', 'right'] as const).forEach((side) => {
     const shapes = openingShapes.filter((shape) => shape.side === side);
     if (!shapes.length) return;
-    const clipId = `branch-opening-clip-${side}`;
+    const clipId = `branch-opening-wall-clip-${side}`;
     clipIds[side] = clipId;
-    const polygons = shapes.map(
-      (shape) => `<polygon points="${joinPoints(shape.points)}" />`,
-    );
+    const polygons = shapes.map((shape) => `<polygon points="${joinPoints(shape.points)}" />`);
     defs.push(
-      `<clipPath id="${clipId}" data-role="branch-opening-clip-${side}" clipPathUnits="userSpaceOnUse">
+      `<clipPath id="${clipId}" data-role="branch-opening-wall-clip-${side}" clipPathUnits="userSpaceOnUse">
         ${polygons.join('\n')}
       </clipPath>`,
     );
@@ -524,9 +521,7 @@ function buildBranchOpeningClips(
   return { defs, clipIds };
 }
 
-function buildBranchWallClips(
-  geometries: BranchGeometry[],
-): {
+function buildBranchOpeningFloorClips(geometries: BranchGeometry[]): {
   defs: string[];
   clipIds: Partial<Record<'left' | 'right', string>>;
 } {
@@ -534,39 +529,31 @@ function buildBranchWallClips(
   const clipIds: Partial<Record<'left' | 'right', string>> = {};
 
   geometries.forEach((geometry) => {
-    const clipId = `branch-wall-clip-${geometry.side}`;
+    const clipId = `branch-opening-floor-clip-${geometry.side}`;
     clipIds[geometry.side] = clipId;
 
-    const nearBoundary =
-      geometry.side === 'left'
-        ? geometry.anchorEdgeX - BRANCH_WALL_CLIP_MARGIN
-        : geometry.anchorEdgeX + BRANCH_WALL_CLIP_MARGIN;
-    const farBoundary =
-      geometry.side === 'left'
-        ? geometry.farEdgeX - BRANCH_WALL_CLIP_MARGIN
-        : geometry.farEdgeX + BRANCH_WALL_CLIP_MARGIN;
-
+    const farInset = geometry.mouthWidth * 0.6;
     const points =
       geometry.side === 'left'
         ? [
-            { x: 0, y: 0 },
-            { x: farBoundary, y: 0 },
-            { x: farBoundary, y: geometry.farStop.y },
-            { x: nearBoundary, y: geometry.anchorStop.y },
-            { x: nearBoundary, y: HEIGHT },
-            { x: 0, y: HEIGHT },
+            { x: geometry.anchorStop.left, y: geometry.anchorStop.y },
+            { x: geometry.anchorStop.left + geometry.mouthWidth, y: geometry.anchorStop.y },
+            { x: geometry.farStop.left + farInset, y: geometry.farStop.y },
+            { x: geometry.farStop.left, y: geometry.farStop.y },
+            { x: geometry.farStop.left, y: HEIGHT },
+            { x: geometry.anchorStop.left, y: HEIGHT },
           ]
         : [
-            { x: WIDTH, y: 0 },
-            { x: WIDTH, y: HEIGHT },
-            { x: nearBoundary, y: HEIGHT },
-            { x: nearBoundary, y: geometry.anchorStop.y },
-            { x: farBoundary, y: geometry.farStop.y },
-            { x: farBoundary, y: 0 },
+            { x: geometry.anchorStop.right, y: geometry.anchorStop.y },
+            { x: geometry.anchorStop.right - geometry.mouthWidth, y: geometry.anchorStop.y },
+            { x: geometry.farStop.right - farInset, y: geometry.farStop.y },
+            { x: geometry.farStop.right, y: geometry.farStop.y },
+            { x: geometry.farStop.right, y: HEIGHT },
+            { x: geometry.anchorStop.right, y: HEIGHT },
           ];
 
     defs.push(
-      `<clipPath id="${clipId}" data-role="branch-clip-${geometry.side}" clipPathUnits="userSpaceOnUse">
+      `<clipPath id="${clipId}" data-role="branch-opening-floor-clip-${geometry.side}" clipPathUnits="userSpaceOnUse">
         <polygon points="${joinPoints(points)}" />
       </clipPath>`,
     );
@@ -642,32 +629,31 @@ function renderJunctionView(
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const branchGeometries = branchParts.map((part) => part.geometry);
   const wallMasks = buildBranchWallMasks(branchGeometries, slices);
-  const branchOpeningClips = buildBranchOpeningClips(wallMasks.openingShapes);
-  const branchFloors = renderBranchFloors(branchParts, branchOpeningClips.clipIds);
+  const branchOpeningWallClips = buildBranchOpeningWallClips(wallMasks.openingShapes);
+  const branchOpeningFloorClips = buildBranchOpeningFloorClips(branchGeometries);
+  const branchFloors = renderBranchFloors(branchParts, branchOpeningFloorClips.clipIds);
   const branchOpeningFills = renderBranchOpeningFills(
     wallMasks.openingShapes,
-    branchOpeningClips.clipIds,
+    branchOpeningWallClips.clipIds,
   );
-  const branchWallClips = buildBranchWallClips(branchGeometries);
-  const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
-  const defs = [...wallMasks.defs, ...branchOpeningClips.defs, ...branchWallClips.defs];
+  const branchWallGroups = renderBranchWallGroups(branchParts, branchOpeningWallClips.clipIds);
+  const defs = [...wallMasks.defs, ...branchOpeningWallClips.defs, ...branchOpeningFloorClips.defs];
 
-  // 1. 床（メイン通路）
-  parts.push(renderMainFloor(mainFloor));
-  parts.push(renderFloorSlices(slices));
-  // 2. クリップ/マスク定義
   if (defs.length > 0) {
     parts.push(`<defs>${defs.join('\n')}</defs>`);
   }
-  // 3. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
+  // 1. 床（メイン通路）
+  parts.push(renderMainFloor(mainFloor));
+  parts.push(renderFloorSlices(slices));
+  // 2. 左右分岐（床）: 壁より先に描画して壁で手前を隠す
   parts.push(...branchFloors);
-  // 4. 開口の奥行きを示すフィル（壁の前）
+  // 3. 開口の奥行きを示すフィル（壁の前）
   parts.push(...branchOpeningFills);
-  // 5. メイン左右壁
+  // 4. メイン左右壁
   parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
-  // 6. 左右分岐（壁）
+  // 5. 左右分岐（壁）
   parts.push(...branchWallGroups);
-  // 7. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
+  // 6. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
   if (!openings.forward) {
     parts.push(renderJunctionForwardCap(stops[3]));
   }
@@ -685,18 +671,18 @@ function renderGoalView(
   const branchParts = buildBranchParts(openings, BRANCH_ANCHOR_DEPTH);
   const branchGeometries = branchParts.map((part) => part.geometry);
   const wallMasks = buildBranchWallMasks(branchGeometries, slices);
-  const branchOpeningClips = buildBranchOpeningClips(wallMasks.openingShapes);
-  const branchFloors = renderBranchFloors(branchParts, branchOpeningClips.clipIds);
-  const branchWallClips = buildBranchWallClips(branchGeometries);
-  const branchWallGroups = renderBranchWallGroups(branchParts, branchWallClips.clipIds);
-  const defs = [...wallMasks.defs, ...branchOpeningClips.defs, ...branchWallClips.defs];
+  const branchOpeningWallClips = buildBranchOpeningWallClips(wallMasks.openingShapes);
+  const branchOpeningFloorClips = buildBranchOpeningFloorClips(branchGeometries);
+  const branchFloors = renderBranchFloors(branchParts, branchOpeningFloorClips.clipIds);
+  const branchWallGroups = renderBranchWallGroups(branchParts, branchOpeningWallClips.clipIds);
+  const defs = [...wallMasks.defs, ...branchOpeningWallClips.defs, ...branchOpeningFloorClips.defs];
 
-  parts.push(renderMainFloor(mainFloor));
-  parts.push(renderFloorSlices(slices));
-  parts.push(renderGoalFloorGlow(mainFloor));
   if (defs.length > 0) {
     parts.push(`<defs>${defs.join('\n')}</defs>`);
   }
+  parts.push(renderMainFloor(mainFloor));
+  parts.push(renderFloorSlices(slices));
+  parts.push(renderGoalFloorGlow(mainFloor));
   parts.push(...branchFloors);
   parts.push(renderCorridorWalls(slices, 'goal', openings, wallMasks.maskIds));
   parts.push(...branchWallGroups);
