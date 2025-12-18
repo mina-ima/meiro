@@ -38,9 +38,6 @@ import opening_fill_right_d2 from '../assets/preview_tiles/opening_fill_right_d2
 import opening_fill_right_d3 from '../assets/preview_tiles/opening_fill_right_d3.png';
 import opening_fill_right_d4 from '../assets/preview_tiles/opening_fill_right_d4.png';
 
-const PLACEHOLDER_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PvNbywAAAABJRU5ErkJggg==';
-
 const TILE_ASSETS: Record<string, string | undefined> = {
   floor_d1,
   floor_d2,
@@ -97,6 +94,11 @@ type TileEntry = {
   key: string;
   depth: Depth;
   role: 'floor' | 'left' | 'right' | 'front' | 'opening_fill_left' | 'opening_fill_right';
+};
+
+type TileSource = {
+  src: string;
+  placeholder: boolean;
 };
 
 const DEPTHS_NEAR_TO_FAR: Depth[] = [1, 2, 3, 4];
@@ -160,13 +162,45 @@ function buildTileEntries(previewState: PreviewState): TileEntry[] {
   return entries;
 }
 
-function getTileSrc(key: string): string {
-  return TILE_ASSETS[key] ?? PLACEHOLDER_DATA_URL;
+function createPlaceholderSvg(entry: TileEntry): string {
+  const colorMap: Record<TileEntry['role'], string> = {
+    floor: '#1d4ed8',
+    left: '#ef4444',
+    right: '#a855f7',
+    front: '#f97316',
+    opening_fill_left: '#22c55e',
+    opening_fill_right: '#84cc16',
+  };
+  const color = colorMap[entry.role] ?? '#475569';
+  const label = `${entry.role}@d${entry.depth}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
+    <rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="${color}" opacity="0.3" />
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="${color}" font-family="monospace">${label}</text>
+  </svg>`;
+}
+
+function getTileSource(entry: TileEntry): TileSource {
+  const asset = TILE_ASSETS[entry.key];
+  if (asset) {
+    return { src: asset, placeholder: false };
+  }
+  const svg = createPlaceholderSvg(entry);
+  return {
+    src: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    placeholder: true,
+  };
+}
+
+// テスト用: アセットを一時的に差し替えてフォールバック挙動を検証する
+export function __setTileAssetForTest(key: string, value: string | undefined): string | undefined {
+  const previous = TILE_ASSETS[key];
+  TILE_ASSETS[key] = value;
+  return previous;
 }
 
 function renderTile(entry: TileEntry): string {
-  const src = getTileSrc(entry.key);
-  return `<img data-tile-key="${entry.key}" data-tile-role="${entry.role}" data-depth="${entry.depth}" src="${src}" alt="${entry.key}" style="position:absolute;left:0;top:0;width:100%;height:100%;" />`;
+  const { src, placeholder } = getTileSource(entry);
+  return `<img data-tile-key="${entry.key}" data-tile-role="${entry.role}" data-depth="${entry.depth}" data-placeholder="${placeholder ? 'true' : 'false'}" src="${src}" alt="${entry.key}" style="position:absolute;left:0;top:0;width:100%;height:100%;" />`;
 }
 
 function renderPreview(

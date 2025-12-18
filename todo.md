@@ -423,3 +423,5 @@
   - DoD: `client/src/assets/preview_tiles/` に `floor_d*` / `left|right_(open|closed)_d*` / `front_dead_d*` / `opening_fill_*_d*` を配置し、FancyMazePreview が `<img>` 重ねで描画。`client/tests/fancyMazePreview.test.tsx` で開口有無によるタイル選択と行き止まりでの depth 打ち切りを確認
 - [x] depth別の開口ロジックを拡張し、forward 開口時は左右開口を depth=2 まで表示、forward=false 時は depth=1 で front_dead を挿入して打ち切る  
   - DoD: FancyMazePreview の previewState が depth 別に左右開口を伸ばし、frontOpen=false の最初の depth までを描画範囲とする。`client/tests/fancyMazePreview.test.tsx` で depth2 の開口表示と front_dead_d1 の挿入、depth2 以降の非描画を検証
+- [x] タイル未準備時でも開発しやすいよう、役割別カラー付きプレースホルダーを自動生成する  
+  - DoD: FancyMazePreview がアセット欠落時に SVG プレースホルダーを描画し、`data-placeholder="true"` を付与。`client/tests/fancyMazePreview.test.tsx` で欠落時プレースホルダーが描画されることを確認

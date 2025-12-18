@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { createFancyMazePreviewSvg } from '../src/views/FancyMazePreview';
+import { __setTileAssetForTest, createFancyMazePreviewSvg } from '../src/views/FancyMazePreview';
 import type { Direction, MazePreviewVariant } from '../src/views/PlayerView';
 import type { ServerMazeCell } from '../src/state/sessionStore';
 
@@ -96,5 +96,22 @@ describe('FancyMazePreview (固定タイル描画)', () => {
     expect(container.querySelector('[data-preview-variant="goal"]')).not.toBeNull();
     expect(container.querySelector('[data-tile-key="right_open_d2"]')).not.toBeNull();
     expect(container.querySelector('[data-tile-key="left_closed_d2"]')).not.toBeNull();
+  });
+
+  it('タイル欠落時は役割付きプレースホルダーを描画する', () => {
+    const key = 'left_open_d1';
+    const prev = __setTileAssetForTest(key, undefined);
+
+    const { container } = renderPreview('junction', {
+      forward: true,
+      left: true,
+      right: false,
+      backward: false,
+    });
+
+    const tile = container.querySelector(`[data-tile-key="${key}"]`);
+    expect(tile?.getAttribute('data-placeholder')).toBe('true');
+
+    __setTileAssetForTest(key, prev);
   });
 });
