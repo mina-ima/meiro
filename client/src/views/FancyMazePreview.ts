@@ -404,7 +404,6 @@ function renderSideBranch(geometry: BranchGeometry): BranchParts {
     anchorStop,
     farStop,
     nearInner,
-    nearInnerInset,
     nearOuter: branchNearOuter,
     farInner: branchFarInner,
     farOuter: branchFarOuter,
@@ -413,7 +412,7 @@ function renderSideBranch(geometry: BranchGeometry): BranchParts {
   } = geometry;
 
   // 1. 分岐床（メイン床と同じグレーグラデーション）
-  const floorPoints = [nearInnerInset, nearInner, branchNearOuter, branchFarOuter, branchFarInner];
+  const floorPoints = [nearInner, branchNearOuter, branchFarOuter, branchFarInner];
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
@@ -532,24 +531,21 @@ function buildBranchOpeningFloorClips(geometries: BranchGeometry[]): {
     const clipId = `branch-opening-floor-clip-${geometry.side}`;
     clipIds[geometry.side] = clipId;
 
-    const farInset = geometry.mouthWidth * 0.6;
     const points =
       geometry.side === 'left'
         ? [
+            { x: 0, y: HEIGHT },
+            { x: 0, y: 0 },
+            { x: geometry.farStop.left, y: 0 },
             { x: geometry.anchorStop.left, y: geometry.anchorStop.y },
-            { x: geometry.anchorStop.left + geometry.mouthWidth, y: geometry.anchorStop.y },
-            { x: geometry.farStop.left + farInset, y: geometry.farStop.y },
-            { x: geometry.farStop.left, y: geometry.farStop.y },
-            { x: geometry.farStop.left, y: HEIGHT },
             { x: geometry.anchorStop.left, y: HEIGHT },
           ]
         : [
-            { x: geometry.anchorStop.right, y: geometry.anchorStop.y },
-            { x: geometry.anchorStop.right - geometry.mouthWidth, y: geometry.anchorStop.y },
-            { x: geometry.farStop.right - farInset, y: geometry.farStop.y },
-            { x: geometry.farStop.right, y: geometry.farStop.y },
-            { x: geometry.farStop.right, y: HEIGHT },
+            { x: WIDTH, y: HEIGHT },
             { x: geometry.anchorStop.right, y: HEIGHT },
+            { x: geometry.anchorStop.right, y: geometry.anchorStop.y },
+            { x: geometry.farStop.right, y: 0 },
+            { x: WIDTH, y: 0 },
           ];
 
     defs.push(

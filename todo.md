@@ -411,3 +411,5 @@
   - DoD: BRANCH_ANCHOR を depth 0.5 に置き、開口側壁マスクが slice1 を含む階段ポリゴン（data-branch-wall-mask-slice 付き）としてメイン壁と同じパースを維持する。junction/goal 共通で `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` により手前スライスまでマスクされることを確認
 - [x] 横通路の壁高さを天井付近まで引き上げ、左右90度の廊下感を強調  
   - DoD: branch-wall のポリゴン上端が床から十分離れ、tests での分岐床・ガイドの性質が維持される
+- [x] branch-opening-floor-clip を通路外側のみの台形に限定し、分岐床 nearLine が本線床に食い込まないようにする  
+  - DoD: branch-opening-floor-clip のポリゴンが anchorStop.left/right を境に外側へ伸びる台形になり、branch-floor nearLine の maxX/minX が anchorStop 境界を越えないことを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
