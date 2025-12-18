@@ -413,3 +413,5 @@
   - DoD: branch-wall のポリゴン上端が床から十分離れ、tests での分岐床・ガイドの性質が維持される
 - [x] branch-opening-floor-clip を通路外側のみの台形に限定し、分岐床 nearLine が本線床に食い込まないようにする  
   - DoD: branch-opening-floor-clip のポリゴンが anchorStop.left/right を境に外側へ伸びる台形になり、branch-floor nearLine の maxX/minX が anchorStop 境界を越えないことを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
+- [x] junction で clipPath を defs 先出し＆ userSpaceOnUse 固定とし、分岐壁を廃止して開口枠（branch-jamb）だけを表示する  
+  - DoD: branch-floor/branch-opening-fill が `url(#branch-opening-floor-clip-*)` / `url(#branch-opening-wall-clip-*)` を参照し、clipPath が <defs> 内で床より前に定義されている。branch-wall 要素が junction DOM に存在せず、代わりに `data-role="branch-jamb-*"` が wall clip 越しに描画され、branch-floor nearLine が anchorStop 境界で clamp されることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認

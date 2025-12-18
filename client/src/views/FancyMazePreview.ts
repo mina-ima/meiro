@@ -411,8 +411,17 @@ function renderSideBranch(geometry: BranchGeometry): BranchParts {
     farEdgeX,
   } = geometry;
 
+  const clampedNearInner =
+    side === 'left'
+      ? { ...nearInner, x: Math.min(nearInner.x, anchorStop.left) }
+      : { ...nearInner, x: Math.max(nearInner.x, anchorStop.right) };
+  const clampedNearOuter =
+    side === 'left'
+      ? { ...branchNearOuter, x: Math.min(branchNearOuter.x, anchorStop.left) }
+      : { ...branchNearOuter, x: Math.max(branchNearOuter.x, anchorStop.right) };
+
   // 1. 分岐床（メイン床と同じグレーグラデーション）
-  const floorPoints = [nearInner, branchNearOuter, branchFarOuter, branchFarInner];
+  const floorPoints = [clampedNearInner, clampedNearOuter, branchFarOuter, branchFarInner];
 
   // 2. 内側の壁（本線との境界側）: 床の端から天井まで
   const innerWallPoints = [
@@ -597,6 +606,30 @@ function renderBranchWallGroups(
   });
 }
 
+function renderBranchJambs(
+  geometries: BranchGeometry[],
+  clipIds: Partial<Record<'left' | 'right', string>>,
+): string[] {
+  const jambWidth = BRANCH_NEAR_WALL_THICKNESS;
+  return geometries.map((geometry) => {
+    const clipId = clipIds[geometry.side];
+    const clipAttr = clipId ? ` clip-path="url(#${clipId})"` : '';
+    const x0 =
+      geometry.side === 'left' ? geometry.anchorStop.left - jambWidth : geometry.anchorStop.right;
+    const x1 =
+      geometry.side === 'left' ? geometry.anchorStop.left : geometry.anchorStop.right + jambWidth;
+    const points = [
+      { x: x0, y: geometry.anchorStop.y },
+      { x: x1, y: geometry.anchorStop.y },
+      { x: x1, y: 0 },
+      { x: x0, y: 0 },
+    ];
+    return `<polygon data-branch="${geometry.side}" data-role="branch-jamb-${geometry.side}"
+      points="${joinPoints(points)}" fill="${COLOR_WALL}" fill-opacity="0.72"
+      stroke="${COLOR_WALL_LINE}" stroke-width="0.5" stroke-opacity="0.28"${clipAttr} />`;
+  });
+}
+
 function renderStartView(
   openings: Openings,
   slices: SliceGeometry[],
@@ -632,7 +665,7 @@ function renderJunctionView(
     wallMasks.openingShapes,
     branchOpeningWallClips.clipIds,
   );
-  const branchWallGroups = renderBranchWallGroups(branchParts, branchOpeningWallClips.clipIds);
+  const branchJambs = renderBranchJambs(branchGeometries, branchOpeningWallClips.clipIds);
   const defs = [...wallMasks.defs, ...branchOpeningWallClips.defs, ...branchOpeningFloorClips.defs];
 
   if (defs.length > 0) {
@@ -647,8 +680,8 @@ function renderJunctionView(
   parts.push(...branchOpeningFills);
   // 4. メイン左右壁
   parts.push(renderCorridorWalls(slices, 'junction', openings, wallMasks.maskIds));
-  // 5. 左右分岐（壁）
-  parts.push(...branchWallGroups);
+  // 5. 左右分岐（開口枠）
+  parts.push(...branchJambs);
   // 6. 正面は壁で塞がず、forward=false のときだけ暗転で閉塞を示す
   if (!openings.forward) {
     parts.push(renderJunctionForwardCap(stops[3]));

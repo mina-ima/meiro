@@ -267,6 +267,7 @@ type PointItem = {x:number,y:number,value:1|3|5};
 * 更新メモ(2026-02-06): FancyMazePreview junction/goal の mouth インセットとシームを撤廃し、アンカーライン上に mouthWidth=anchorWidth*0.12 の共有エッジを直接描く構成に戻す。分岐床の手前2点を anchorStop 上の線分に揃え、branch-opening-fill とマスクのみを残して clipPath を無効化。分岐壁の根元も mouth 線分に一致させ、描画順は床→床スライス→分岐床→開口フィル→defs→メイン壁→分岐壁→cap に固定（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で床連続性と壁根元・clip非使用を検証）
 * 更新メモ(2026-02-07): FancyMazePreview junction/goal の BRANCH_ANCHOR を slice1 深度(1.0)に戻し、branch wall mask の開口スライスを slice2 のみに制限（slice1 を含めない）。床用 clipPath は anchorStop.y と mouthWidth に合わせて共有エッジを維持し、`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で mask スライス集合とクリップ位置を回帰
 * 更新メモ(2026-02-08): FancyMazePreview junction/goal の branch-opening-floor-clip を通路外側だけの台形に限定し、分岐床の nearLine を anchorStop 境界と外側厚みで止めて本線床へ食い込まないよう修正（`client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で nearX と clip 形状を検証）
+* 更新メモ(2026-02-09): FancyMazePreview junction で clipPath を defs 先出し＋`clipPathUnits="userSpaceOnUse"`に固定し、branch-floor の nearLine を anchorStop 境界で clamp。分岐壁は描かず、開口枠ポリゴン（`data-role="branch-jamb-*"`）のみを wall clip 経由で描画し、床/開口フィルは clipPath 経由で開口外へ漏れないことを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で回帰。
 
 ### 8.2 オーナー
 
