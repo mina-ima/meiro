@@ -415,3 +415,9 @@
   - DoD: branch-opening-floor-clip のポリゴンが anchorStop.left/right を境に外側へ伸びる台形になり、branch-floor nearLine の maxX/minX が anchorStop 境界を越えないことを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
 - [x] junction で clipPath を defs 先出し＆ userSpaceOnUse 固定とし、分岐壁を廃止して開口枠（branch-jamb）だけを表示する  
   - DoD: branch-floor/branch-opening-fill が `url(#branch-opening-floor-clip-*)` / `url(#branch-opening-wall-clip-*)` を参照し、clipPath が <defs> 内で床より前に定義されている。branch-wall 要素が junction DOM に存在せず、代わりに `data-role="branch-jamb-*"` が wall clip 越しに描画され、branch-floor nearLine が anchorStop 境界で clamp されることを `client/src/views/FancyMazePreview.ts` / `client/tests/fancyMazePreview.test.tsx` で確認
+
+---
+
+## 26. FancyMazePreview 画像タイル化（2026-02-09）
+- [x] ポリゴン/クリップ方式を廃止し、固定PNGタイル（depth=1..4、左右開閉と行き止まり）を重ねる描画へ切り替える  
+  - DoD: `client/src/assets/preview_tiles/` に `floor_d*` / `left|right_(open|closed)_d*` / `front_dead_d*` / `opening_fill_*_d*` を配置し、FancyMazePreview が `<img>` 重ねで描画。`client/tests/fancyMazePreview.test.tsx` で開口有無によるタイル選択と行き止まりでの depth 打ち切りを確認
