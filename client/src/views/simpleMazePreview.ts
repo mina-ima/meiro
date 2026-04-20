@@ -129,7 +129,7 @@ function renderCorridorWalls(): string {
   return `${renderWallSide('left')}\n${renderWallSide('right')}`;
 }
 
-// 正面の行き止まり壁
+// 正面の行き止まり壁（レンガテクスチャ）
 function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string {
   const t = depth === 'near' ? 0.7 : 0.9;
   const bottomY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
@@ -146,28 +146,44 @@ function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string 
   return `<polygon data-forward-block="${label}" points="${joinPoints(pts)}" fill="url(#wall-brick-dark)" />`;
 }
 
-// ゴールの光る出口
-function renderGoalPortal(): string {
+// 通路の先が暗闇に消えていく表現（正面が開いている場合）
+function renderCorridorFade(): string {
   const left = CORRIDOR_FAR_LEFT;
   const right = CORRIDOR_FAR_RIGHT;
 
-  const wallPts = [
+  return `<polygon points="${joinPoints([
     { x: left, y: 0 },
     { x: right, y: 0 },
     { x: right, y: FLOOR_FAR_Y },
     { x: left, y: FLOOR_FAR_Y },
-  ];
+  ])}" fill="${COLOR_BG}" />`;
+}
 
-  const portalWidth = (right - left) * 0.45;
-  const portalHeight = FLOOR_FAR_Y - 18;
-  const portalLeft = (left + right) / 2 - portalWidth / 2;
-  const portalTop = 9;
+// ゴール：通路の先が外の光に開けている表現
+function renderGoalPortal(): string {
+  const left = CORRIDOR_FAR_LEFT;
+  const right = CORRIDOR_FAR_RIGHT;
 
-  const wall = `<polygon points="${joinPoints(wallPts)}" fill="${COLOR_PORTAL_FRAME}" />`;
-  const portal = `<rect x="${portalLeft}" y="${portalTop}" width="${portalWidth}" height="${portalHeight}" fill="${COLOR_PORTAL}" rx="2" />`;
-  const glow = `<rect x="${portalLeft - 3}" y="${portalTop - 3}" width="${portalWidth + 6}" height="${portalHeight + 6}" fill="${COLOR_PORTAL}" opacity="0.15" rx="4" />`;
+  // 通路の奥が外に開けている（空と光のグラデーション）
+  const skyGlow = `<polygon points="${joinPoints([
+    { x: left, y: 0 },
+    { x: right, y: 0 },
+    { x: right, y: FLOOR_FAR_Y },
+    { x: left, y: FLOOR_FAR_Y },
+  ])}" fill="${COLOR_PORTAL}" />`;
 
-  return `${wall}\n${glow}\n${portal}`;
+  // 光が周囲に漏れるグロー効果
+  const glowLeft = left - 8;
+  const glowRight = right + 8;
+  const glowTop = FLOOR_FAR_Y - 25;
+  const glow = `<polygon points="${joinPoints([
+    { x: glowLeft, y: glowTop },
+    { x: glowRight, y: glowTop },
+    { x: right, y: FLOOR_FAR_Y },
+    { x: left, y: FLOOR_FAR_Y },
+  ])}" fill="${COLOR_PORTAL}" opacity="0.12" />`;
+
+  return `${glow}\n${skyGlow}`;
 }
 
 // 側面分岐：開口部を通して横通路の両壁・床が見える3D描画
@@ -254,7 +270,9 @@ function renderStartView(openings: Openings): string {
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
 
-  if (!openings.forward) {
+  if (openings.forward) {
+    parts.push(renderCorridorFade());
+  } else {
     parts.push(renderFrontWall('start', 'near'));
   }
 
@@ -281,7 +299,9 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderWallSide('right'));
   }
 
-  if (!openings.forward) {
+  if (openings.forward) {
+    parts.push(renderCorridorFade());
+  } else {
     parts.push(renderFrontWall('junction', 'near'));
   }
 
