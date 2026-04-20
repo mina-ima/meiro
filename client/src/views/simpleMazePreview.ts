@@ -73,7 +73,10 @@ function renderCeiling(): string {
   return `<rect x="0" y="0" width="${WIDTH}" height="${FLOOR_FAR_Y}" fill="url(#sky-grad)" />`;
 }
 
-// 通路の床
+// 視界の深さ（仕様: 4マス）
+const VIEW_DEPTH_TILES = 4;
+
+// 通路の床（4マスのグリッド付き）
 function renderCorridorFloor(): string {
   const pts = [
     { x: CORRIDOR_NEAR_LEFT, y: FLOOR_NEAR_Y },
@@ -84,16 +87,27 @@ function renderCorridorFloor(): string {
 
   const floor = `<polygon data-floor="corridor" data-floor-layer="main" points="${joinPoints(pts)}" fill="url(#corridor-floor-grad)" />`;
 
+  // 縦の収束線（通路の幅方向）
   const vanishX = (CORRIDOR_FAR_LEFT + CORRIDOR_FAR_RIGHT) / 2;
   const vanishY = FLOOR_FAR_Y;
   let guideLines = '';
   for (let i = 1; i < 6; i += 1) {
     const t = i / 6;
     const xNear = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_NEAR_RIGHT, t);
-    guideLines += `<line x1="${xNear}" y1="${FLOOR_NEAR_Y}" x2="${vanishX}" y2="${vanishY}" stroke="#000000" stroke-opacity="0.2" stroke-width="1" />`;
+    guideLines += `<line x1="${xNear}" y1="${FLOOR_NEAR_Y}" x2="${vanishX}" y2="${vanishY}" stroke="#000000" stroke-opacity="0.15" stroke-width="1" />`;
   }
 
-  return `${floor}\n${guideLines}`;
+  // 横線（マス境界：4マス分の奥行きを均等に分割）
+  let tileLines = '';
+  for (let i = 1; i <= VIEW_DEPTH_TILES; i += 1) {
+    const t = i / VIEW_DEPTH_TILES;
+    const y = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
+    const xL = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t);
+    const xR = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
+    tileLines += `<line x1="${xL}" y1="${y}" x2="${xR}" y2="${y}" stroke="#000000" stroke-opacity="0.15" stroke-width="1" />`;
+  }
+
+  return `${floor}\n${guideLines}\n${tileLines}`;
 }
 
 // 通路の壁（片側）
