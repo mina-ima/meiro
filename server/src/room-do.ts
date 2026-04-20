@@ -574,8 +574,8 @@ export class RoomDurableObject {
     return `${this.roomId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  async alarm(alarmTime: number): Promise<void> {
-    const now = alarmTime;
+  async alarm(alarmInfo?: unknown): Promise<void> {
+    const now = typeof alarmInfo === 'number' ? alarmInfo : Date.now();
     const previousPhase = this.roomState.phase;
     const previousPhaseStartedAt = this.roomState.phaseStartedAt;
     progressPhase(this.roomState, now);
