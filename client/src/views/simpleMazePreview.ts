@@ -170,24 +170,42 @@ function renderGoalPortal(): string {
   return `${wall}\n${glow}\n${portal}`;
 }
 
-// 側面分岐：壁に全高の開口部を作り、奥行きのある横通路を描画
+// 側面分岐：壁の切れ目から横通路が見える3D描画
+// 参考画像のように、壁のエッジ面（厚み）が見える自然な3D表現
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
+  const dir = isLeft ? -1 : 1;
 
-  // 開口部の奥行き範囲（通路の手前～奥）
-  const t1 = 0.28;
-  const t2 = 0.62;
+  // 開口部の奥行き範囲
+  const tNear = 0.25;
+  const tFar = 0.60;
 
-  const nearX_wall = isLeft ? CORRIDOR_NEAR_LEFT : CORRIDOR_NEAR_RIGHT;
-  const farX_wall = isLeft ? CORRIDOR_FAR_LEFT : CORRIDOR_FAR_RIGHT;
+  const wallNearEdge = isLeft ? CORRIDOR_NEAR_LEFT : CORRIDOR_NEAR_RIGHT;
+  const wallFarEdge = isLeft ? CORRIDOR_FAR_LEFT : CORRIDOR_FAR_RIGHT;
 
-  // 開口部の壁上の座標
-  const openNearX = lerp(nearX_wall, farX_wall, t1);
-  const openFarX = lerp(nearX_wall, farX_wall, t2);
-  const openNearFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t1);
-  const openFarFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t2);
+  // 開口部の境界座標
+  const openNearX = lerp(wallNearEdge, wallFarEdge, tNear);
+  const openFarX = lerp(wallNearEdge, wallFarEdge, tFar);
+  const openNearFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tNear);
+  const openFarFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tFar);
 
-  // 1) 開口部の背景（壁を覆い隠す暗い空間）
+  // 壁のエッジ面の奥行き（壁の厚みを表現する重要な3D要素）
+  const wallDepth = 18 * dir;
+  const edgeInnerX = openNearX + wallDepth;
+  const edgeInnerFloorY = openNearFloorY - 8;
+
+  // 横通路の奥壁の位置
+  const sideDepth = 70 * dir;
+  const farWallX = openNearX + sideDepth;
+  const farWallFloorY = openNearFloorY - 25;
+
+  // --- 描画順序：奥から手前へ ---
+
+  // 1) 壁を手前と奥に分割
+  const wallBefore = renderWallSide(side, 0, tNear);
+  const wallAfter = renderWallSide(side, tFar, 1);
+
+  // 2) 開口部背景（暗い空間）
   const openingBg = `<polygon data-branch-entry="${side}" points="${joinPoints([
     { x: openNearX, y: 0 },
     { x: openFarX, y: 0 },
@@ -195,54 +213,41 @@ function renderSideBranch(side: 'left' | 'right'): string {
     { x: openNearX, y: openNearFloorY },
   ])}" fill="${COLOR_BG}" />`;
 
-  // 2) 横通路の奥の壁
-  const branchDir = isLeft ? -1 : 1;
-  const branchExtent = 65;
-  const farWallNearX = openNearX + branchDir * branchExtent * 0.75;
-  const farWallFarX = openFarX + branchDir * branchExtent * 0.45;
-  const farWallNearFloorY = openNearFloorY - 18;
-  const farWallFarFloorY = openFarFloorY - 12;
-
+  // 3) 横通路の奥壁（開口部を通して見える正面の壁）
   const farWall = `<polygon points="${joinPoints([
-    { x: farWallNearX, y: 0 },
-    { x: farWallFarX, y: 0 },
-    { x: farWallFarX, y: farWallFarFloorY },
-    { x: farWallNearX, y: farWallNearFloorY },
+    { x: farWallX, y: 0 },
+    { x: edgeInnerX, y: 0 },
+    { x: edgeInnerX, y: edgeInnerFloorY },
+    { x: farWallX, y: farWallFloorY },
   ])}" fill="url(#wall-brick-dark)" />`;
 
-  // 3) 横通路の床
+  // 4) 横通路の床
   const branchFloor = `<polygon data-branch-floor="${side}" points="${joinPoints([
     { x: openNearX, y: openNearFloorY },
     { x: openFarX, y: openFarFloorY },
-    { x: farWallFarX, y: farWallFarFloorY },
-    { x: farWallNearX, y: farWallNearFloorY },
+    { x: edgeInnerX, y: edgeInnerFloorY },
+    { x: farWallX, y: farWallFloorY },
   ])}" fill="${COLOR_FLOOR_DARK}" />`;
 
-  // 4) 開口部の奥エッジ（壁の断面＝奥行き感を出す）
-  const edgeWidth = isLeft ? 4 : -4;
-  const edgePts = [
-    { x: openFarX, y: 0 },
-    { x: openFarX + edgeWidth, y: 0 },
-    { x: openFarX + edgeWidth, y: openFarFloorY },
-    { x: openFarX, y: openFarFloorY },
-  ];
-  const edge = `<polygon points="${joinPoints(edgePts)}" fill="${COLOR_WALL_DARK}" />`;
-
-  // 5) 開口部の手前エッジ
-  const nearEdgeWidth = isLeft ? 3 : -3;
-  const nearEdgePts = [
+  // 5) 壁のエッジ面（壁の厚み＝3D奥行きの決定的な要素）
+  // 参考画像で見える「壁の断面」を再現
+  const wallEdge = `<polygon points="${joinPoints([
     { x: openNearX, y: 0 },
-    { x: openNearX + nearEdgeWidth, y: 0 },
-    { x: openNearX + nearEdgeWidth, y: openNearFloorY },
+    { x: edgeInnerX, y: 0 },
+    { x: edgeInnerX, y: edgeInnerFloorY },
     { x: openNearX, y: openNearFloorY },
-  ];
-  const nearEdge = `<polygon points="${joinPoints(nearEdgePts)}" fill="${COLOR_WALL_SHADOW}" />`;
+  ])}" fill="${COLOR_WALL_SHADOW}" />`;
 
-  // 壁を開口部の前後に分割して描画
-  const wallBefore = renderWallSide(side, 0, t1);
-  const wallAfter = renderWallSide(side, t2, 1);
+  // 6) 奥の開口エッジ（壁が再開する箇所の薄い影）
+  const farEdgeW = isLeft ? 3 : -3;
+  const farEdge = `<polygon points="${joinPoints([
+    { x: openFarX, y: 0 },
+    { x: openFarX + farEdgeW, y: 0 },
+    { x: openFarX + farEdgeW, y: openFarFloorY },
+    { x: openFarX, y: openFarFloorY },
+  ])}" fill="${COLOR_WALL_DARK}" />`;
 
-  return [wallBefore, openingBg, farWall, branchFloor, edge, nearEdge, wallAfter].join('\n');
+  return [wallBefore, openingBg, farWall, branchFloor, wallEdge, farEdge, wallAfter].join('\n');
 }
 
 // スタートビュー
