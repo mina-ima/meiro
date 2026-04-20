@@ -877,19 +877,19 @@ function PlacementPalette({
   );
 
   const baseStyle: CSSProperties = {
-    flex: '1 1 140px',
-    minHeight: '88px',
-    borderRadius: '0.5rem',
-    border: '1px dashed #94a3b8',
+    flex: '0 0 auto',
+    padding: '0.4rem 0.75rem',
+    borderRadius: '0.375rem',
+    border: '1px solid #334155',
     backgroundColor: disabled ? '#1e293b' : '#0f172a',
     color: '#f8fafc',
     display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: '0.4rem',
     cursor: disabled ? 'not-allowed' : 'grab',
     userSelect: 'none',
+    fontSize: '0.85rem',
   };
 
   return (
@@ -913,9 +913,9 @@ function PlacementPalette({
           onDragStart={(event) => dragStartHandler(event, 'trap')}
           onClick={() => onSelect?.('trap')}
         >
-          <span style={{ fontSize: '1.6rem' }}>🪤</span>
-          <strong>罠を配置</strong>
-          <small>残り: {trapCharges}</small>
+          <span style={{ fontSize: '1.1rem' }}>🪤</span>
+          <span>罠</span>
+          <small style={{ color: '#94a3b8' }}>×{trapCharges}</small>
         </div>
         <div
           role="button"
@@ -930,9 +930,9 @@ function PlacementPalette({
           onDragStart={(event) => dragStartHandler(event, 'prediction')}
           onClick={() => onSelect?.('prediction')}
         >
-          <span style={{ fontSize: '1.6rem' }}>🎯</span>
-          <strong>予測地点</strong>
-          <small>残り: {predictionRemaining}</small>
+          <span style={{ fontSize: '1.1rem' }}>🎯</span>
+          <span>予測</span>
+          <small style={{ color: '#94a3b8' }}>×{predictionRemaining}</small>
         </div>
       </div>
       {disabled ? (
