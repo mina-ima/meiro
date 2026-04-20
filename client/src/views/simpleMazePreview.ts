@@ -15,9 +15,9 @@ const HEIGHT = 180;
 const FLOOR_NEAR_Y = HEIGHT; // 手前の床は画面下端まで
 const FLOOR_FAR_Y = 70; // 奥（消失点）
 
-// 通路の幅（手前と奥）
-const CORRIDOR_NEAR_LEFT = 30;
-const CORRIDOR_NEAR_RIGHT = WIDTH - 30; // 290
+// 通路の幅（手前は画面端まで、奥で収束）
+const CORRIDOR_NEAR_LEFT = 0;
+const CORRIDOR_NEAR_RIGHT = WIDTH; // 320
 const CORRIDOR_FAR_LEFT = WIDTH / 2 - 30; // 130
 const CORRIDOR_FAR_RIGHT = WIDTH / 2 + 30; // 190
 
@@ -190,14 +190,14 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const openFarFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tFar);
 
   // 壁のエッジ面の奥行き（壁の厚みを表現する重要な3D要素）
-  const wallDepth = 18 * dir;
+  const wallDepth = 20 * dir;
   const edgeInnerX = openNearX + wallDepth;
-  const edgeInnerFloorY = openNearFloorY - 8;
+  const edgeInnerFloorY = openNearFloorY - 6;
 
   // 横通路の奥壁の位置
-  const sideDepth = 70 * dir;
+  const sideDepth = 80 * dir;
   const farWallX = openNearX + sideDepth;
-  const farWallFloorY = openNearFloorY - 25;
+  const farWallFloorY = openNearFloorY - 22;
 
   // --- 描画順序：奥から手前へ ---
 
@@ -213,15 +213,15 @@ function renderSideBranch(side: 'left' | 'right'): string {
     { x: openNearX, y: openNearFloorY },
   ])}" fill="${COLOR_BG}" />`;
 
-  // 3) 横通路の奥壁（開口部を通して見える正面の壁）
+  // 3) 横通路の奥壁（開口部を通して見える正面の壁 - 明るい壁テクスチャ使用）
   const farWall = `<polygon points="${joinPoints([
     { x: farWallX, y: 0 },
     { x: edgeInnerX, y: 0 },
     { x: edgeInnerX, y: edgeInnerFloorY },
     { x: farWallX, y: farWallFloorY },
-  ])}" fill="url(#wall-brick-dark)" />`;
+  ])}" fill="url(#wall-brick)" />`;
 
-  // 4) 横通路の床
+  // 4) 横通路の床（開口部の下端から横通路の奥まで）
   const branchFloor = `<polygon data-branch-floor="${side}" points="${joinPoints([
     { x: openNearX, y: openNearFloorY },
     { x: openFarX, y: openFarFloorY },
@@ -230,7 +230,7 @@ function renderSideBranch(side: 'left' | 'right'): string {
   ])}" fill="${COLOR_FLOOR_DARK}" />`;
 
   // 5) 壁のエッジ面（壁の厚み＝3D奥行きの決定的な要素）
-  // 参考画像で見える「壁の断面」を再現
+  // 開口部の手前で壁が90°曲がるところの面
   const wallEdge = `<polygon points="${joinPoints([
     { x: openNearX, y: 0 },
     { x: edgeInnerX, y: 0 },
@@ -238,8 +238,8 @@ function renderSideBranch(side: 'left' | 'right'): string {
     { x: openNearX, y: openNearFloorY },
   ])}" fill="${COLOR_WALL_SHADOW}" />`;
 
-  // 6) 奥の開口エッジ（壁が再開する箇所の薄い影）
-  const farEdgeW = isLeft ? 3 : -3;
+  // 6) 奥の開口エッジ（壁が再開する箇所の影）
+  const farEdgeW = isLeft ? 4 : -4;
   const farEdge = `<polygon points="${joinPoints([
     { x: openFarX, y: 0 },
     { x: openFarX + farEdgeW, y: 0 },
