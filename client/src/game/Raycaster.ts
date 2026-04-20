@@ -6,6 +6,7 @@ export interface RayHit {
   distance: number;
   angle: number;
   intensity: number;
+  side: number; // 0 = NS wall, 1 = EW wall
 }
 
 export interface RaycasterConfig {
@@ -124,6 +125,7 @@ function castSingleRay(
         distance,
         angle,
         intensity: computeIntensity(distance, range),
+        side,
       };
     }
   }
@@ -133,6 +135,7 @@ function castSingleRay(
     distance: range,
     angle,
     intensity: 0,
+    side: 0,
   };
 }
 

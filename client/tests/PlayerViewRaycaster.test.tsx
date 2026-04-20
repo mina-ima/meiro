@@ -206,6 +206,7 @@ describe('PlayerView レイキャスト仕様', () => {
       distance: PLAYER_VIEW_RANGE * 2,
       angle: 0.1,
       intensity: 0.5,
+      side: 0,
     };
 
     castRaysMock.mockImplementation(() => [farHit]);
@@ -227,7 +228,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(datasetValue).toBe(farHit.intensity.toFixed(2));
   });
 
-  it('レンガの床と天井を描画する', () => {
+  it('空と床のグラデーション背景を描画する', () => {
     castRaysMock.mockReturnValue([]);
 
     render(
@@ -243,19 +244,9 @@ describe('PlayerView レイキャスト仕様', () => {
     flushAnimationFrame(rafCallbacks, 0);
     flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
 
-    expect(fakeContext.paths.length).toBeGreaterThan(0);
-    const hasBrickFill = fakeContext.paths.some((path) => {
-      if (typeof path.fillStyle !== 'string') {
-        return false;
-      }
-      return path.fillStyle.startsWith('rgb(');
-    });
-    expect(hasBrickFill).toBe(true);
-
-    const mortarLines = fakeContext.strokes.filter((stroke) => {
-      return typeof stroke.strokeStyle === 'string' && stroke.strokeStyle === '#f0f0f0';
-    });
-    expect(mortarLines.length).toBeGreaterThan(0);
+    // Sky and floor are drawn as gradient-filled rects
+    const gradientOps = fakeContext.operations.filter((op) => typeof op.fillStyle !== 'string');
+    expect(gradientOps.length).toBeGreaterThanOrEqual(2);
   });
 
   it('迷路の壁に応じて中心レイの距離が変化する', async () => {
@@ -310,9 +301,9 @@ describe('PlayerView レイキャスト仕様', () => {
 
   it('レイヒット距離に応じて縦線を描画する', () => {
     castRaysMock.mockReturnValue([
-      { tile: { x: 1, y: 1 }, distance: 0.5, angle: -0.1, intensity: 1 },
-      { tile: { x: 2, y: 1 }, distance: 2, angle: 0, intensity: 0.85 },
-      { tile: { x: 3, y: 1 }, distance: 4, angle: 0.1, intensity: 0.5 },
+      { tile: { x: 1, y: 1 }, distance: 0.5, angle: -0.1, intensity: 1, side: 0 },
+      { tile: { x: 2, y: 1 }, distance: 2, angle: 0, intensity: 0.85, side: 1 },
+      { tile: { x: 3, y: 1 }, distance: 4, angle: 0.1, intensity: 0.5, side: 0 },
     ]);
 
     render(
@@ -344,9 +335,9 @@ describe('PlayerView レイキャスト仕様', () => {
 
   it('壁がある位置だけカラムを描画する', () => {
     const hits: RayHit[] = [
-      { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 1 },
-      { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0 },
-      { tile: { x: 3, y: 1 }, distance: 0.9, angle: 0.2, intensity: 0.9 },
+      { tile: { x: 1, y: 1 }, distance: 0.8, angle: -0.2, intensity: 1, side: 0 },
+      { tile: null, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0, side: 0 },
+      { tile: { x: 3, y: 1 }, distance: 0.9, angle: 0.2, intensity: 0.9, side: 1 },
     ];
     castRaysMock.mockReturnValue(hits);
 
@@ -424,9 +415,9 @@ describe('PlayerView レイキャスト仕様', () => {
 
   it('視界シルエットを dead-end として判定して公開する', () => {
     const hits: RayHit[] = [
-      { tile: { x: 0, y: 0 }, distance: 0.5, angle: -0.3, intensity: 1 },
-      { tile: { x: 1, y: 0 }, distance: 0.6, angle: 0, intensity: 0.9 },
-      { tile: { x: 2, y: 0 }, distance: 0.5, angle: 0.3, intensity: 0.8 },
+      { tile: { x: 0, y: 0 }, distance: 0.5, angle: -0.3, intensity: 1, side: 0 },
+      { tile: { x: 1, y: 0 }, distance: 0.6, angle: 0, intensity: 0.9, side: 0 },
+      { tile: { x: 2, y: 0 }, distance: 0.5, angle: 0.3, intensity: 0.8, side: 1 },
     ];
     castRaysMock.mockReturnValue(hits);
 
@@ -449,9 +440,9 @@ describe('PlayerView レイキャスト仕様', () => {
 
   it('視界シルエットを corner-left として判定して公開する', () => {
     const hits: RayHit[] = [
-      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.5 },
-      { tile: { x: 1, y: 0 }, distance: 0.6, angle: -0.1, intensity: 0.8 },
-      { tile: { x: 2, y: 0 }, distance: 0.6, angle: 0.2, intensity: 0.7 },
+      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.5, side: 0 },
+      { tile: { x: 1, y: 0 }, distance: 0.6, angle: -0.1, intensity: 0.8, side: 0 },
+      { tile: { x: 2, y: 0 }, distance: 0.6, angle: 0.2, intensity: 0.7, side: 1 },
     ];
     castRaysMock.mockReturnValue(hits);
 
@@ -474,9 +465,9 @@ describe('PlayerView レイキャスト仕様', () => {
 
   it('視界シルエットを junction として判定して公開する', () => {
     const hits: RayHit[] = [
-      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.6 },
-      { tile: { x: 1, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0.6 },
-      { tile: { x: 2, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0.4, intensity: 0.6 },
+      { tile: { x: 0, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: -0.4, intensity: 0.6, side: 0 },
+      { tile: { x: 1, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0, intensity: 0.6, side: 0 },
+      { tile: { x: 2, y: 0 }, distance: PLAYER_VIEW_RANGE, angle: 0.4, intensity: 0.6, side: 1 },
     ];
     castRaysMock.mockReturnValue(hits);
 
@@ -497,7 +488,7 @@ describe('PlayerView レイキャスト仕様', () => {
     expect(fakeContext.canvas.dataset.viewRightDepth).toBe(PLAYER_VIEW_RANGE.toFixed(2));
   });
 
-  it('背景は黒で初期化される', () => {
+  it('背景が空の色で初期化される', () => {
     castRaysMock.mockReturnValue([]);
 
     render(
@@ -514,7 +505,7 @@ describe('PlayerView レイキャスト仕様', () => {
     flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
 
     expect(fakeContext.operations.length).toBeGreaterThan(0);
-    expect(fakeContext.operations[0]?.fillStyle).toBe('#000000');
+    expect(fakeContext.operations[0]?.fillStyle).toBe('#88aac8');
   });
 });
 

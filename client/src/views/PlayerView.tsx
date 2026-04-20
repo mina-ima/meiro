@@ -55,11 +55,19 @@ export interface PlayerViewProps {
 }
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
-const BACKGROUND_COLOR = '#000000';
-const BRICK_NEAR_COLOR = '#8c1c1c';
-const BRICK_FAR_COLOR = '#2d0505';
-const BRICK_LINE_COLOR = '#f0f0f0';
-const CEILING_TINT_COLOR = '#120404';
+const BACKGROUND_COLOR = '#88aac8';
+const SKY_HORIZON_COLOR = '#c8d8c0';
+const SKY_TOP_COLOR = '#7898b8';
+const WALL_LIGHT_COLOR = '#a89078';
+const WALL_DARK_COLOR = '#887060';
+const WALL_FAR_COLOR = '#504038';
+const BRICK_LINE_COLOR = '#c0b0a0';
+const FLOOR_NEAR_COLOR = '#607080';
+const FLOOR_FAR_COLOR = '#384048';
+// Legacy colors used by preview/wireframe rendering
+const BRICK_NEAR_COLOR = '#a89078';
+const BRICK_FAR_COLOR = '#504038';
+const CEILING_TINT_COLOR = '#384048';
 const RAYCAST_GRID_SCALE = 2;
 const NEAR_WALL_THRESHOLD = PLAYER_VIEW_RANGE * 0.35;
 const OPEN_CORRIDOR_THRESHOLD = PLAYER_VIEW_RANGE * 0.85;
@@ -454,10 +462,24 @@ function drawWireframeBase(context: CanvasRenderingContext2D): void {
   context.fillRect(0, 0, width, height);
 }
 
-function drawBrickBackdrop(context: CanvasRenderingContext2D, profile?: ViewProfile): void {
-  const dims = computeCorridorDimensions(context.canvas, profile);
-  drawBrickCeiling(context, dims);
-  drawBrickFloor(context, dims);
+function drawBrickBackdrop(context: CanvasRenderingContext2D, _profile?: ViewProfile): void {
+  const { width, height } = context.canvas;
+  const horizon = Math.round(height * 0.45);
+
+  // Sky gradient
+  const skyGrad = context.createLinearGradient(0, 0, 0, horizon);
+  skyGrad.addColorStop(0, SKY_TOP_COLOR);
+  skyGrad.addColorStop(1, SKY_HORIZON_COLOR);
+  context.fillStyle = skyGrad;
+  context.fillRect(0, 0, width, horizon);
+
+  // Floor gradient
+  const floorGrad = context.createLinearGradient(0, horizon, 0, height);
+  floorGrad.addColorStop(0, FLOOR_FAR_COLOR);
+  floorGrad.addColorStop(1, FLOOR_NEAR_COLOR);
+  context.fillStyle = floorGrad;
+  context.fillRect(0, horizon, width, height - horizon);
+
   context.canvas.dataset.viewFogStart = '1.00';
 }
 
@@ -639,11 +661,11 @@ function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void
       return;
     }
     const perpDist = Math.max(0.3, hit.distance);
-    const wallHeight = Math.min(height, height / perpDist);
+    const wallHeight = Math.min(height * 2, height / perpDist);
     const top = horizon - wallHeight / 2;
     const left = Math.floor(index * spacing);
     const normalizedDistance = clamp(perpDist / maxRange, 0, 1);
-    drawBrickColumn(context, left, top, columnWidth, wallHeight, normalizedDistance);
+    drawBrickColumn(context, left, top, columnWidth, wallHeight, normalizedDistance, hit.side);
   });
 }
 
@@ -654,15 +676,18 @@ function drawBrickColumn(
   width: number,
   height: number,
   distanceRatio: number,
+  side: number = 0,
 ): void {
-  const color = mixHexColors(BRICK_NEAR_COLOR, BRICK_FAR_COLOR, distanceRatio);
+  const nearColor = side === 1 ? WALL_DARK_COLOR : WALL_LIGHT_COLOR;
+  const color = mixHexColors(nearColor, WALL_FAR_COLOR, distanceRatio);
   context.fillStyle = color;
   context.fillRect(left, top, width, height);
 
-  context.strokeStyle = BRICK_LINE_COLOR;
+  const mortarAlpha = clamp(1 - distanceRatio * 1.2, 0.05, 0.4);
+  context.strokeStyle = `rgba(192, 176, 160, ${mortarAlpha})`;
   const rowCount = Math.max(2, Math.round(height / 8));
   const brickHeight = height / rowCount;
-  context.lineWidth = Math.max(1, height * 0.003);
+  context.lineWidth = Math.max(0.5, height * 0.002);
 
   for (let row = 1; row < rowCount; row += 1) {
     const y = Math.round(top + row * brickHeight);
