@@ -55,17 +55,18 @@ export interface PlayerViewProps {
 }
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
-const BACKGROUND_COLOR = '#88aac8';
-const SKY_HORIZON_COLOR = '#c8d8c0';
-const SKY_TOP_COLOR = '#7898b8';
-const WALL_LIGHT_COLOR = '#a89078';
-const WALL_DARK_COLOR = '#887060';
+// プレビューSVGと統一したカラーパレット
+const BACKGROUND_COLOR = '#8898a8';
+const SKY_HORIZON_COLOR = '#b8c8c0';
+const SKY_TOP_COLOR = '#8898a8';
+const WALL_LIGHT_COLOR = '#a08868';
+const WALL_DARK_COLOR = '#786050';
 const WALL_FAR_COLOR = '#504038';
 const BRICK_LINE_COLOR = '#c0b0a0';
-const FLOOR_NEAR_COLOR = '#607080';
+const FLOOR_NEAR_COLOR = '#586878';
 const FLOOR_FAR_COLOR = '#384048';
 // Legacy colors used by preview/wireframe rendering
-const BRICK_NEAR_COLOR = '#a89078';
+const BRICK_NEAR_COLOR = '#a08868';
 const BRICK_FAR_COLOR = '#504038';
 const CEILING_TINT_COLOR = '#384048';
 const RAYCAST_GRID_SCALE = 2;
@@ -110,7 +111,7 @@ function computeCorridorDimensions(
   profile?: ViewProfile | null,
 ): CorridorDimensions {
   const { width, height } = canvas;
-  const baseTopY = Math.round(height * 0.45);
+  const baseTopY = Math.round(height * 0.39);
   const bottomY = Math.round(height * 0.98);
   const leftNearX = Math.round(width * 0.12);
   const rightNearX = width - leftNearX;
@@ -464,7 +465,7 @@ function drawWireframeBase(context: CanvasRenderingContext2D): void {
 
 function drawBrickBackdrop(context: CanvasRenderingContext2D, _profile?: ViewProfile): void {
   const { width, height } = context.canvas;
-  const horizon = Math.round(height * 0.45);
+  const horizon = Math.round(height * 0.39);
 
   // Sky gradient
   const skyGrad = context.createLinearGradient(0, 0, 0, horizon);
@@ -651,7 +652,7 @@ function updateRayDataset(canvas: HTMLCanvasElement, hits: RayHit[], profile: Vi
 
 function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   const { width, height } = context.canvas;
-  const horizon = Math.round(height * 0.45);
+  const horizon = Math.round(height * 0.39);
   const maxRange = PLAYER_VIEW_RANGE * RAYCAST_GRID_SCALE;
   const spacing = hits.length > 0 ? width / hits.length : width;
   const columnWidth = Math.ceil(spacing) + 1;

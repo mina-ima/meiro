@@ -505,7 +505,7 @@ describe('PlayerView レイキャスト仕様', () => {
     flushAnimationFrame(rafCallbacks, FRAME_LOOP_INTERVAL_MS + 1);
 
     expect(fakeContext.operations.length).toBeGreaterThan(0);
-    expect(fakeContext.operations[0]?.fillStyle).toBe('#88aac8');
+    expect(fakeContext.operations[0]?.fillStyle).toBe('#8898a8');
   });
 });
 
