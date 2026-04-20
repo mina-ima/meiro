@@ -119,7 +119,30 @@ export interface OwnerViewProps {
 const DRAG_DATA_TYPE = 'application/meiro-owner-placement';
 const PLAYER_MARKER_TIP_OFFSET = 0.6;
 const PLAYER_MARKER_BASE_WIDTH = 0.7;
-type PlacementType = 'trap' | 'prediction';
+type PlacementType = 'point1' | 'point3' | 'point5' | 'trap' | 'prediction';
+type PrepStage = 'point' | 'trap' | 'prediction' | 'ended';
+
+const PREP_TOTAL_MS = 60_000;
+const POINT_WINDOW_MS = 40_000;
+const TRAP_WINDOW_MS = 5_000;
+
+function getPrepStage(timeRemaining: number): PrepStage {
+  const elapsed = PREP_TOTAL_MS - timeRemaining * 1000;
+  if (elapsed < 0 || timeRemaining <= 0) return 'ended';
+  if (elapsed < POINT_WINDOW_MS) return 'point';
+  if (elapsed < POINT_WINDOW_MS + TRAP_WINDOW_MS) return 'trap';
+  return 'prediction';
+}
+
+function getStageTimeRemaining(timeRemaining: number, stage: PrepStage): number {
+  const elapsed = PREP_TOTAL_MS - timeRemaining * 1000;
+  switch (stage) {
+    case 'point': return Math.max(0, Math.ceil((POINT_WINDOW_MS - elapsed) / 1000));
+    case 'trap': return Math.max(0, Math.ceil((POINT_WINDOW_MS + TRAP_WINDOW_MS - elapsed) / 1000));
+    case 'prediction': return Math.max(0, Math.ceil(timeRemaining));
+    default: return 0;
+  }
+}
 
 export function OwnerView({
   client,
@@ -258,13 +281,16 @@ export function OwnerView({
         return;
       }
       const payload = { x: cell.x, y: cell.y };
-      if (type === 'trap') {
+      if (type === 'point1' || type === 'point3' || type === 'point5') {
+        const value = type === 'point1' ? 1 : type === 'point3' ? 3 : 5;
         client.send({
           type: 'O_EDIT',
-          edit: {
-            action: 'PLACE_TRAP',
-            cell: payload,
-          },
+          edit: { action: 'PLACE_POINT', cell: payload, value },
+        });
+      } else if (type === 'trap') {
+        client.send({
+          type: 'O_EDIT',
+          edit: { action: 'PLACE_TRAP', cell: payload },
         });
       } else {
         client.send({ type: 'O_MRK', cell: payload, active: true });
@@ -440,6 +466,7 @@ export function OwnerView({
               disabled={!placementEnabled}
               onSelect={handleToolSelect}
               activePlacement={armedPlacement}
+              timeRemaining={timeRemaining}
             />
           </div>
         </div>
@@ -854,6 +881,7 @@ interface PlacementPaletteProps {
   disabled: boolean;
   onSelect?: (type: PlacementType) => void;
   activePlacement?: PlacementType | null;
+  timeRemaining: number;
 }
 
 function PlacementPalette({
@@ -862,84 +890,102 @@ function PlacementPalette({
   disabled,
   onSelect,
   activePlacement,
+  timeRemaining,
 }: PlacementPaletteProps) {
-  const dragStartHandler = useCallback(
-    (event: React.DragEvent<HTMLDivElement>, type: PlacementType) => {
-      if (disabled) {
-        event.preventDefault();
-        return;
-      }
-      event.dataTransfer.setData(DRAG_DATA_TYPE, type);
-      event.dataTransfer.effectAllowed = 'copy';
-      onSelect?.(type);
-    },
-    [disabled, onSelect],
-  );
+  const stage = getPrepStage(timeRemaining);
+  const stageTime = getStageTimeRemaining(timeRemaining, stage);
 
-  const baseStyle: CSSProperties = {
-    flex: '0 0 auto',
+  const stageLabel: Record<PrepStage, string> = {
+    point: '📦 ポイント配置時間',
+    trap: '🪤 罠配置時間',
+    prediction: '🎯 予測配置時間',
+    ended: '⏱ 準備終了',
+  };
+
+  const btnStyle = (type: PlacementType, active: boolean): CSSProperties => ({
     padding: '0.4rem 0.75rem',
     borderRadius: '0.375rem',
-    border: '1px solid #334155',
+    border: active ? '2px solid #38bdf8' : '1px solid #334155',
     backgroundColor: disabled ? '#1e293b' : '#0f172a',
     color: '#f8fafc',
     display: 'flex',
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     alignItems: 'center',
     gap: '0.4rem',
-    cursor: disabled ? 'not-allowed' : 'grab',
-    userSelect: 'none',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    userSelect: 'none' as const,
     fontSize: '0.85rem',
-  };
+    boxShadow: active ? '0 0 0 2px rgba(56,189,248,0.5)' : 'none',
+  });
 
   return (
     <section
       aria-label="設置ツール"
       style={{ border: '1px solid #1f2937', borderRadius: '0.75rem', padding: '0.75rem' }}
     >
-      <p style={{ margin: '0 0 0.75rem', color: '#94a3b8' }}>
-        見下ろし図にドラッグ＆ドロップして罠を1個、予測地点を3個配置しましょう（準備フェーズは60秒）。
-      </p>
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <div
-          role="button"
-          aria-label="罠アイコン"
-          draggable={!disabled}
-          style={{
-            ...baseStyle,
-            borderColor: activePlacement === 'trap' ? '#38bdf8' : (baseStyle.border as string),
-            boxShadow: activePlacement === 'trap' ? '0 0 0 2px rgba(56,189,248,0.5)' : 'none',
-          }}
-          onDragStart={(event) => dragStartHandler(event, 'trap')}
-          onClick={() => onSelect?.('trap')}
-        >
-          <span style={{ fontSize: '1.1rem' }}>🪤</span>
-          <span>罠</span>
-          <small style={{ color: '#94a3b8' }}>×{trapCharges}</small>
-        </div>
-        <div
-          role="button"
-          aria-label="予測地点アイコン"
-          draggable={!disabled}
-          style={{
-            ...baseStyle,
-            borderColor:
-              activePlacement === 'prediction' ? '#38bdf8' : (baseStyle.border as string),
-            boxShadow: activePlacement === 'prediction' ? '0 0 0 2px rgba(56,189,248,0.5)' : 'none',
-          }}
-          onDragStart={(event) => dragStartHandler(event, 'prediction')}
-          onClick={() => onSelect?.('prediction')}
-        >
-          <span style={{ fontSize: '1.1rem' }}>🎯</span>
-          <span>予測</span>
-          <small style={{ color: '#94a3b8' }}>×{predictionRemaining}</small>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <strong style={{ color: '#f8fafc' }}>{stageLabel[stage]}</strong>
+        <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>残り {stageTime}秒</span>
       </div>
-      {disabled ? (
-        <p style={{ margin: '0.5rem 0 0', color: '#f87171' }}>
-          準備フェーズ中かつ接続中のみドラッグで配置できます。
-        </p>
-      ) : null}
+
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {stage === 'point' ? (
+          <>
+            <div
+              role="button"
+              aria-label="1点ポイント"
+              style={btnStyle('point1', activePlacement === 'point1')}
+              onClick={() => onSelect?.('point1')}
+            >
+              <span>📦</span><span>1点</span>
+            </div>
+            <div
+              role="button"
+              aria-label="3点ポイント"
+              style={btnStyle('point3', activePlacement === 'point3')}
+              onClick={() => onSelect?.('point3')}
+            >
+              <span>📦</span><span>3点</span>
+            </div>
+            <div
+              role="button"
+              aria-label="5点ポイント"
+              style={btnStyle('point5', activePlacement === 'point5')}
+              onClick={() => onSelect?.('point5')}
+            >
+              <span>📦</span><span>5点</span>
+            </div>
+          </>
+        ) : stage === 'trap' ? (
+          <div
+            role="button"
+            aria-label="罠アイコン"
+            style={btnStyle('trap', activePlacement === 'trap')}
+            onClick={() => onSelect?.('trap')}
+          >
+            <span>🪤</span><span>罠</span>
+            <small style={{ color: '#94a3b8' }}>×{trapCharges}</small>
+          </div>
+        ) : stage === 'prediction' ? (
+          <div
+            role="button"
+            aria-label="予測地点アイコン"
+            style={btnStyle('prediction', activePlacement === 'prediction')}
+            onClick={() => onSelect?.('prediction')}
+          >
+            <span>🎯</span><span>予測</span>
+            <small style={{ color: '#94a3b8' }}>×{predictionRemaining}</small>
+          </div>
+        ) : (
+          <p style={{ margin: 0, color: '#94a3b8' }}>探索フェーズに移行します…</p>
+        )}
+      </div>
+
+      <p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.8rem' }}>
+        {stage === 'point' ? 'マップをクリックしてポイントを配置' :
+         stage === 'trap' ? 'マップをクリックして罠を設置' :
+         stage === 'prediction' ? 'マップをクリックして予測地点をマーク' : ''}
+      </p>
     </section>
   );
 }

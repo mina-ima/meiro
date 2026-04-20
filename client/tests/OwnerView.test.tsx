@@ -352,10 +352,11 @@ describe('OwnerView', () => {
     expect(bottomOuterWall).not.toBeNull();
   });
 
-  it('準備フェーズで罠アイコンを配置するとO_EDITが送信される', () => {
+  it('罠配置時間に罠アイコンを配置するとO_EDITが送信される', () => {
     const send = vi.fn();
     const client = { send } as unknown as NetClient;
     const maze = createMockMaze(40);
+    // timeRemaining=18 → elapsed=42s → 罠ウィンドウ内（40-45秒）
     render(
       <OwnerView
         client={client}
@@ -364,7 +365,7 @@ describe('OwnerView', () => {
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}
-        timeRemaining={60}
+        timeRemaining={18}
         predictionMarks={[]}
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
@@ -393,9 +394,10 @@ describe('OwnerView', () => {
     });
   });
 
-  it('準備フェーズで予測地点アイコンを配置するとO_MRKが送信される', () => {
+  it('予測配置時間に予測地点アイコンを配置するとO_MRKが送信される', () => {
     const send = vi.fn();
     const client = { send } as unknown as NetClient;
+    // timeRemaining=10 → elapsed=50s → 予測ウィンドウ内（45-60秒）
     render(
       <OwnerView
         client={client}
@@ -404,7 +406,7 @@ describe('OwnerView', () => {
         forbiddenDistance={2}
         activePredictions={0}
         predictionLimit={3}
-        timeRemaining={60}
+        timeRemaining={10}
         predictionMarks={[]}
         traps={[]}
         playerPosition={{ x: 0, y: 0 }}
@@ -434,7 +436,7 @@ describe('OwnerView', () => {
     });
   });
 
-  it('準備フェーズ以外では配置しても送信されない', () => {
+  it('準備フェーズ以外ではパレットが表示されず配置できない', () => {
     const send = vi.fn();
     const client = { send } as unknown as NetClient;
     render(
@@ -460,11 +462,8 @@ describe('OwnerView', () => {
       />,
     );
 
-    const trapIcon = screen.getByLabelText('罠アイコン');
     const map = screen.getByLabelText('俯瞰マップ');
     mockBoundingRect(map);
-
-    fireEvent.click(trapIcon);
     fireEvent.click(map, { clientX: 200, clientY: 200 });
 
     expect(send).not.toHaveBeenCalled();
