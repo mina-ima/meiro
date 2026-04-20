@@ -40,7 +40,7 @@ function getDefaultPreviewClips(): readonly PreviewClip[] {
 }
 
 const PREVIEW_INTERVAL_MS = 5_000;
-const USE_FANCY_PREVIEW = true;
+const USE_FANCY_PREVIEW = false;
 
 export interface PlayerViewProps {
   points: number;
