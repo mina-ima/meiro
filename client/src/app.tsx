@@ -12,7 +12,7 @@ import { ToastHost, enqueueErrorToast, enqueueInfoToast } from './ui/toasts';
 import { DebugHUD } from './ui/DebugHUD';
 import { getOptionalWsBase } from './config/env';
 
-const WS_BASE = getOptionalWsBase();
+const WS_BASE = getOptionalWsBase() ?? (import.meta.env.PROD ? 'wss://meiro-server.minamidenshi.workers.dev' : null);
 const DEFAULT_HTTP_ENDPOINT = import.meta.env.PROD
   ? 'https://meiro-server.minamidenshi.workers.dev'
   : null;

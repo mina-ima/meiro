@@ -101,7 +101,7 @@ function computeCorridorDimensions(
   profile?: ViewProfile | null,
 ): CorridorDimensions {
   const { width, height } = canvas;
-  const baseTopY = Math.round(height * 0.18);
+  const baseTopY = Math.round(height * 0.45);
   const bottomY = Math.round(height * 0.98);
   const leftNearX = Math.round(width * 0.12);
   const rightNearX = width - leftNearX;
@@ -628,23 +628,21 @@ function updateRayDataset(canvas: HTMLCanvasElement, hits: RayHit[], profile: Vi
 
 function drawRayColumns(context: CanvasRenderingContext2D, hits: RayHit[]): void {
   const { width, height } = context.canvas;
-  const horizon = Math.round(height * 0.18);
-  const ground = Math.round(height * 0.98);
-  const viewHeight = Math.max(1, ground - horizon);
+  const horizon = Math.round(height * 0.45);
+  const maxRange = PLAYER_VIEW_RANGE * RAYCAST_GRID_SCALE;
   const spacing = hits.length > 0 ? width / hits.length : width;
-  const minHeight = height * 0.08;
+  const columnWidth = Math.ceil(spacing) + 1;
 
   hits.forEach((hit, index) => {
     if (!hit.tile) {
       return;
     }
-    const normalizedDistance = clamp(hit.distance / PLAYER_VIEW_RANGE, 0, 1);
-    const depthFactor = 1 - normalizedDistance ** 0.85;
-    const columnHeight = Math.max(minHeight, viewHeight * depthFactor);
-    const columnWidth = Math.max(2, spacing * (0.4 + depthFactor * 0.3));
-    const left = index * spacing + spacing / 2 - columnWidth / 2;
-    const top = ground - columnHeight;
-    drawBrickColumn(context, left, top, columnWidth, columnHeight, normalizedDistance);
+    const perpDist = Math.max(0.3, hit.distance);
+    const wallHeight = Math.min(height, height / perpDist);
+    const top = horizon - wallHeight / 2;
+    const left = Math.floor(index * spacing);
+    const normalizedDistance = clamp(perpDist / maxRange, 0, 1);
+    drawBrickColumn(context, left, top, columnWidth, wallHeight, normalizedDistance);
   });
 }
 
