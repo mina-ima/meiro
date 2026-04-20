@@ -13,6 +13,7 @@ import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
 import type {
   PauseReason,
   ServerSessionEntry,
+  ServerPoint,
   SessionPhase,
   ServerMazeState,
 } from '../state/sessionStore';
@@ -104,6 +105,7 @@ export interface OwnerViewProps {
   timeRemaining: number;
   predictionMarks: Vector2[];
   traps: Vector2[];
+  points?: ServerPoint[];
   playerPosition: Vector2;
   mazeSize: 20 | 40;
   maze?: ServerMazeState | null;
@@ -154,6 +156,7 @@ export function OwnerView({
   timeRemaining,
   predictionMarks,
   traps,
+  points = [],
   playerPosition,
   mazeSize,
   maze,
@@ -268,6 +271,20 @@ export function OwnerView({
   }, [client, canStartGame, selectedMazeSize]);
 
   const placementEnabled = Boolean(client && phase === 'prep' && hasMazeData);
+  const currentStage = getPrepStage(timeRemaining);
+
+  // 罠/予測段階では自動的にツールを選択（クリックだけで配置可能に）
+  useEffect(() => {
+    if (!placementEnabled) {
+      setArmedPlacement(null);
+      return;
+    }
+    if (currentStage === 'trap') {
+      setArmedPlacement('trap');
+    } else if (currentStage === 'prediction') {
+      setArmedPlacement('prediction');
+    }
+  }, [placementEnabled, currentStage]);
 
   useEffect(() => {
     if (!placementEnabled) {
@@ -435,6 +452,7 @@ export function OwnerView({
             playerPosition={playerPosition}
             predictionMarks={predictionMarks}
             traps={traps}
+            points={points}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onPan={handlePan}
@@ -503,6 +521,7 @@ interface OwnerMapProps {
   playerPosition: Vector2;
   predictionMarks: Vector2[];
   traps: Vector2[];
+  points?: ServerPoint[];
   onZoomIn: () => void;
   onZoomOut: () => void;
   onPan: (dx: number, dy: number) => void;
@@ -522,6 +541,7 @@ function OwnerMap({
   playerPosition,
   predictionMarks,
   traps,
+  points = [],
   onZoomIn,
   onZoomOut,
   onPan,
@@ -779,6 +799,30 @@ function OwnerMap({
         >
           <title>プレイヤー位置</title>
         </polygon>
+
+        {points.map((point, index) => (
+          <g key={`point-${index}`} data-testid="point-marker">
+            <circle
+              cx={point.position.x + 0.5}
+              cy={point.position.y + 0.5}
+              r={0.3}
+              fill={point.value === 5 ? '#f59e0b' : point.value === 3 ? '#3b82f6' : '#94a3b8'}
+              stroke="#fff"
+              strokeWidth={0.05}
+            />
+            <text
+              x={point.position.x + 0.5}
+              y={point.position.y + 0.62}
+              textAnchor="middle"
+              fontSize={0.35}
+              fill="#fff"
+              fontWeight="bold"
+            >
+              {point.value}
+            </text>
+            <title>{point.value}点ポイント</title>
+          </g>
+        ))}
 
         {predictionMarks.map((mark, index) => (
           <rect

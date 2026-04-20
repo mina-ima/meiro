@@ -216,6 +216,7 @@ export function App() {
         timeRemaining={timeRemaining}
         predictionMarks={ownerState.predictionMarks}
         traps={ownerState.traps}
+        points={ownerState.points}
         playerPosition={playerState.position}
         mazeSize={mazeSize}
         maze={maze}
