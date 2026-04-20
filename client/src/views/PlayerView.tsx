@@ -18,7 +18,8 @@ import {
 } from '../state/sessionStore';
 
 function createSvgDataUri(svg: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
+  const base64 = btoa(unescape(encodeURIComponent(svg.trim())));
+  return `data:image/svg+xml;base64,${base64}`;
 }
 
 interface PreviewClip {
