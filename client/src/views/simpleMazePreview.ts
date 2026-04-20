@@ -161,40 +161,46 @@ function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string 
 }
 
 // 通路の先が暗闇に消えていく表現（正面が開いている場合）
+// 分岐ビューの正面壁と同じ深さ（t=0.75）に配置
 function renderCorridorFade(): string {
-  const left = CORRIDOR_FAR_LEFT;
-  const right = CORRIDOR_FAR_RIGHT;
+  const t = 0.75;
+  const left = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t);
+  const right = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
+  const bottomY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
 
   return `<polygon points="${joinPoints([
     { x: left, y: 0 },
     { x: right, y: 0 },
-    { x: right, y: FLOOR_FAR_Y },
-    { x: left, y: FLOOR_FAR_Y },
+    { x: right, y: bottomY },
+    { x: left, y: bottomY },
   ])}" fill="${COLOR_BG}" />`;
 }
 
 // ゴール：通路の先が外の光に開けている表現
+// 分岐ビューの正面壁と同じ深さ（t=0.75）に配置
 function renderGoalPortal(): string {
-  const left = CORRIDOR_FAR_LEFT;
-  const right = CORRIDOR_FAR_RIGHT;
+  const t = 0.75;
+  const left = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t);
+  const right = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
+  const bottomY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
 
-  // 通路の奥が外に開けている（空と光のグラデーション）
+  // 通路の奥が外に開けている（空と光）
   const skyGlow = `<polygon points="${joinPoints([
     { x: left, y: 0 },
     { x: right, y: 0 },
-    { x: right, y: FLOOR_FAR_Y },
-    { x: left, y: FLOOR_FAR_Y },
+    { x: right, y: bottomY },
+    { x: left, y: bottomY },
   ])}" fill="${COLOR_PORTAL}" />`;
 
   // 光が周囲に漏れるグロー効果
-  const glowLeft = left - 8;
-  const glowRight = right + 8;
-  const glowTop = FLOOR_FAR_Y - 25;
+  const glowLeft = left - 10;
+  const glowRight = right + 10;
+  const glowTop = bottomY - 20;
   const glow = `<polygon points="${joinPoints([
     { x: glowLeft, y: glowTop },
     { x: glowRight, y: glowTop },
-    { x: right, y: FLOOR_FAR_Y },
-    { x: left, y: FLOOR_FAR_Y },
+    { x: right, y: bottomY },
+    { x: left, y: bottomY },
   ])}" fill="${COLOR_PORTAL}" opacity="0.12" />`;
 
   return `${glow}\n${skyGlow}`;
