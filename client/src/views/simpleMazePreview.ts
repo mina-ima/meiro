@@ -170,8 +170,8 @@ function renderGoalPortal(): string {
   return `${wall}\n${glow}\n${portal}`;
 }
 
-// 側面分岐：壁の切れ目から横通路が見える3D描画
-// 参考画像のように、壁のエッジ面（厚み）が見える自然な3D表現
+// 側面分岐：開口部を通して横通路の両壁・床が見える3D描画
+// 参考画像のように、横通路が奥に向かって収束する遠近法表現
 function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;
@@ -183,25 +183,20 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const wallNearEdge = isLeft ? CORRIDOR_NEAR_LEFT : CORRIDOR_NEAR_RIGHT;
   const wallFarEdge = isLeft ? CORRIDOR_FAR_LEFT : CORRIDOR_FAR_RIGHT;
 
-  // 開口部の境界座標
+  // 開口部の境界座標（メイン通路の壁上）
   const openNearX = lerp(wallNearEdge, wallFarEdge, tNear);
   const openFarX = lerp(wallNearEdge, wallFarEdge, tFar);
   const openNearFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tNear);
   const openFarFloorY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, tFar);
 
-  // 壁のエッジ面の奥行き（壁の厚みを表現する重要な3D要素）
-  const wallDepth = 20 * dir;
-  const edgeInnerX = openNearX + wallDepth;
-  const edgeInnerFloorY = openNearFloorY - 6;
+  // 横通路の消失点（両壁が収束する点）
+  const vanishX = openNearX + dir * 90;
+  const vanishFloorY = (openNearFloorY + openFarFloorY) / 2 - 18;
+  const vanishCeilingY = 12;
 
-  // 横通路の奥壁の位置
-  const sideDepth = 80 * dir;
-  const farWallX = openNearX + sideDepth;
-  const farWallFloorY = openNearFloorY - 22;
+  // --- 描画要素 ---
 
-  // --- 描画順序：奥から手前へ ---
-
-  // 1) 壁を手前と奥に分割
+  // 1) メイン通路の壁を手前と奥に分割
   const wallBefore = renderWallSide(side, 0, tNear);
   const wallAfter = renderWallSide(side, tFar, 1);
 
@@ -213,32 +208,32 @@ function renderSideBranch(side: 'left' | 'right'): string {
     { x: openNearX, y: openNearFloorY },
   ])}" fill="${COLOR_BG}" />`;
 
-  // 3) 横通路の奥壁（開口部を通して見える正面の壁 - 明るい壁テクスチャ使用）
-  const farWall = `<polygon points="${joinPoints([
-    { x: farWallX, y: 0 },
-    { x: edgeInnerX, y: 0 },
-    { x: edgeInnerX, y: edgeInnerFloorY },
-    { x: farWallX, y: farWallFloorY },
+  // 3) 横通路の手前壁（開口部の手前端から消失点へ収束）
+  // 参考画像で最も目立つ壁 - レンガテクスチャで奥に伸びる
+  const nearCorridorWall = `<polygon points="${joinPoints([
+    { x: openNearX, y: 0 },
+    { x: vanishX, y: vanishCeilingY },
+    { x: vanishX, y: vanishFloorY },
+    { x: openNearX, y: openNearFloorY },
   ])}" fill="url(#wall-brick)" />`;
 
-  // 4) 横通路の床（開口部の下端から横通路の奥まで）
+  // 4) 横通路の奥壁（開口部の奥端から消失点へ収束）
+  // 手前壁より暗い色で奥行き感を出す
+  const farCorridorWall = `<polygon points="${joinPoints([
+    { x: openFarX, y: 0 },
+    { x: vanishX, y: vanishCeilingY },
+    { x: vanishX, y: vanishFloorY },
+    { x: openFarX, y: openFarFloorY },
+  ])}" fill="url(#wall-brick-dark)" />`;
+
+  // 5) 横通路の床（手前壁と奥壁の間、消失点に向かって収束）
   const branchFloor = `<polygon data-branch-floor="${side}" points="${joinPoints([
     { x: openNearX, y: openNearFloorY },
     { x: openFarX, y: openFarFloorY },
-    { x: edgeInnerX, y: edgeInnerFloorY },
-    { x: farWallX, y: farWallFloorY },
+    { x: vanishX, y: vanishFloorY },
   ])}" fill="${COLOR_FLOOR_DARK}" />`;
 
-  // 5) 壁のエッジ面（壁の厚み＝3D奥行きの決定的な要素）
-  // 開口部の手前で壁が90°曲がるところの面
-  const wallEdge = `<polygon points="${joinPoints([
-    { x: openNearX, y: 0 },
-    { x: edgeInnerX, y: 0 },
-    { x: edgeInnerX, y: edgeInnerFloorY },
-    { x: openNearX, y: openNearFloorY },
-  ])}" fill="${COLOR_WALL_SHADOW}" />`;
-
-  // 6) 奥の開口エッジ（壁が再開する箇所の影）
+  // 6) 壁再開箇所のエッジ（奥端で壁が再開する箇所の影）
   const farEdgeW = isLeft ? 4 : -4;
   const farEdge = `<polygon points="${joinPoints([
     { x: openFarX, y: 0 },
@@ -247,7 +242,8 @@ function renderSideBranch(side: 'left' | 'right'): string {
     { x: openFarX, y: openFarFloorY },
   ])}" fill="${COLOR_WALL_DARK}" />`;
 
-  return [wallBefore, openingBg, farWall, branchFloor, wallEdge, farEdge, wallAfter].join('\n');
+  // 描画順：奥の壁→床→手前の壁（手前が上に重なる）
+  return [wallBefore, openingBg, farCorridorWall, branchFloor, nearCorridorWall, farEdge, wallAfter].join('\n');
 }
 
 // スタートビュー

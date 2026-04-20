@@ -146,8 +146,8 @@ describe('simpleMazePreview', () => {
 
     const leftPts = parsePoints(leftFloor?.getAttribute('points') ?? null);
     const rightPts = parsePoints(rightFloor?.getAttribute('points') ?? null);
-    expect(leftPts.length).toBeGreaterThanOrEqual(4);
-    expect(rightPts.length).toBeGreaterThanOrEqual(4);
+    expect(leftPts.length).toBeGreaterThanOrEqual(3);
+    expect(rightPts.length).toBeGreaterThanOrEqual(3);
 
     // 左分岐の床は左方向に伸びる
     const leftXs = leftPts.map((p) => p.x);
