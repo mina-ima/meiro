@@ -281,7 +281,7 @@ describe('PlayerView 操作', () => {
     expect(true).toBe(true);
   });
 
-  it('exploreフェーズではプレビュー風SVG画像を表示する（canvasではなく）', () => {
+  it('exploreフェーズではcanvas（レイキャスト表示）を描画する', () => {
     applyMazeSnapshot({ cellWalls: { top: true, right: false, bottom: false, left: true } });
     render(
       <PlayerView
@@ -295,7 +295,6 @@ describe('PlayerView 操作', () => {
       />,
     );
 
-    expect(screen.getByTestId('explore-svg-view')).toBeInTheDocument();
-    expect(screen.queryByLabelText('レイキャスト表示')).toBeNull();
+    expect(screen.getByTestId('explore-canvas')).toBeInTheDocument();
   });
 });

@@ -330,19 +330,6 @@ export function PlayerView({
     return openings;
   }, [openings]);
 
-  const exploreViewSrc = useMemo(() => {
-    if (phase !== 'explore' || !maze || !currentCell || !openings) return null;
-    const variant: MazePreviewVariant =
-      currentCell.x === maze.goal.x && currentCell.y === maze.goal.y
-        ? 'goal'
-        : currentCell.x === maze.start.x && currentCell.y === maze.start.y
-          ? 'start'
-          : 'junction';
-    const openDirections = getOpenDirections(currentCell);
-    const svg = createSimplePreviewSvg(currentCell, openDirections, variant, facing, openings);
-    return createSvgDataUri(svg);
-  }, [phase, maze, currentCell, openings, facing]);
-
   // ---- Player input (step-based) ----
   const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
   const [activeStep, setActiveStep] = useState<ControlAction | null>(null);
@@ -436,24 +423,13 @@ export function PlayerView({
     <div>
       <h2>プレイヤービュー</h2>
       <div style={{ position: 'relative', width: 640, height: 360 }}>
-        {exploring && exploreViewSrc ? (
-          <img
-            src={exploreViewSrc}
-            alt="迷路探索ビュー"
-            aria-label="迷路探索ビュー"
-            style={{
-              display: 'block',
-              width: 640,
-              height: 360,
-              borderRadius: '0.5rem',
-              border: '1px solid rgba(59, 130, 246, 0.2)',
-              boxShadow: '0 12px 24px rgba(8, 47, 73, 0.35)',
-            }}
-            data-testid="explore-svg-view"
-          />
-        ) : (
-          <canvas ref={canvasRef} width={640} height={360} aria-label="レイキャスト表示" />
-        )}
+        <canvas
+          ref={canvasRef}
+          width={640}
+          height={360}
+          aria-label="レイキャスト表示"
+          data-testid="explore-canvas"
+        />
         {exploring ? (
           <div
             aria-hidden
@@ -1171,7 +1147,7 @@ function isDirectionOpen(cell: ServerMazeCell, direction: Direction): boolean {
   return !cell.walls[wallKey];
 }
 
-function angleToDirection(angle: number): Direction {
+export function angleToDirection(angle: number): Direction {
   // angle: radian, 0=east, +π/2=south (Yが下向きの2D座標系)
   const twoPi = Math.PI * 2;
   const normalized = ((angle % twoPi) + twoPi) % twoPi;
@@ -1181,7 +1157,7 @@ function angleToDirection(angle: number): Direction {
   return 'north';
 }
 
-function computeOpenings(
+export function computeOpenings(
   cell: ServerMazeCell,
   facing: Direction,
 ): { forward: boolean; backward: boolean; left: boolean; right: boolean } {
@@ -1193,7 +1169,7 @@ function computeOpenings(
   };
 }
 
-const DIRECTION_LABEL_JA: Record<Direction, string> = {
+export const DIRECTION_LABEL_JA: Record<Direction, string> = {
   north: '北',
   east: '東',
   south: '南',

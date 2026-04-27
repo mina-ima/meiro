@@ -22,6 +22,7 @@ import type {
   SessionPhase,
   ServerMazeState,
 } from '../state/sessionStore';
+import { angleToDirection, computeOpenings, DIRECTION_LABEL_JA } from './PlayerView';
 
 interface Vector2 {
   x: number;
@@ -41,6 +42,12 @@ interface InitialSetupPanelProps {
   pointCountLimit: number;
   pointTotalValue: number;
   pointTotalMinimum: number;
+  playerInfo?: {
+    cellX: number;
+    cellY: number;
+    facing: 'north' | 'east' | 'south' | 'west';
+    openings: { forward: boolean; backward: boolean; left: boolean; right: boolean } | null;
+  };
 }
 
 function InitialSetupPanel({
@@ -56,6 +63,7 @@ function InitialSetupPanel({
   pointCountLimit,
   pointTotalValue,
   pointTotalMinimum,
+  playerInfo,
 }: InitialSetupPanelProps) {
   const remainingPoints = Math.max(0, pointCountLimit - pointCount);
   const totalShortfall = Math.max(0, pointTotalMinimum - pointTotalValue);
@@ -95,6 +103,33 @@ function InitialSetupPanel({
         {totalMet ? '（条件達成）' : `（あと${totalShortfall}点必要）`}
       </p>
       <p style={{ margin: 0 }}>設定残り時間: {timeText}</p>
+      {playerInfo ? (
+        <div
+          style={{
+            margin: '0.25rem 0 0',
+            padding: '0.5rem 0.75rem',
+            background: '#f1f5f9',
+            border: '1px dashed #94a3b8',
+            borderRadius: '0.5rem',
+            fontSize: '0.85rem',
+            color: '#0f172a',
+          }}
+          data-testid="player-status-debug"
+        >
+          <div>
+            プレイヤー: ({playerInfo.cellX}, {playerInfo.cellY}) 向き:{' '}
+            <strong>{playerInfo.facing === 'north' ? '北' : playerInfo.facing === 'east' ? '東' : playerInfo.facing === 'south' ? '南' : '西'}</strong>
+          </div>
+          {playerInfo.openings ? (
+            <div>
+              前: {playerInfo.openings.forward ? '通路' : '壁'} ／ 後:{' '}
+              {playerInfo.openings.backward ? '通路' : '壁'} ／ 左:{' '}
+              {playerInfo.openings.left ? '通路' : '壁'} ／ 右:{' '}
+              {playerInfo.openings.right ? '通路' : '壁'}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {pauseMessage ? (
         <p style={{ margin: 0, color: '#dc2626' }} aria-live="polite">
           {pauseMessage}
@@ -245,6 +280,19 @@ export function OwnerView({
   const [offset, setOffset] = useState(() => centerOffset(mazeSize, zoom));
   const [selectedMazeSize, setSelectedMazeSize] = useState<20 | 40>(mazeSize);
   const [armedPlacement, setArmedPlacement] = useState<PlacementType | null>(null);
+
+  // プレイヤー周辺の状態（プレイヤー画面のオーバーレイと同じ情報をここでも表示）
+  const playerCellX = Math.floor(playerPosition.x);
+  const playerCellY = Math.floor(playerPosition.y);
+  const playerFacing = useMemo(() => angleToDirection(playerAngle), [playerAngle]);
+  const playerCell = useMemo(() => {
+    if (!maze || maze.cells.length === 0) return null;
+    return maze.cells.find((c) => c.x === playerCellX && c.y === playerCellY) ?? null;
+  }, [maze, playerCellX, playerCellY]);
+  const playerOpenings = useMemo(() => {
+    if (!playerCell) return null;
+    return computeOpenings(playerCell, playerFacing);
+  }, [playerCell, playerFacing]);
 
   useEffect(() => {
     const nextIndex = getInitialZoomIndex();
@@ -512,6 +560,16 @@ export function OwnerView({
               pointCountLimit={pointCountLimit}
               pointTotalValue={pointTotalValue}
               pointTotalMinimum={pointTotalMinimum}
+              playerInfo={
+                phase === 'explore'
+                  ? {
+                      cellX: playerCellX,
+                      cellY: playerCellY,
+                      facing: playerFacing,
+                      openings: playerOpenings,
+                    }
+                  : undefined
+              }
               pauseMessage={
                 pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined
                   ? `通信再開待ち: 残り ${pauseSecondsRemaining} 秒`
