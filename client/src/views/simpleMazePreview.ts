@@ -213,9 +213,10 @@ function renderSideBranch(side: 'left' | 'right'): string {
   const isLeft = side === 'left';
   const dir = isLeft ? -1 : 1;
 
-  // 開口部の奥行き範囲
-  const tNear = 0.25;
-  const tFar = 0.60;
+  // 開口部の奥行き範囲: 現在セルの真横 (カメラ位置〜1マス先)
+  // 0.0..0.25 で「現在いるセルの左/右壁」が開いていることを表現する
+  const tNear = 0.0;
+  const tFar = 0.25;
 
   const wallNearEdge = isLeft ? CORRIDOR_NEAR_LEFT : CORRIDOR_NEAR_RIGHT;
   const wallFarEdge = isLeft ? CORRIDOR_FAR_LEFT : CORRIDOR_FAR_RIGHT;

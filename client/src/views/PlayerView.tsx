@@ -350,12 +350,12 @@ export function PlayerView({
   }, [openings]);
 
   // 探索ビューのSVG（プレビューと同一の生成器を使用）
+  // start variant は左右開口部を無視するため使わず、ゴールセル以外は junction で統一する
   const exploreSvg = useMemo(() => {
     if (!currentCell || !openings) return '';
     let variant: MazePreviewVariant = 'junction';
-    if (maze) {
-      if (currentCell.x === maze.start.x && currentCell.y === maze.start.y) variant = 'start';
-      else if (currentCell.x === maze.goal.x && currentCell.y === maze.goal.y) variant = 'goal';
+    if (maze && currentCell.x === maze.goal.x && currentCell.y === maze.goal.y) {
+      variant = 'goal';
     }
     const openDirections = getOpenDirections(currentCell);
     return createSimplePreviewSvg(currentCell, openDirections, variant, facing, openings);
