@@ -145,9 +145,14 @@ function renderCorridorWalls(): string {
 }
 
 // 正面の行き止まり壁（レンガテクスチャ）
-// near: 現在セルの東境界(1マス先, t=0.25)に壁。far: 2マス先(t=0.5)に壁。
-function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string {
-  const t = depth === 'near' ? 0.25 : 0.5;
+// t を直接指定可能。t=0.25 で1マス先、t=0.5 で2マス先、t=0.75 で3マス先に壁が立つ
+function renderFrontWall(label: string, tOrDepth: number | 'near' | 'far' = 'near'): string {
+  const t =
+    typeof tOrDepth === 'number'
+      ? tOrDepth
+      : tOrDepth === 'near'
+        ? 0.25
+        : 0.5;
   const bottomY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
   const left = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t);
   const right = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
@@ -285,25 +290,35 @@ function renderSideBranch(side: 'left' | 'right'): string {
   return [wallBefore, openingBg, farCorridorWall, branchFloor, nearCorridorWall, farEdge, wallAfter].join('\n');
 }
 
+// 前壁の奥行き(マス数)から t を計算
+// forwardDepth=0: 現在セル境界に壁 (t=0.25)
+// forwardDepth=1: 1マス先境界に壁 (t=0.5)
+// forwardDepth=2: 2マス先境界に壁 (t=0.75)
+// forwardDepth>=3: 描画しない（呼び出し側で fade に切替える）
+const VIEW_FORWARD_TILE_LIMIT = 3;
+function tForForwardDepth(depth: number): number {
+  return Math.min(0.25 + depth * 0.25, 0.95);
+}
+
 // スタートビュー
-function renderStartView(openings: Openings): string {
+function renderStartView(openings: Openings, forwardDepth: number): string {
   const parts: string[] = [];
   parts.push(renderDefs());
   parts.push(renderCeiling());
   parts.push(renderCorridorFloor());
   parts.push(renderCorridorWalls());
 
-  if (openings.forward) {
+  if (forwardDepth >= VIEW_FORWARD_TILE_LIMIT) {
     parts.push(renderCorridorFade());
   } else {
-    parts.push(renderFrontWall('start', 'near'));
+    parts.push(renderFrontWall('start', tForForwardDepth(forwardDepth)));
   }
 
   return parts.join('\n');
 }
 
 // 分岐ビュー
-function renderJunctionView(openings: Openings): string {
+function renderJunctionView(openings: Openings, forwardDepth: number): string {
   const parts: string[] = [];
   parts.push(renderDefs());
   parts.push(renderCeiling());
@@ -322,10 +337,10 @@ function renderJunctionView(openings: Openings): string {
     parts.push(renderWallSide('right'));
   }
 
-  if (openings.forward) {
+  if (forwardDepth >= VIEW_FORWARD_TILE_LIMIT) {
     parts.push(renderCorridorFade());
   } else {
-    parts.push(renderFrontWall('junction', 'near'));
+    parts.push(renderFrontWall('junction', tForForwardDepth(forwardDepth)));
   }
 
   return parts.join('\n');
@@ -361,7 +376,17 @@ export function createSimplePreviewSvg(
   variant: MazePreviewVariant,
   orientation: Direction,
   openings: Openings,
+  forwardDepth?: number,
 ): string {
+  // forwardDepthが省略された場合は openings.forward から従来挙動を再現
+  // (true → 3+マス見える=fade, false → 0マスで壁)
+  const depth =
+    typeof forwardDepth === 'number'
+      ? Math.max(0, Math.floor(forwardDepth))
+      : openings.forward
+        ? VIEW_FORWARD_TILE_LIMIT
+        : 0;
+
   const groupAttrs = [
     `data-view-tilt="0.00"`,
     `data-forward-open="${openings.forward}"`,
@@ -369,13 +394,14 @@ export function createSimplePreviewSvg(
     `data-right-open="${openings.right}"`,
     `data-back-open="${openings.backward}"`,
     `data-facing="${orientation}"`,
+    `data-forward-depth="${depth}"`,
   ].join(' ');
 
   let inner = '';
   if (variant === 'start') {
-    inner = renderStartView(openings);
+    inner = renderStartView(openings, depth);
   } else if (variant === 'junction') {
-    inner = renderJunctionView(openings);
+    inner = renderJunctionView(openings, depth);
   } else {
     inner = renderGoalView(openings);
   }

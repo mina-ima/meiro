@@ -25,6 +25,7 @@ import {
   DIRECTION_LABEL_JA,
   angleToDirection,
   computeOpenings,
+  computeForwardWallDistance,
   isDirectionOpen,
   rotateDirection,
   getOpenDirections,
@@ -351,6 +352,7 @@ export function PlayerView({
 
   // 探索ビューのSVG（プレビューと同一の生成器を使用）
   // start variant は左右開口部を無視するため使わず、ゴールセル以外は junction で統一する
+  // forwardDepth: 前方の壁までの距離（0..3）。仕様「前方3マス先まで見える」に対応
   const exploreSvg = useMemo(() => {
     if (!currentCell || !openings) return '';
     let variant: MazePreviewVariant = 'junction';
@@ -358,7 +360,19 @@ export function PlayerView({
       variant = 'goal';
     }
     const openDirections = getOpenDirections(currentCell);
-    return createSimplePreviewSvg(currentCell, openDirections, variant, facing, openings);
+    const forwardDepth = maze
+      ? computeForwardWallDistance(maze.cells, currentCell, facing, 3)
+      : openings.forward
+        ? 3
+        : 0;
+    return createSimplePreviewSvg(
+      currentCell,
+      openDirections,
+      variant,
+      facing,
+      openings,
+      forwardDepth,
+    );
   }, [currentCell, openings, maze, facing]);
 
   // ---- Player input (step-based) ----

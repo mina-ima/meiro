@@ -72,3 +72,31 @@ export function getOpenDirections(cell: ServerMazeCell): Direction[] {
   });
   return directions;
 }
+
+// 現在セルから forward方向に進んだ際、何マス先で壁にぶつかるかを返す。
+// 0 = 現在セルの forward が壁（前進不可）
+// N = N マス分は通路、その先で壁
+// maxDistance に達した場合は maxDistance を返す（= それ以上は描画しない fade 表現用）
+export function computeForwardWallDistance(
+  cells: readonly ServerMazeCell[],
+  startCell: ServerMazeCell,
+  facing: Direction,
+  maxDistance: number,
+): number {
+  const lookup = new Map<string, ServerMazeCell>();
+  cells.forEach((c) => lookup.set(`${c.x},${c.y}`, c));
+  const vector = DIRECTION_VECTORS[facing];
+  let cur: ServerMazeCell | undefined = startCell;
+  let dist = 0;
+  while (dist < maxDistance && cur) {
+    if (!isDirectionOpen(cur, facing)) {
+      return dist;
+    }
+    cur = lookup.get(`${cur.x + vector.dx},${cur.y + vector.dy}`);
+    dist += 1;
+    if (!cur) {
+      return dist;
+    }
+  }
+  return dist;
+}
