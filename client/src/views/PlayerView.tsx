@@ -284,6 +284,31 @@ export function PlayerView({
   const activeClip = clips[clipIndex];
   const showPreview = phase === 'prep';
 
+  // 探索フェーズでは、プレビューと同じSVG生成方式で現在の視界を描画
+  const exploreCellX = Math.floor(playerPosition.x);
+  const exploreCellY = Math.floor(playerPosition.y);
+  const exploreViewSrc = useMemo(() => {
+    if (phase !== 'explore' || !maze || maze.cells.length === 0) return null;
+    const cell = maze.cells.find((c) => c.x === exploreCellX && c.y === exploreCellY);
+    if (!cell) return null;
+    const facing = angleToDirection(playerAngle);
+    const openings = {
+      forward: isDirectionOpen(cell, facing),
+      right: isDirectionOpen(cell, rotateDirection(facing, 1)),
+      backward: isDirectionOpen(cell, rotateDirection(facing, 2)),
+      left: isDirectionOpen(cell, rotateDirection(facing, -1)),
+    };
+    const variant: MazePreviewVariant =
+      cell.x === maze.goal.x && cell.y === maze.goal.y
+        ? 'goal'
+        : cell.x === maze.start.x && cell.y === maze.start.y
+          ? 'start'
+          : 'junction';
+    const openDirections = getOpenDirections(cell);
+    const svg = createSimplePreviewSvg(cell, openDirections, variant, facing, openings);
+    return createSvgDataUri(svg);
+  }, [phase, maze, exploreCellX, exploreCellY, playerAngle]);
+
   // ---- Player input (keyboard + touch) ----
   const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
   const [activeControls, setActiveControls] = useState<Set<ControlAction>>(() => new Set());
@@ -416,7 +441,48 @@ export function PlayerView({
     <div>
       <h2>プレイヤービュー</h2>
       <div style={{ position: 'relative', width: 640, height: 360 }}>
-        <canvas ref={canvasRef} width={640} height={360} aria-label="レイキャスト表示" />
+        {exploring && exploreViewSrc ? (
+          <img
+            src={exploreViewSrc}
+            alt="迷路探索ビュー"
+            aria-label="迷路探索ビュー"
+            style={{
+              display: 'block',
+              width: 640,
+              height: 360,
+              borderRadius: '0.5rem',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              boxShadow: '0 12px 24px rgba(8, 47, 73, 0.35)',
+            }}
+            data-testid="explore-svg-view"
+          />
+        ) : (
+          <canvas ref={canvasRef} width={640} height={360} aria-label="レイキャスト表示" />
+        )}
+        {exploring ? (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: '0.5rem',
+              right: '0.5rem',
+              padding: '0.35rem 0.6rem',
+              borderRadius: '0.5rem',
+              background: 'rgba(15, 23, 42, 0.7)',
+              color: '#f1f5f9',
+              fontSize: '0.75rem',
+              lineHeight: 1.4,
+              pointerEvents: 'none',
+            }}
+          >
+            <div>
+              <kbd>W</kbd>/<kbd>↑</kbd>前進・<kbd>S</kbd>/<kbd>↓</kbd>後退
+            </div>
+            <div>
+              <kbd>A</kbd>/<kbd>←</kbd>左回転・<kbd>D</kbd>/<kbd>→</kbd>右回転
+            </div>
+          </div>
+        ) : null}
         {showPreview ? (
           <div
             role="group"
@@ -475,6 +541,13 @@ export function PlayerView({
           </div>
         ) : null}
       </div>
+      {exploring ? (
+        <PlayerControls
+          activeControls={activeControls}
+          onPress={handleControlPress}
+          onRelease={handleControlRelease}
+        />
+      ) : null}
       <HUD timeRemaining={timeRemaining} score={points} targetScore={targetPoints}>
         {phase === 'explore' && initialCompensation > 0 ? (
           <p aria-live="polite">初期ポイント補填 +{initialCompensation}</p>
@@ -484,13 +557,6 @@ export function PlayerView({
           <p aria-live="polite">通信再開待ち: 残り {pauseSecondsRemaining} 秒</p>
         ) : null}
       </HUD>
-      {exploring ? (
-        <PlayerControls
-          activeControls={activeControls}
-          onPress={handleControlPress}
-          onRelease={handleControlRelease}
-        />
-      ) : null}
       {reachedTarget ? (
         <div
           role="status"
@@ -1104,6 +1170,16 @@ const DIRECTION_VECTORS: Record<Direction, { dx: number; dy: number }> = {
 function isDirectionOpen(cell: ServerMazeCell, direction: Direction): boolean {
   const wallKey = DIRECTION_INFO[direction].wall;
   return !cell.walls[wallKey];
+}
+
+function angleToDirection(angle: number): Direction {
+  // angle: radian, 0=east, +π/2=south (Yが下向きの2D座標系)
+  const twoPi = Math.PI * 2;
+  const normalized = ((angle % twoPi) + twoPi) % twoPi;
+  if (normalized < Math.PI / 4 || normalized >= (7 * Math.PI) / 4) return 'east';
+  if (normalized < (3 * Math.PI) / 4) return 'south';
+  if (normalized < (5 * Math.PI) / 4) return 'west';
+  return 'north';
 }
 
 function rotateDirection(direction: Direction, steps: number): Direction {
