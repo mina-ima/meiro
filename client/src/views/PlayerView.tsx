@@ -306,38 +306,10 @@ export function PlayerView({
   const activeClip = clips[clipIndex];
   const showPreview = phase === 'prep';
 
-  // 探索フェーズでは、プレビューと同じSVG生成方式で現在の視界を描画
+  // ---- 視点と移動可否の単一ソース ----
   const exploreCellX = Math.floor(playerPosition.x);
   const exploreCellY = Math.floor(playerPosition.y);
-  const exploreViewSrc = useMemo(() => {
-    if (phase !== 'explore' || !maze || maze.cells.length === 0) return null;
-    const cell = maze.cells.find((c) => c.x === exploreCellX && c.y === exploreCellY);
-    if (!cell) return null;
-    const facing = angleToDirection(playerAngle);
-    const openings = {
-      forward: isDirectionOpen(cell, facing),
-      right: isDirectionOpen(cell, rotateDirection(facing, 1)),
-      backward: isDirectionOpen(cell, rotateDirection(facing, 2)),
-      left: isDirectionOpen(cell, rotateDirection(facing, -1)),
-    };
-    const variant: MazePreviewVariant =
-      cell.x === maze.goal.x && cell.y === maze.goal.y
-        ? 'goal'
-        : cell.x === maze.start.x && cell.y === maze.start.y
-          ? 'start'
-          : 'junction';
-    const openDirections = getOpenDirections(cell);
-    const svg = createSimplePreviewSvg(cell, openDirections, variant, facing, openings);
-    return createSvgDataUri(svg);
-  }, [phase, maze, exploreCellX, exploreCellY, playerAngle]);
 
-  // ---- Player input (step-based) ----
-  const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
-  const [activeStep, setActiveStep] = useState<ControlAction | null>(null);
-  const stepLockRef = useRef(false);
-  const exploring = phase === 'explore';
-
-  // 現在セルから見た4方向の通路有無（移動可否）
   const currentCell = useMemo(() => {
     if (!maze || maze.cells.length === 0) return null;
     return maze.cells.find((c) => c.x === exploreCellX && c.y === exploreCellY) ?? null;
@@ -345,17 +317,37 @@ export function PlayerView({
 
   const facing = useMemo(() => angleToDirection(playerAngle), [playerAngle]);
 
+  // openings は SVG生成と移動判定の両方でこれを使う（単一ソース）
+  const openings = useMemo(() => {
+    if (!currentCell) return null;
+    return computeOpenings(currentCell, facing);
+  }, [currentCell, facing]);
+
   const availableActions = useMemo<Record<ControlAction, boolean>>(() => {
-    if (!currentCell) {
+    if (!openings) {
       return { forward: false, backward: false, left: false, right: false };
     }
-    return {
-      forward: isDirectionOpen(currentCell, facing),
-      backward: isDirectionOpen(currentCell, rotateDirection(facing, 2)),
-      left: isDirectionOpen(currentCell, rotateDirection(facing, -1)),
-      right: isDirectionOpen(currentCell, rotateDirection(facing, 1)),
-    };
-  }, [currentCell, facing]);
+    return openings;
+  }, [openings]);
+
+  const exploreViewSrc = useMemo(() => {
+    if (phase !== 'explore' || !maze || !currentCell || !openings) return null;
+    const variant: MazePreviewVariant =
+      currentCell.x === maze.goal.x && currentCell.y === maze.goal.y
+        ? 'goal'
+        : currentCell.x === maze.start.x && currentCell.y === maze.start.y
+          ? 'start'
+          : 'junction';
+    const openDirections = getOpenDirections(currentCell);
+    const svg = createSimplePreviewSvg(currentCell, openDirections, variant, facing, openings);
+    return createSvgDataUri(svg);
+  }, [phase, maze, currentCell, openings, facing]);
+
+  // ---- Player input (step-based) ----
+  const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
+  const [activeStep, setActiveStep] = useState<ControlAction | null>(null);
+  const stepLockRef = useRef(false);
+  const exploring = phase === 'explore';
 
   // 入力送信ループ（20Hz）
   useEffect(() => {
@@ -471,18 +463,22 @@ export function PlayerView({
               right: '0.5rem',
               padding: '0.35rem 0.6rem',
               borderRadius: '0.5rem',
-              background: 'rgba(15, 23, 42, 0.7)',
+              background: 'rgba(15, 23, 42, 0.78)',
               color: '#f1f5f9',
               fontSize: '0.75rem',
               lineHeight: 1.4,
               pointerEvents: 'none',
             }}
+            data-testid="explore-orientation-overlay"
           >
             <div>
-              <kbd>W</kbd>/<kbd>↑</kbd>前進・<kbd>S</kbd>/<kbd>↓</kbd>後退
+              向き: <strong>{DIRECTION_LABEL_JA[facing]}</strong>
             </div>
             <div>
-              <kbd>A</kbd>/<kbd>←</kbd>左回転・<kbd>D</kbd>/<kbd>→</kbd>右回転
+              前: {openings?.forward ? '通路' : '壁'} ／ 後: {openings?.backward ? '通路' : '壁'}
+            </div>
+            <div>
+              左: {openings?.left ? '通路' : '壁'} ／ 右: {openings?.right ? '通路' : '壁'}
             </div>
           </div>
         ) : null}
@@ -1184,6 +1180,25 @@ function angleToDirection(angle: number): Direction {
   if (normalized < (5 * Math.PI) / 4) return 'west';
   return 'north';
 }
+
+function computeOpenings(
+  cell: ServerMazeCell,
+  facing: Direction,
+): { forward: boolean; backward: boolean; left: boolean; right: boolean } {
+  return {
+    forward: isDirectionOpen(cell, facing),
+    backward: isDirectionOpen(cell, rotateDirection(facing, 2)),
+    left: isDirectionOpen(cell, rotateDirection(facing, -1)),
+    right: isDirectionOpen(cell, rotateDirection(facing, 1)),
+  };
+}
+
+const DIRECTION_LABEL_JA: Record<Direction, string> = {
+  north: '北',
+  east: '東',
+  south: '南',
+  west: '西',
+};
 
 function rotateDirection(direction: Direction, steps: number): Direction {
   const index = DIRECTION_SEQUENCE.indexOf(direction);
