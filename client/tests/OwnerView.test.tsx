@@ -436,6 +436,77 @@ describe('OwnerView', () => {
     });
   });
 
+  it('ポイント残数と合計の達成状況をHUDに表示する', () => {
+    const points = [
+      { value: 5 as const, position: { x: 1, y: 1 } },
+      { value: 5 as const, position: { x: 2, y: 2 } },
+      { value: 3 as const, position: { x: 3, y: 3 } },
+    ];
+    render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={50}
+        predictionMarks={[]}
+        traps={[]}
+        points={points}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="prep"
+        sessions={[]}
+        maze={createMockMaze(20)}
+      />,
+    );
+
+    expect(screen.getByTestId('point-count-summary')).toHaveTextContent(
+      'ポイント: 3/12（残り9個）',
+    );
+    expect(screen.getByTestId('point-total-summary')).toHaveTextContent(
+      '合計点: 13/40（あと27点必要）',
+    );
+    expect(screen.getByTestId('point-palette-summary')).toHaveTextContent(
+      /残り 9個 \/ 上限 12個/,
+    );
+    expect(screen.getByTestId('point-palette-summary')).toHaveTextContent(/不足27点/);
+  });
+
+  it('合計点が下限を満たすと達成表示になる', () => {
+    const points = Array.from({ length: 9 }, (_, i) => ({
+      value: 5 as const,
+      position: { x: i, y: 0 },
+    }));
+    render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={50}
+        predictionMarks={[]}
+        traps={[]}
+        points={points}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="prep"
+        sessions={[]}
+        maze={createMockMaze(20)}
+      />,
+    );
+
+    expect(screen.getByTestId('point-total-summary')).toHaveTextContent(
+      '合計点: 45/40（条件達成）',
+    );
+    expect(screen.getByTestId('point-palette-summary')).toHaveTextContent(/達成/);
+  });
+
   it('準備フェーズ以外ではパレットが表示されず配置できない', () => {
     const send = vi.fn();
     const client = { send } as unknown as NetClient;

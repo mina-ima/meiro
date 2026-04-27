@@ -24,6 +24,16 @@ export const WALL_STOCK_BY_MAZE_SIZE: Readonly<Record<20 | 40, number>> = {
 export const POINT_REQUIRED_RATE = 0.65;
 export const GOAL_BONUS_RATE = 0.2;
 
+export const POINT_COUNT_LIMITS: Readonly<Record<20 | 40, number>> = {
+  20: 12,
+  40: 18,
+};
+
+export const POINT_TOTAL_MINIMUMS: Readonly<Record<20 | 40, number>> = {
+  20: 40,
+  40: 60,
+};
+
 export const POINT_PLACEMENT_WINDOWS = {
   points: 40,
   traps: 5,

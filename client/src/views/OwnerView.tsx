@@ -9,7 +9,12 @@ import {
   type CSSProperties,
 } from 'react';
 import type { NetClient } from '../net/NetClient';
-import { OWNER_ZOOM_LEVELS, MAX_ACTIVE_TRAPS } from '../config/spec';
+import {
+  OWNER_ZOOM_LEVELS,
+  MAX_ACTIVE_TRAPS,
+  POINT_COUNT_LIMITS,
+  POINT_TOTAL_MINIMUMS,
+} from '../config/spec';
 import type {
   PauseReason,
   ServerSessionEntry,
@@ -32,6 +37,10 @@ interface InitialSetupPanelProps {
   pauseMessage: string | null;
   forbiddenDistance: number;
   editCooldownText: string;
+  pointCount: number;
+  pointCountLimit: number;
+  pointTotalValue: number;
+  pointTotalMinimum: number;
 }
 
 function InitialSetupPanel({
@@ -43,7 +52,14 @@ function InitialSetupPanel({
   pauseMessage,
   forbiddenDistance,
   editCooldownText,
+  pointCount,
+  pointCountLimit,
+  pointTotalValue,
+  pointTotalMinimum,
 }: InitialSetupPanelProps) {
+  const remainingPoints = Math.max(0, pointCountLimit - pointCount);
+  const totalShortfall = Math.max(0, pointTotalMinimum - pointTotalValue);
+  const totalMet = pointTotalValue >= pointTotalMinimum;
   return (
     <section
       aria-label="初期設定情報"
@@ -67,6 +83,16 @@ function InitialSetupPanel({
       <p style={{ margin: 0 }}>編集クールダウン: {editCooldownText}</p>
       <p style={{ margin: 0 }}>
         予測地点: 残り{remainingPredictions} / {predictionLimit}
+      </p>
+      <p style={{ margin: 0 }} data-testid="point-count-summary">
+        ポイント: {pointCount}/{pointCountLimit}（残り{remainingPoints}個）
+      </p>
+      <p
+        style={{ margin: 0, color: totalMet ? '#15803d' : '#dc2626' }}
+        data-testid="point-total-summary"
+      >
+        合計点: {pointTotalValue}/{pointTotalMinimum}
+        {totalMet ? '（条件達成）' : `（あと${totalShortfall}点必要）`}
       </p>
       <p style={{ margin: 0 }}>設定残り時間: {timeText}</p>
       {pauseMessage ? (
@@ -173,6 +199,14 @@ export function OwnerView({
   const activeTrapCount = Math.min(traps.length, MAX_ACTIVE_TRAPS);
   const remainingPredictions = Math.max(0, predictionLimit - clampedPredictions);
   const setupTimeText = formatSetupTime(timeRemaining);
+  const pointCountLimit = POINT_COUNT_LIMITS[mazeSize];
+  const pointTotalMinimum = POINT_TOTAL_MINIMUMS[mazeSize];
+  const pointCount = points.length;
+  const pointTotalValue = useMemo(
+    () => points.reduce((sum, point) => sum + point.value, 0),
+    [points],
+  );
+  const remainingPoints = Math.max(0, pointCountLimit - pointCount);
   const ownerSession = useMemo(
     () => sessions.find((session) => session.role === 'owner'),
     [sessions],
@@ -472,6 +506,10 @@ export function OwnerView({
               timeText={setupTimeText}
               forbiddenDistance={forbiddenDistance}
               editCooldownText={editCooldownText}
+              pointCount={pointCount}
+              pointCountLimit={pointCountLimit}
+              pointTotalValue={pointTotalValue}
+              pointTotalMinimum={pointTotalMinimum}
               pauseMessage={
                 pauseReason === 'disconnect' && pauseSecondsRemaining !== undefined
                   ? `通信再開待ち: 残り ${pauseSecondsRemaining} 秒`
@@ -485,6 +523,10 @@ export function OwnerView({
               onSelect={handleToolSelect}
               activePlacement={armedPlacement}
               timeRemaining={timeRemaining}
+              pointRemaining={remainingPoints}
+              pointCountLimit={pointCountLimit}
+              pointTotalValue={pointTotalValue}
+              pointTotalMinimum={pointTotalMinimum}
             />
           </div>
         </div>
@@ -926,6 +968,10 @@ interface PlacementPaletteProps {
   onSelect?: (type: PlacementType) => void;
   activePlacement?: PlacementType | null;
   timeRemaining: number;
+  pointRemaining: number;
+  pointCountLimit: number;
+  pointTotalValue: number;
+  pointTotalMinimum: number;
 }
 
 function PlacementPalette({
@@ -935,6 +981,10 @@ function PlacementPalette({
   onSelect,
   activePlacement,
   timeRemaining,
+  pointRemaining,
+  pointCountLimit,
+  pointTotalValue,
+  pointTotalMinimum,
 }: PlacementPaletteProps) {
   const stage = getPrepStage(timeRemaining);
   const stageTime = getStageTimeRemaining(timeRemaining, stage);
@@ -971,6 +1021,23 @@ function PlacementPalette({
         <strong style={{ color: '#f8fafc' }}>{stageLabel[stage]}</strong>
         <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>残り {stageTime}秒</span>
       </div>
+
+      {stage === 'point' ? (
+        <div
+          style={{ marginBottom: '0.5rem', color: '#cbd5f5', fontSize: '0.8rem' }}
+          data-testid="point-palette-summary"
+        >
+          残り {pointRemaining}個 / 上限 {pointCountLimit}個 ｜ 合計 {pointTotalValue} / 下限{' '}
+          {pointTotalMinimum}点
+          {pointTotalValue >= pointTotalMinimum ? (
+            <span style={{ color: '#4ade80', marginLeft: '0.4rem' }}>達成</span>
+          ) : (
+            <span style={{ color: '#f87171', marginLeft: '0.4rem' }}>
+              不足{Math.max(0, pointTotalMinimum - pointTotalValue)}点
+            </span>
+          )}
+        </div>
+      ) : null}
 
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         {stage === 'point' ? (

@@ -184,6 +184,7 @@ export interface OwnerClientState {
   predictionHits: number;
   predictionMarks: ServerVector[];
   traps: ServerVector[];
+  points: ServerPoint[];
 }
 
 export interface PlayerClientState {
@@ -231,6 +232,7 @@ function createInitialOwnerClientState(): OwnerClientState {
     predictionHits: 0,
     predictionMarks: [],
     traps: [],
+    points: [],
   };
 }
 
@@ -666,6 +668,7 @@ export const useSessionStore = create<SessionState>((set) => ({
           predictionHits: nextSnapshot.owner.predictionHits,
           predictionMarks: cloneVectorList(nextSnapshot.owner.predictionMarks),
           traps: cloneVectorList(nextSnapshot.owner.traps),
+          points: clonePoints(nextSnapshot.owner.points),
         },
         player: {
           predictionHits: nextSnapshot.player.predictionHits,
