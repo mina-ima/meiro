@@ -349,6 +349,18 @@ export function PlayerView({
     return openings;
   }, [openings]);
 
+  // 探索ビューのSVG（プレビューと同一の生成器を使用）
+  const exploreSvg = useMemo(() => {
+    if (!currentCell || !openings) return '';
+    let variant: MazePreviewVariant = 'junction';
+    if (maze) {
+      if (currentCell.x === maze.start.x && currentCell.y === maze.start.y) variant = 'start';
+      else if (currentCell.x === maze.goal.x && currentCell.y === maze.goal.y) variant = 'goal';
+    }
+    const openDirections = getOpenDirections(currentCell);
+    return createSimplePreviewSvg(currentCell, openDirections, variant, facing, openings);
+  }, [currentCell, openings, maze, facing]);
+
   // ---- Player input (step-based) ----
   const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
   const [activeStep, setActiveStep] = useState<ControlAction | null>(null);
@@ -442,12 +454,31 @@ export function PlayerView({
     <div>
       <h2>プレイヤービュー</h2>
       <div style={{ position: 'relative', width: 640, height: 360 }}>
+        <div
+          aria-label="探索ビュー"
+          data-testid="explore-canvas"
+          style={{
+            width: '100%',
+            height: '100%',
+            background: '#202830',
+            borderRadius: '0.5rem',
+            overflow: 'hidden',
+          }}
+          dangerouslySetInnerHTML={{
+            __html: exploring && exploreSvg
+              ? exploreSvg.replace(
+                  /<svg([^>]*)>/,
+                  '<svg$1 style="width:100%;height:100%;display:block" preserveAspectRatio="xMidYMid meet">',
+                )
+              : '',
+          }}
+        />
         <canvas
           ref={canvasRef}
           width={640}
           height={360}
-          aria-label="レイキャスト表示"
-          data-testid="explore-canvas"
+          aria-hidden
+          style={{ display: 'none' }}
         />
         {exploring ? (
           <div

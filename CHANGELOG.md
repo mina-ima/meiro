@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed (v1.7.3)
+- 探索フェーズの描画を、prepフェーズと同じプレビューSVG (`createSimplePreviewSvg`) に統一。canvas+Raycasterから移行。
+- オーナー俯瞰マップのプレイヤー三角矢印をセル内に収まるサイズへ縮小（高さ0.6→0.4、幅0.7→0.45）。隣セルの壁にかかって見える問題を解消。
+
 ### Added
 - Cloudflare Workers/Pages 向けプレビューデプロイワークフローを追加。
 - リリースタグ運用と CHANGELOG 更新手順を README に記載。

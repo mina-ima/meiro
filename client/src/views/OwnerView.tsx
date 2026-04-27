@@ -181,8 +181,9 @@ export interface OwnerViewProps {
 }
 
 const DRAG_DATA_TYPE = 'application/meiro-owner-placement';
-const PLAYER_MARKER_TIP_OFFSET = 0.6;
-const PLAYER_MARKER_BASE_WIDTH = 0.7;
+// セル(1×1)内に収まるサイズ。高さ tip(0.30) + base(0.10) = 0.40、幅 0.45
+const PLAYER_MARKER_TIP_OFFSET = 0.3;
+const PLAYER_MARKER_BASE_WIDTH = 0.45;
 type PlacementType = 'point1' | 'point3' | 'point5' | 'trap' | 'prediction';
 type PrepStage = 'point' | 'trap' | 'prediction' | 'ended';
 
