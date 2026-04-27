@@ -530,6 +530,55 @@ describe('OwnerView', () => {
     expect(screen.getByTestId('point-palette-summary')).toHaveTextContent(/不足27点/);
   });
 
+  it('プレイヤーマーカーの三角形がplayerAngleに応じて回転する', () => {
+    const { container, rerender } = render(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={120}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 5, y: 5 }}
+        playerAngle={0}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[]}
+      />,
+    );
+
+    // angle=0 (east) → rotateDeg = 0 + 90 = 90
+    const eastMarker = container.querySelector('[data-testid="player-marker"]');
+    expect(eastMarker?.getAttribute('transform')).toContain('rotate(90');
+
+    // angle=π/2 (south) → rotateDeg = 90 + 90 = 180
+    rerender(
+      <OwnerView
+        client={null}
+        roomId="ROOM-1"
+        trapCharges={0}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={120}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 5, y: 5 }}
+        playerAngle={Math.PI / 2}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="explore"
+        sessions={[]}
+      />,
+    );
+    const southMarker = container.querySelector('[data-testid="player-marker"]');
+    expect(southMarker?.getAttribute('transform')).toContain('rotate(180');
+  });
+
   it('合計点が下限を満たすと達成表示になる', () => {
     const points = Array.from({ length: 9 }, (_, i) => ({
       value: 5 as const,

@@ -218,6 +218,7 @@ export function App() {
         traps={ownerState.traps}
         points={ownerState.points}
         playerPosition={playerState.position}
+        playerAngle={serverSnapshot?.player.angle ?? 0}
         mazeSize={mazeSize}
         maze={maze}
         editCooldownMs={ownerCooldownMs}

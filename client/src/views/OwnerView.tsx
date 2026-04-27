@@ -133,6 +133,7 @@ export interface OwnerViewProps {
   traps: Vector2[];
   points?: ServerPoint[];
   playerPosition: Vector2;
+  playerAngle?: number;
   mazeSize: 20 | 40;
   maze?: ServerMazeState | null;
   editCooldownMs: number;
@@ -184,6 +185,7 @@ export function OwnerView({
   traps,
   points = [],
   playerPosition,
+  playerAngle = 0,
   mazeSize,
   maze,
   editCooldownMs,
@@ -483,6 +485,7 @@ export function OwnerView({
             zoomIndex={zoomIndex}
             offset={offset}
             playerPosition={playerPosition}
+            playerAngle={playerAngle}
             predictionMarks={predictionMarks}
             traps={traps}
             points={points}
@@ -560,6 +563,7 @@ interface OwnerMapProps {
   zoomIndex: number;
   offset: Vector2;
   playerPosition: Vector2;
+  playerAngle?: number;
   predictionMarks: Vector2[];
   traps: Vector2[];
   points?: ServerPoint[];
@@ -580,6 +584,7 @@ function OwnerMap({
   zoomIndex,
   offset,
   playerPosition,
+  playerAngle = 0,
   predictionMarks,
   traps,
   points = [],
@@ -837,6 +842,7 @@ function OwnerMap({
           strokeWidth={0.12}
           strokeLinejoin="round"
           data-testid="player-marker"
+          transform={`rotate(${(playerAngle * 180) / Math.PI + 90} ${playerPosition.x} ${playerPosition.y})`}
         >
           <title>プレイヤー位置</title>
         </polygon>
