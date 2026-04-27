@@ -145,8 +145,9 @@ function renderCorridorWalls(): string {
 }
 
 // 正面の行き止まり壁（レンガテクスチャ）
+// near: 現在セルの東境界(1マス先, t=0.25)に壁。far: 2マス先(t=0.5)に壁。
 function renderFrontWall(label: string, depth: 'near' | 'far' = 'near'): string {
-  const t = depth === 'near' ? 0.7 : 0.9;
+  const t = depth === 'near' ? 0.25 : 0.5;
   const bottomY = lerp(FLOOR_NEAR_Y, FLOOR_FAR_Y, t);
   const left = lerp(CORRIDOR_NEAR_LEFT, CORRIDOR_FAR_LEFT, t);
   const right = lerp(CORRIDOR_NEAR_RIGHT, CORRIDOR_FAR_RIGHT, t);
