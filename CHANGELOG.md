@@ -44,6 +44,11 @@
   - `playerAngle` を OwnerView/OwnerMap に伝搬し、`transform="rotate(angle*180/π+90, x, y)"` で実際の向きに回転表示。
   - `playerAngle=0`(東)で右向き、`π/2`(南)で下向き、`π`(西)で左向き、`-π/2`(北)で上向き。
 
+### Fixed (v1.7.2)
+- オーナーが prep フェーズで1つもポイントを置かないと、explore 開始と同時に `targetScore=0 ≤ player.score=0` で即時 result 遷移してしまう不具合を修正。
+  - `evaluateScoreCompletion` で `targetScore <= 0` の場合は完了判定をスキップ（タイムアップまで explore を継続）
+  - これがクライアント側で「壁が描画されない」「操作カーソルが見えない」現象の正体だった（result フェーズでは Raycaster ループがスキップされ PlayerControls も非表示）。
+
 ### Refactor (v1.7.1)
 - 方向ヘルパー（Direction型, DIRECTION_INFO, angleToDirection, computeOpenings, isDirectionOpen, rotateDirection, getOpenDirections, DIRECTION_LABEL_JA）を `mazeDirection.ts` に切り出し。
   - PlayerView ⇄ simpleMazePreview/FancyMazePreview の循環参照を解消し、OwnerView も同モジュールから取得するように統一。

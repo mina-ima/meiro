@@ -1328,6 +1328,12 @@ export class RoomDurableObject {
       return;
     }
 
+    // targetScore=0（オーナーがポイントを1つも置かなかった等）では即達成判定にしない。
+    // ゲームを成立させるため、 explore のタイムアップまで待つ。
+    if (this.roomState.targetScore <= 0) {
+      return;
+    }
+
     if (this.roomState.player.score < this.roomState.targetScore) {
       return;
     }
