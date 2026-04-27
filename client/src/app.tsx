@@ -232,6 +232,7 @@ export function App() {
       />
     ) : (
       <PlayerView
+        client={client}
         points={score}
         targetPoints={targetScore}
         predictionHits={playerState.predictionHits}
