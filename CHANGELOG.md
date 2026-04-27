@@ -44,6 +44,11 @@
   - `playerAngle` を OwnerView/OwnerMap に伝搬し、`transform="rotate(angle*180/π+90, x, y)"` で実際の向きに回転表示。
   - `playerAngle=0`(東)で右向き、`π/2`(南)で下向き、`π`(西)で左向き、`-π/2`(北)で上向き。
 
+### Refactor (v1.7.1)
+- 方向ヘルパー（Direction型, DIRECTION_INFO, angleToDirection, computeOpenings, isDirectionOpen, rotateDirection, getOpenDirections, DIRECTION_LABEL_JA）を `mazeDirection.ts` に切り出し。
+  - PlayerView ⇄ simpleMazePreview/FancyMazePreview の循環参照を解消し、OwnerView も同モジュールから取得するように統一。
+  - Temporal Dead Zone 由来の不安定挙動を回避。
+
 ### Fixed (v1.7.0)
 - 探索フェーズの描画を canvas + Raycaster に戻す（v1.5.0でSVG化した時点での機能後退を是正）。
   - SVGは現在セルの状態しか反映していなかったが、仕様は「前方3マス先まで見える」。

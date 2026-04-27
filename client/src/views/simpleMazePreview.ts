@@ -1,4 +1,5 @@
-import type { Direction, MazePreviewVariant } from './PlayerView';
+import type { Direction } from './mazeDirection';
+import type { MazePreviewVariant } from './PlayerView';
 import type { ServerMazeCell } from '../state/sessionStore';
 
 type Openings = {

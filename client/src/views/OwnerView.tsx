@@ -22,7 +22,7 @@ import type {
   SessionPhase,
   ServerMazeState,
 } from '../state/sessionStore';
-import { angleToDirection, computeOpenings, DIRECTION_LABEL_JA } from './PlayerView';
+import { angleToDirection, computeOpenings, DIRECTION_LABEL_JA } from './mazeDirection';
 
 interface Vector2 {
   x: number;
