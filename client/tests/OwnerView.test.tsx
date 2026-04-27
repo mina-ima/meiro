@@ -352,6 +352,61 @@ describe('OwnerView', () => {
     expect(bottomOuterWall).not.toBeNull();
   });
 
+  it('ポイントアイコンを選択した後、別のアイコンを選ぶまで連続配置できる', () => {
+    const send = vi.fn();
+    const client = { send } as unknown as NetClient;
+    const maze = createMockMaze(20);
+    render(
+      <OwnerView
+        client={client}
+        roomId="ROOM-1"
+        trapCharges={1}
+        forbiddenDistance={2}
+        activePredictions={0}
+        predictionLimit={3}
+        timeRemaining={50}
+        predictionMarks={[]}
+        traps={[]}
+        playerPosition={{ x: 0, y: 0 }}
+        mazeSize={20}
+        editCooldownMs={0}
+        phase="prep"
+        sessions={[
+          { id: 'owner', role: 'owner', nick: 'OWNER' },
+          { id: 'player', role: 'player', nick: 'PLAYER' },
+        ]}
+        maze={maze}
+      />,
+    );
+
+    const map = screen.getByLabelText('俯瞰マップ');
+    mockBoundingRect(map);
+    fireEvent.click(screen.getByLabelText('1点ポイント'));
+
+    // 2回続けてマップをクリックしても armedPlacement は保持されたまま
+    fireEvent.click(map, { clientX: 24, clientY: 24 });
+    fireEvent.click(map, { clientX: 120, clientY: 120 });
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenNthCalledWith(1, {
+      type: 'O_EDIT',
+      edit: { action: 'PLACE_POINT', cell: { x: 1, y: 1 }, value: 1 },
+    });
+    expect(send).toHaveBeenNthCalledWith(2, {
+      type: 'O_EDIT',
+      edit: { action: 'PLACE_POINT', cell: { x: 5, y: 5 }, value: 1 },
+    });
+
+    // 3点に切り替えて配置
+    fireEvent.click(screen.getByLabelText('3点ポイント'));
+    fireEvent.click(map, { clientX: 240, clientY: 240 });
+
+    expect(send).toHaveBeenLastCalledWith({
+      type: 'O_EDIT',
+      edit: { action: 'PLACE_POINT', cell: { x: 10, y: 10 }, value: 3 },
+    });
+  });
+
   it('罠配置時間に罠アイコンを配置するとO_EDITが送信される', () => {
     const send = vi.fn();
     const client = { send } as unknown as NetClient;

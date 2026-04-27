@@ -346,7 +346,6 @@ export function OwnerView({
       } else {
         client.send({ type: 'O_MRK', cell: payload, active: true });
       }
-      setArmedPlacement(null);
     },
     [client, phase],
   );
@@ -847,18 +846,20 @@ function OwnerMap({
             <circle
               cx={point.position.x + 0.5}
               cy={point.position.y + 0.5}
-              r={0.3}
+              r={0.45}
               fill={point.value === 5 ? '#f59e0b' : point.value === 3 ? '#3b82f6' : '#94a3b8'}
               stroke="#fff"
-              strokeWidth={0.05}
+              strokeWidth={0.08}
             />
             <text
               x={point.position.x + 0.5}
-              y={point.position.y + 0.62}
+              y={point.position.y + 0.5}
               textAnchor="middle"
-              fontSize={0.35}
+              dominantBaseline="central"
+              fontSize={0.7}
               fill="#fff"
               fontWeight="bold"
+              data-testid="point-marker-label"
             >
               {point.value}
             </text>
