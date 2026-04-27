@@ -8,3 +8,5 @@ dist
 .idea
 .corepack
 *.tsbuildinfo
+.vercel
+.env*.local
