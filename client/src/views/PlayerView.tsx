@@ -57,7 +57,10 @@ export interface PlayerViewProps {
 }
 
 const INPUT_SEND_INTERVAL_MS = 50; // 20Hz
-const TURN_INPUT_MAGNITUDE = 0.5;
+// 1マス前進: MOVE_SPEED=2.0マス/秒なので 500ms
+const STEP_FORWARD_DURATION_MS = 500;
+// 90°回転: yaw=1, TURN_SPEED=2π rad/sec → 250ms
+const STEP_TURN_DURATION_MS = 250;
 
 type ControlAction = 'forward' | 'backward' | 'left' | 'right';
 
@@ -65,6 +68,25 @@ interface InputState {
   forward: number;
   yaw: number;
 }
+
+interface StepPhase {
+  forward: number;
+  yaw: number;
+  durationMs: number;
+}
+
+const STEP_SEQUENCES: Record<ControlAction, StepPhase[]> = {
+  forward: [{ forward: 1, yaw: 0, durationMs: STEP_FORWARD_DURATION_MS }],
+  backward: [{ forward: -1, yaw: 0, durationMs: STEP_FORWARD_DURATION_MS }],
+  left: [
+    { forward: 0, yaw: -1, durationMs: STEP_TURN_DURATION_MS },
+    { forward: 1, yaw: 0, durationMs: STEP_FORWARD_DURATION_MS },
+  ],
+  right: [
+    { forward: 0, yaw: 1, durationMs: STEP_TURN_DURATION_MS },
+    { forward: 1, yaw: 0, durationMs: STEP_FORWARD_DURATION_MS },
+  ],
+};
 
 const PLAYER_FOV_RADIANS = (PLAYER_FOV_DEGREES * Math.PI) / 180;
 // プレビューSVGと統一したカラーパレット
@@ -309,133 +331,114 @@ export function PlayerView({
     return createSvgDataUri(svg);
   }, [phase, maze, exploreCellX, exploreCellY, playerAngle]);
 
-  // ---- Player input (keyboard + touch) ----
+  // ---- Player input (step-based) ----
   const inputRef = useRef<InputState>({ forward: 0, yaw: 0 });
-  const [activeControls, setActiveControls] = useState<Set<ControlAction>>(() => new Set());
+  const [activeStep, setActiveStep] = useState<ControlAction | null>(null);
+  const stepLockRef = useRef(false);
   const exploring = phase === 'explore';
 
+  // 現在セルから見た4方向の通路有無（移動可否）
+  const currentCell = useMemo(() => {
+    if (!maze || maze.cells.length === 0) return null;
+    return maze.cells.find((c) => c.x === exploreCellX && c.y === exploreCellY) ?? null;
+  }, [maze, exploreCellX, exploreCellY]);
+
+  const facing = useMemo(() => angleToDirection(playerAngle), [playerAngle]);
+
+  const availableActions = useMemo<Record<ControlAction, boolean>>(() => {
+    if (!currentCell) {
+      return { forward: false, backward: false, left: false, right: false };
+    }
+    return {
+      forward: isDirectionOpen(currentCell, facing),
+      backward: isDirectionOpen(currentCell, rotateDirection(facing, 2)),
+      left: isDirectionOpen(currentCell, rotateDirection(facing, -1)),
+      right: isDirectionOpen(currentCell, rotateDirection(facing, 1)),
+    };
+  }, [currentCell, facing]);
+
+  // 入力送信ループ（20Hz）
   useEffect(() => {
     if (!client || !exploring) {
       inputRef.current = { forward: 0, yaw: 0 };
-      setActiveControls(new Set());
       return;
     }
-
-    const keysHeld = new Set<string>();
-
-    const isMovementKey = (code: string): boolean =>
-      code === 'KeyW' ||
-      code === 'KeyS' ||
-      code === 'KeyA' ||
-      code === 'KeyD' ||
-      code === 'ArrowUp' ||
-      code === 'ArrowDown' ||
-      code === 'ArrowLeft' ||
-      code === 'ArrowRight';
-
-    const recompute = () => {
-      const forward = keysHeld.has('KeyW') || keysHeld.has('ArrowUp')
-        ? 1
-        : keysHeld.has('KeyS') || keysHeld.has('ArrowDown')
-          ? -1
-          : inputRef.current.forward !== 0 && !keysHeld.size
-            ? 0
-            : inputRef.current.forward;
-      const yaw = keysHeld.has('KeyD') || keysHeld.has('ArrowRight')
-        ? TURN_INPUT_MAGNITUDE
-        : keysHeld.has('KeyA') || keysHeld.has('ArrowLeft')
-          ? -TURN_INPUT_MAGNITUDE
-          : inputRef.current.yaw;
-
-      // キーボード入力中はタッチ状態を上書きする
-      const next: InputState = {
-        forward: keysHeld.has('KeyW') || keysHeld.has('ArrowUp')
-          ? 1
-          : keysHeld.has('KeyS') || keysHeld.has('ArrowDown')
-            ? -1
-            : inputRef.current.forward,
-        yaw,
-      };
-      void forward;
-      inputRef.current = next;
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isMovementKey(e.code)) return;
-      e.preventDefault();
-      keysHeld.add(e.code);
-      recompute();
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (!isMovementKey(e.code)) return;
-      keysHeld.delete(e.code);
-      // キー離した時、対応する軸を 0 に戻す
-      const next: InputState = { ...inputRef.current };
-      if (e.code === 'KeyW' || e.code === 'ArrowUp') {
-        if (!keysHeld.has('KeyS') && !keysHeld.has('ArrowDown')) next.forward = 0;
-        else next.forward = -1;
-      }
-      if (e.code === 'KeyS' || e.code === 'ArrowDown') {
-        if (!keysHeld.has('KeyW') && !keysHeld.has('ArrowUp')) next.forward = 0;
-        else next.forward = 1;
-      }
-      if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
-        if (!keysHeld.has('KeyD') && !keysHeld.has('ArrowRight')) next.yaw = 0;
-        else next.yaw = TURN_INPUT_MAGNITUDE;
-      }
-      if (e.code === 'KeyD' || e.code === 'ArrowRight') {
-        if (!keysHeld.has('KeyA') && !keysHeld.has('ArrowLeft')) next.yaw = 0;
-        else next.yaw = -TURN_INPUT_MAGNITUDE;
-      }
-      inputRef.current = next;
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
     const intervalId = window.setInterval(() => {
       const { forward, yaw } = inputRef.current;
       try {
         client.send({ type: 'P_INPUT', yaw, forward, timestamp: Date.now() });
       } catch {
-        /* 送信失敗はサイレントに無視（再接続ロジックに任せる） */
+        /* 送信失敗は再接続ロジックに任せる */
       }
     }, INPUT_SEND_INTERVAL_MS);
-
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       window.clearInterval(intervalId);
       inputRef.current = { forward: 0, yaw: 0 };
     };
   }, [client, exploring]);
 
-  const handleControlPress = useCallback((action: ControlAction) => {
-    setActiveControls((prev) => {
-      const next = new Set(prev);
-      next.add(action);
-      return next;
-    });
-    const next: InputState = { ...inputRef.current };
-    if (action === 'forward') next.forward = 1;
-    else if (action === 'backward') next.forward = -1;
-    else if (action === 'left') next.yaw = -TURN_INPUT_MAGNITUDE;
-    else next.yaw = TURN_INPUT_MAGNITUDE;
-    inputRef.current = next;
-  }, []);
+  // ステップ実行: シーケンスを順次再生
+  const runStep = useCallback(
+    (action: ControlAction) => {
+      if (stepLockRef.current || !exploring || !client) return;
+      if (!availableActions[action]) return;
+      stepLockRef.current = true;
+      setActiveStep(action);
 
-  const handleControlRelease = useCallback((action: ControlAction) => {
-    setActiveControls((prev) => {
-      const next = new Set(prev);
-      next.delete(action);
-      return next;
-    });
-    const next: InputState = { ...inputRef.current };
-    if (action === 'forward' || action === 'backward') next.forward = 0;
-    else next.yaw = 0;
-    inputRef.current = next;
-  }, []);
+      const sequence = STEP_SEQUENCES[action];
+      let timeoutId: number | undefined;
+      const runPhase = (idx: number) => {
+        if (idx >= sequence.length) {
+          inputRef.current = { forward: 0, yaw: 0 };
+          stepLockRef.current = false;
+          setActiveStep(null);
+          return;
+        }
+        const phase = sequence[idx];
+        inputRef.current = { forward: phase.forward, yaw: phase.yaw };
+        timeoutId = window.setTimeout(() => runPhase(idx + 1), phase.durationMs);
+      };
+      runPhase(0);
+      return () => {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
+    },
+    [availableActions, client, exploring],
+  );
+
+  // キーボード入力: 押下毎に1ステップ
+  useEffect(() => {
+    if (!client || !exploring) return;
+    const keyMap: Record<string, ControlAction> = {
+      KeyW: 'forward',
+      ArrowUp: 'forward',
+      KeyS: 'backward',
+      ArrowDown: 'backward',
+      KeyA: 'left',
+      ArrowLeft: 'left',
+      KeyD: 'right',
+      ArrowRight: 'right',
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const action = keyMap[e.code];
+      if (!action) return;
+      if (e.repeat) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      runStep(action);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [client, exploring, runStep]);
+
+  const handleControlPress = useCallback(
+    (action: ControlAction) => {
+      runStep(action);
+    },
+    [runStep],
+  );
 
   return (
     <div>
@@ -543,9 +546,9 @@ export function PlayerView({
       </div>
       {exploring ? (
         <PlayerControls
-          activeControls={activeControls}
+          activeStep={activeStep}
+          availableActions={availableActions}
           onPress={handleControlPress}
-          onRelease={handleControlRelease}
         />
       ) : null}
       <HUD timeRemaining={timeRemaining} score={points} targetScore={targetPoints}>
@@ -2307,45 +2310,46 @@ function hashSeed(seed: string): number {
 }
 
 interface PlayerControlsProps {
-  activeControls: Set<ControlAction>;
+  activeStep: ControlAction | null;
+  availableActions: Record<ControlAction, boolean>;
   onPress: (action: ControlAction) => void;
-  onRelease: (action: ControlAction) => void;
 }
 
-function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsProps) {
-  const buttonStyle = (action: ControlAction): React.CSSProperties => ({
-    width: '4rem',
-    height: '4rem',
-    fontSize: '1.6rem',
-    fontWeight: 700,
-    border: '1px solid #475569',
-    borderRadius: '0.75rem',
-    backgroundColor: activeControls.has(action) ? '#0ea5e9' : '#1e293b',
-    color: '#f8fafc',
-    userSelect: 'none',
-    touchAction: 'none',
-    cursor: 'pointer',
-  });
+function PlayerControls({ activeStep, availableActions, onPress }: PlayerControlsProps) {
+  const buttonStyle = (action: ControlAction): React.CSSProperties => {
+    const enabled = availableActions[action];
+    return {
+      width: '4rem',
+      height: '4rem',
+      fontSize: '1.6rem',
+      fontWeight: 700,
+      border: '1px solid #475569',
+      borderRadius: '0.75rem',
+      backgroundColor: !enabled
+        ? '#0f172a'
+        : activeStep === action
+          ? '#0ea5e9'
+          : '#1e293b',
+      color: enabled ? '#f8fafc' : '#475569',
+      opacity: enabled ? 1 : 0.4,
+      userSelect: 'none',
+      touchAction: 'none',
+      cursor: enabled ? 'pointer' : 'not-allowed',
+    };
+  };
 
   const bind = (action: ControlAction) => ({
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
+      if (!availableActions[action]) return;
       if (typeof e.currentTarget.setPointerCapture === 'function') {
         try {
           e.currentTarget.setPointerCapture(e.pointerId);
         } catch {
-          /* setPointerCaptureが失敗した場合は無視（jsdom等で未実装） */
+          /* jsdom等でsetPointerCapture未実装 */
         }
       }
       onPress(action);
-    },
-    onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => {
-      e.preventDefault();
-      onRelease(action);
-    },
-    onPointerCancel: () => onRelease(action),
-    onPointerLeave: () => {
-      if (activeControls.has(action)) onRelease(action);
     },
   });
 
@@ -2365,9 +2369,11 @@ function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsPr
         maxWidth: '640px',
       }}
     >
-      <div style={{ fontSize: '0.85rem', color: '#cbd5f5' }}>
+      <div style={{ fontSize: '0.85rem', color: '#cbd5f5', lineHeight: 1.6 }}>
         <strong style={{ color: '#fff' }}>操作:</strong>{' '}
-        キーボードは <kbd>W</kbd>/<kbd>↑</kbd> 前進、<kbd>S</kbd>/<kbd>↓</kbd> 後退、<kbd>A</kbd>/<kbd>←</kbd> 左回転、<kbd>D</kbd>/<kbd>→</kbd> 右回転。スマホは下のボタンを押している間だけ動きます。
+        <kbd>W</kbd>/<kbd>↑</kbd> 1マス前進、<kbd>S</kbd>/<kbd>↓</kbd> 1マス後退、
+        <kbd>A</kbd>/<kbd>←</kbd> 左に曲がって1マス、<kbd>D</kbd>/<kbd>→</kbd> 右に曲がって1マス。
+        移動できる方向のボタンだけ点灯します。
       </div>
       <div
         style={{
@@ -2382,7 +2388,8 @@ function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsPr
         <button
           type="button"
           aria-label="前進"
-          aria-pressed={activeControls.has('forward')}
+          aria-pressed={activeStep === 'forward'}
+          disabled={!availableActions.forward}
           style={buttonStyle('forward')}
           {...bind('forward')}
         >
@@ -2391,8 +2398,9 @@ function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsPr
         <span />
         <button
           type="button"
-          aria-label="左回転"
-          aria-pressed={activeControls.has('left')}
+          aria-label="左へ移動"
+          aria-pressed={activeStep === 'left'}
+          disabled={!availableActions.left}
           style={buttonStyle('left')}
           {...bind('left')}
         >
@@ -2401,7 +2409,8 @@ function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsPr
         <button
           type="button"
           aria-label="後退"
-          aria-pressed={activeControls.has('backward')}
+          aria-pressed={activeStep === 'backward'}
+          disabled={!availableActions.backward}
           style={buttonStyle('backward')}
           {...bind('backward')}
         >
@@ -2409,8 +2418,9 @@ function PlayerControls({ activeControls, onPress, onRelease }: PlayerControlsPr
         </button>
         <button
           type="button"
-          aria-label="右回転"
-          aria-pressed={activeControls.has('right')}
+          aria-label="右へ移動"
+          aria-pressed={activeStep === 'right'}
+          disabled={!availableActions.right}
           style={buttonStyle('right')}
           {...bind('right')}
         >
